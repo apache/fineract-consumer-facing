@@ -30,27 +30,37 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default: 4
 
   # Maintain dependencies for Gradle (Backend)
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default: 4
 
   # Maintain dependencies for Maven (Backend alternative)
   - package-ecosystem: "maven"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default: 4
 
   # Maintain dependencies for Docker
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default: 4
 
   # Maintain dependencies for Python (pip)
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default: 4
