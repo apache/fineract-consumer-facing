@@ -36,7 +36,6 @@ concurrency:
 permissions:
   contents: read
   security-events: write
-  actions: read
 
 jobs:
   zizmor:
@@ -45,7 +44,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -58,4 +56,6 @@ jobs:
           advanced-security: false
           min-severity: medium
           min-confidence: medium
-          token: ${{ github.token }}
+          # Disabling online audits resolves 403 Forbidden errors and saves API rate limits.
+          # Sensitive audits like 'impostor-commit' are covered by the ASF Allowlist Check.
+          online-audits: false
