@@ -20,11 +20,11 @@ name: "ASF Allowlist Check"
 on:
   workflow_dispatch:
   pull_request:
+    branches: ["main"]
     paths:
       - ".github/**"
   push:
-    branches:
-      - main
+    branches: ["**"]
     paths:
       - ".github/**"
 
