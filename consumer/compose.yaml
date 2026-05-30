@@ -1,0 +1,116 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+services:
+  bff-db:
+    image: postgres:18-alpine
+    container_name: bff-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-consumerapp}
+      POSTGRES_USER: ${POSTGRES_USER:-consumerapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-consumerapp} -d ${POSTGRES_DB:-consumerapp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+
+  fineract-db:
+    image: postgres:18-alpine
+    container_name: fineract-db
+    environment:
+      POSTGRES_DB: fineract_tenants
+      POSTGRES_USER: fineract
+      POSTGRES_PASSWORD: fineractpw
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql
+    configs:
+      - source: fineract_init_sql
+        target: /docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fineract -d fineract_tenants"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+
+  fineract:
+    image: apache/fineract:latest
+    container_name: fineract
+    depends_on:
+      fineract-db:
+        condition: service_healthy
+    environment:
+      FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME: org.postgresql.Driver
+      FINERACT_HIKARI_JDBC_URL: jdbc:postgresql://fineract-db:5432/fineract_tenants
+      FINERACT_HIKARI_USERNAME: fineract
+      FINERACT_HIKARI_PASSWORD: fineractpw
+      FINERACT_DEFAULT_TENANTDB_HOSTNAME: fineract-db
+      FINERACT_DEFAULT_TENANTDB_PORT: "5432"
+      FINERACT_DEFAULT_TENANTDB_UID: fineract
+      FINERACT_DEFAULT_TENANTDB_PWD: fineractpw
+      FINERACT_SERVER_SSL_ENABLED: "false"
+      FINERACT_SERVER_PORT: "8080"
+      JAVA_TOOL_OPTIONS: "-Xmx1536m -Xms512m"
+    ports:
+      - "8888:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/fineract-provider/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 120s
+    mem_limit: 2g
+
+  bff:
+    build: .
+    container_name: bff
+    depends_on:
+      bff-db:
+        condition: service_healthy
+      fineract:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://bff-db:5432/${POSTGRES_DB:-consumerapp}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-consumerapp}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      FINERACT_BASE_URL: http://fineract:8080/fineract-provider/api/v1
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      JAVA_TOOL_OPTIONS: "-Xmx768m -Xms256m"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'until exec 3<>/dev/tcp/localhost/8080; do sleep 1; done'"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+    mem_limit: 1g
+
+configs:
+  fineract_init_sql:
+    content: |
+      CREATE DATABASE fineract_default;
+      GRANT ALL PRIVILEGES ON DATABASE fineract_default TO fineract;
+

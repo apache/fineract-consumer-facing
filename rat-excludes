@@ -1,0 +1,11 @@
+**/node_modules/**
+**/target/**
+**/dist/**
+**/build/**
+frontend/src/openapi-client/**
+consumer/gradle/wrapper/**
+**/*.log
+rat-excludes
+LICENSE
+*.jar
+**/.nvmrc

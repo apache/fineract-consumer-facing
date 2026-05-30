@@ -1,0 +1,157 @@
+/*
+ Licensed to the Apache Software Foundation (ASF) under one
+ or more contributor license agreements.  See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership.  The ASF licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+ */
+
+import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
+
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.0.6'
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'se.thinkcode.cucumber-runner' version '0.0.11'
+	id 'org.openapi.generator' version '7.13.0'
+}
+
+group = 'org.apache.fineract'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+ext {
+	set('springCloudVersion', "2025.1.0")
+	set('liquibase.version', "4.33.0")
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation('org.springframework.boot:spring-boot-starter-data-jpa')
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-liquibase'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+	compileOnly 'org.projectlombok:lombok'
+	runtimeOnly 'org.postgresql:postgresql'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.security:spring-security-test'
+	testImplementation 'io.cucumber:cucumber-java:7.20.1'
+	testImplementation 'io.github.openfeign:feign-okhttp'
+	testImplementation 'io.github.openfeign:feign-jackson'
+	testImplementation 'io.github.openfeign:feign-slf4j'
+	testImplementation 'org.openapitools:jackson-databind-nullable:0.2.6'
+	testCompileOnly 'org.projectlombok:lombok'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+	}
+}
+
+sourceSets {
+	test {
+		java {
+			srcDir "$buildDir/generated/java-client/src/main/java"
+		}
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+cucumber {
+	featurePath = 'src/test/resources/features'
+	glue = 'org.apache.fineract.consumer.cucumber.steps'
+	plugin = ['pretty']
+}
+
+task openapi {
+	description = 'Capture OpenAPI spec from the running app at localhost:8080.'
+	group = 'documentation'
+	doLast {
+		def out = file("$buildDir/openapi/openapi.json")
+		out.parentFile.mkdirs()
+		new URL("http://localhost:8080/v3/api-docs").withInputStream { input ->
+			out.withOutputStream { it << input }
+		}
+		println "OpenAPI spec → ${out}"
+	}
+}
+
+task generateJavaClient(type: GenerateTask) {
+	description = 'Generate Java/Feign client for BFF tests.'
+	group = 'documentation'
+	generatorName  = 'java'
+	library        = 'feign'
+	inputSpec      = "$buildDir/openapi/openapi.json"
+	outputDir      = "$buildDir/generated/java-client"
+	ignoreFileOverride = "$projectDir/openapi/java.ignore"
+	apiPackage     = 'org.apache.fineract.consumer.client.api'
+	modelPackage   = 'org.apache.fineract.consumer.client.model'
+	invokerPackage = 'org.apache.fineract.consumer.client'
+	generateApiTests           = false
+	generateModelTests         = false
+	generateApiDocumentation   = false
+	generateModelDocumentation = false
+	configOptions = [
+		dateLibrary         : 'java8',
+		serializationLibrary: 'jackson',
+		useTags             : 'true',
+		useJakartaEe        : 'true'
+	]
+	dependsOn 'openapi'
+}
+
+task generateTypeScriptClient(type: GenerateTask) {
+	description = 'Generate TypeScript/Angular client for the frontend.'
+	group = 'documentation'
+	generatorName = 'typescript-angular'
+	inputSpec     = "$buildDir/openapi/openapi.json"
+	outputDir     = "$projectDir/../frontend/src/openapi-client"
+	ignoreFileOverride = "$projectDir/openapi/typescript.ignore"
+	configOptions = [
+		npmName            : '@bff/client',
+		npmVersion         : project.version.toString(),
+		ngVersion          : '20.0.0',
+		supportsES6        : 'true',
+		withInterfaces     : 'true',
+		providedInRoot     : 'true',
+		modelPropertyNaming: 'camelCase'
+	]
+	dependsOn 'openapi'
+}
+
+task generateClients {
+	description = 'Generate Java + TypeScript clients from the OpenAPI spec.'
+	group = 'documentation'
+	dependsOn 'generateJavaClient', 'generateTypeScriptClient'
+}

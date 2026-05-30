@@ -22,13 +22,13 @@ on:
     branches: [ "**" ]
     paths-ignore:
       - "**/*.md"
-      - ".rat-excludes"
+      - "rat-excludes"
       - "LICENSE"
   pull_request:
     branches: [ "main" ]
     paths-ignore:
       - "**/*.md"
-      - ".rat-excludes"
+      - "rat-excludes"
       - "LICENSE"
 
 concurrency:
@@ -63,4 +63,4 @@ jobs:
       - name: Run Apache RAT Scan
         run: |
           # Use pre-installed Java to save time and API calls
-          java -jar apache-rat-0.17.jar --input-exclude-file .rat-excludes -- .
+          java -jar apache-rat-0.17.jar --input-exclude-file rat-excludes -- .

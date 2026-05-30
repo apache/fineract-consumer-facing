@@ -15,10 +15,22 @@
 # specific language governing permissions and limitations
 # under the License.
 
-**/node_modules/**
-**/target/**
-**/dist/**
-**/build/**
-.rat-excludes
-LICENSE
-*.jar
+node_modules
+dist
+.angular
+playwright-report
+test-results
+coverage
+__screenshots__
+.idea
+.vscode
+.history
+*.sublime-workspace
+*.swp
+.DS_Store
+Thumbs.db
+.git
+.gitignore
+Dockerfile
+.dockerignore
+.nvmrc

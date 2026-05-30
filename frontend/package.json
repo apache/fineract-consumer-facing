@@ -1,0 +1,54 @@
+{
+  "name": "frontend",
+  "version": "0.0.0",
+  "engines": {
+    "node": ">=22.0.0 <23.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:docker:up": "docker compose -f ../docker-compose.e2e.yml up -d --build",
+    "e2e:docker:down": "docker compose -f ../docker-compose.e2e.yml down -v",
+    "e2e:docker:logs": "docker compose -f ../docker-compose.e2e.yml logs -f",
+    "e2e:docker:ps": "docker compose -f ../docker-compose.e2e.yml ps",
+    "e2e:stack:run": "npm run e2e:docker:up && npm run e2e && npm run e2e:docker:down"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/common": "^20.3.0",
+    "@angular/compiler": "^20.3.0",
+    "@angular/core": "^20.3.0",
+    "@angular/forms": "^20.3.0",
+    "@angular/platform-browser": "^20.3.0",
+    "@angular/router": "^20.3.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^20.3.26",
+    "@angular/cli": "^20.3.26",
+    "@angular/compiler-cli": "^20.3.0",
+    "@playwright/test": "^1.60.0",
+    "jsdom": "^29.1.1",
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
