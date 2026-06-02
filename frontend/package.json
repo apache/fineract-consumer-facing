@@ -43,12 +43,12 @@
     "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@angular/build": "^20.3.26",
+    "@angular/build": "^21.2.13",
     "@angular/cli": "^20.3.26",
     "@angular/compiler-cli": "^20.3.0",
     "@playwright/test": "^1.60.0",
     "jsdom": "^29.1.1",
     "typescript": "~5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.8"
   }
 }
