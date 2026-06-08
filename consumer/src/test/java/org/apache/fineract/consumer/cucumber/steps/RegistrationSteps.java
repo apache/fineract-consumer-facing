@@ -35,12 +35,18 @@ import org.apache.fineract.consumer.client.model.VerifyOtpCommandData;
 import org.apache.fineract.consumer.client.model.VerifyOtpCommandRequest;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.MailpitProbe;
+import org.apache.fineract.consumer.otp.command.data.OtpConstants;
+import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
+import org.apache.fineract.consumer.registration.command.exception.IdentityNotVerifiedException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 public class RegistrationSteps {
 
     private static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
     private static final String DEVICE_FINGERPRINT = "cucumber-test-device";
     private static final String WRONG_OTP = "WRONG1";
+    private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     private final FineractSeeder fineractSeed = new FineractSeeder();
     private final MailpitProbe mailpit = new MailpitProbe();
@@ -83,6 +89,7 @@ public class RegistrationSteps {
     public void registrationRejected() {
         assertThat(lastError).as("expected rejection, got success").isNotNull();
         assertThat(lastError.status()).isEqualTo(403);
+        assertThat(readCode(lastError.contentUTF8())).isEqualTo(IdentityNotVerifiedException.CODE);
     }
 
     @Then("the rejection does not reveal which field failed")
@@ -98,7 +105,7 @@ public class RegistrationSteps {
     public void requestEmailOtp() {
         SendOtpCommandRequest request = new SendOtpCommandRequest()
                 .registrationId(registrationId)
-                .deliveryMethod("email");
+                .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME);
         try {
             bff.sendOtp(request);
             lastError = null;
@@ -156,6 +163,7 @@ public class RegistrationSteps {
     public void otpRejected() {
         assertThat(lastError).as("expected OTP rejection, got success").isNotNull();
         assertThat(lastError.status()).isEqualTo(400);
+        assertThat(readCode(lastError.contentUTF8())).isEqualTo(OtpTokenInvalidException.CODE);
     }
 
     private void submit(String documentKey) {
@@ -183,6 +191,14 @@ public class RegistrationSteps {
         } catch (FeignException e) {
             lastError = e;
             lastVerify = null;
+        }
+    }
+
+    private static String readCode(String body) {
+        try {
+            return JSON.readTree(body).path("code").asString();
+        } catch (Exception e) {
+            throw new IllegalStateException("could not parse error response body: " + body, e);
         }
     }
 

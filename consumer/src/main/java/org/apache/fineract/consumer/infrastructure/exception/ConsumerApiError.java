@@ -17,16 +17,21 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.user.command.exception;
+package org.apache.fineract.consumer.infrastructure.exception;
 
-import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
-import org.springframework.http.HttpStatus;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 
-public class UserNotFoundException extends AbstractConsumerException {
+@Getter
+@RequiredArgsConstructor
+@Builder
+@EqualsAndHashCode
+@ToString
+public final class ConsumerApiError {
 
-    public static final String CODE = "error.msg.consumer.user.not.found";
-
-    public UserNotFoundException() {
-        super(HttpStatus.NOT_FOUND, CODE, "user not found");
-    }
+    private final String code;
+    private final String defaultMessage;
 }

@@ -24,7 +24,9 @@ import org.springframework.http.HttpStatus;
 
 public class OtpTokenInvalidException extends AbstractConsumerException {
 
+    public static final String CODE = "error.msg.consumer.otp.invalid";
+
     public OtpTokenInvalidException() {
-        super(HttpStatus.BAD_REQUEST, "invalid or expired otp");
+        super(HttpStatus.BAD_REQUEST, CODE, "invalid or expired otp");
     }
 }

@@ -24,7 +24,9 @@ import org.springframework.http.HttpStatus;
 
 public class OtpDeliveryMethodInvalidException extends AbstractConsumerException {
 
+    public static final String CODE = "error.msg.consumer.otp.delivery.method.invalid";
+
     public OtpDeliveryMethodInvalidException() {
-        super(HttpStatus.BAD_REQUEST, "unsupported delivery method");
+        super(HttpStatus.BAD_REQUEST, CODE, "unsupported delivery method");
     }
 }

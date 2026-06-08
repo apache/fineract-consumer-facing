@@ -2,7 +2,7 @@
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
+ * regarding copyright ownership. The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -17,16 +17,13 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.user.command.exception;
+package org.apache.fineract.consumer.infrastructure.fineractclient;
 
-import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
-import org.springframework.http.HttpStatus;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
-public class UserNotFoundException extends AbstractConsumerException {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class FineractHeaders {
 
-    public static final String CODE = "error.msg.consumer.user.not.found";
-
-    public UserNotFoundException() {
-        super(HttpStatus.NOT_FOUND, CODE, "user not found");
-    }
+    public static final String TENANT_ID = "Fineract-Platform-TenantId";
 }

@@ -24,7 +24,9 @@ import org.springframework.http.HttpStatus;
 
 public class IdentityNotVerifiedException extends AbstractConsumerException {
 
+    public static final String CODE = "error.msg.consumer.registration.identity.not.verified";
+
     public IdentityNotVerifiedException() {
-        super(HttpStatus.FORBIDDEN, "registration could not be completed");
+        super(HttpStatus.FORBIDDEN, CODE, "registration could not be completed");
     }
 }

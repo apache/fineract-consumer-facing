@@ -19,7 +19,6 @@
 
 package org.apache.fineract.consumer.infrastructure.exception;
 
-import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -33,10 +32,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class DefaultExceptionHandler {
 
+    public static final String CODE = "error.msg.consumer.internal.error";
+    private static final String DEFAULT_MESSAGE = "internal error";
+
     @ExceptionHandler(Throwable.class)
-    public ResponseEntity<Map<String, String>> handle(Throwable ex) {
+    public ResponseEntity<ConsumerApiError> handle(Throwable ex) {
         log.error("unexpected error: {}", ex.getClass().getSimpleName(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "internal error"));
+                .body(ConsumerApiError.builder()
+                        .code(CODE)
+                        .defaultMessage(DEFAULT_MESSAGE)
+                        .build());
     }
 }

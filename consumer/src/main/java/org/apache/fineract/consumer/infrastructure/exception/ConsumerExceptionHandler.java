@@ -19,7 +19,6 @@
 
 package org.apache.fineract.consumer.infrastructure.exception;
 
-import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -33,13 +32,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class ConsumerExceptionHandler {
 
     @ExceptionHandler(AbstractConsumerException.class)
-    public ResponseEntity<Map<String, String>> handle(AbstractConsumerException ex) {
+    public ResponseEntity<ConsumerApiError> handle(AbstractConsumerException ex) {
         if (ex.getHttpStatus().is5xxServerError()) {
             log.error("{}: {}", ex.getClass().getSimpleName(), ex.getErrorMessage(), ex);
         } else {
             log.warn("{}: {}", ex.getClass().getSimpleName(), ex.getErrorMessage());
         }
         return ResponseEntity.status(ex.getHttpStatus())
-                .body(Map.of("error", ex.getErrorMessage()));
+                .body(ConsumerApiError.builder()
+                        .code(ex.getCode())
+                        .defaultMessage(ex.getErrorMessage())
+                        .build());
     }
 }

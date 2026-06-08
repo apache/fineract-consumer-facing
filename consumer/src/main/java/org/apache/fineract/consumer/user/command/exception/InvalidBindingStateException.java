@@ -24,7 +24,9 @@ import org.springframework.http.HttpStatus;
 
 public class InvalidBindingStateException extends AbstractConsumerException {
 
+    public static final String CODE = "error.msg.consumer.user.binding.state.invalid";
+
     public InvalidBindingStateException() {
-        super(HttpStatus.CONFLICT, "user is not in the expected binding state");
+        super(HttpStatus.CONFLICT, CODE, "user is not in the expected binding state");
     }
 }

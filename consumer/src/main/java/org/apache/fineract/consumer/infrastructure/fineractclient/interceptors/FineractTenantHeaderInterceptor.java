@@ -22,16 +22,16 @@ package org.apache.fineract.consumer.infrastructure.fineractclient.interceptors;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractHeaders;
 import org.apache.fineract.consumer.infrastructure.fineractclient.configs.FineractClientProperties;
 
 @RequiredArgsConstructor
 public class FineractTenantHeaderInterceptor implements RequestInterceptor {
 
-    private static final String TENANT_HEADER = "Fineract-Platform-TenantId";
     private final FineractClientProperties properties;
 
     @Override
     public void apply(RequestTemplate template) {
-        template.header(TENANT_HEADER, properties.getTenantId());
+        template.header(FineractHeaders.TENANT_ID, properties.getTenantId());
     }
 }

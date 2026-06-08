@@ -28,21 +28,24 @@ import org.springframework.util.Assert;
 @Repository
 public class OtpCommandRepository {
 
+    private static final String EXTERNAL_ID_NULL = "externalId must not be null";
+    private static final String REQUEST_NULL = "request must not be null";
+
     private final ConcurrentHashMap<UUID, PendingOtp> store = new ConcurrentHashMap<>();
 
     public PendingOtp getPendingOtpForUser(UUID externalId) {
-        Assert.notNull(externalId, "externalId must not be null");
+        Assert.notNull(externalId, EXTERNAL_ID_NULL);
         return store.get(externalId);
     }
 
     public void addPendingOtp(UUID externalId, PendingOtp request) {
-        Assert.notNull(externalId, "externalId must not be null");
-        Assert.notNull(request, "request must not be null");
+        Assert.notNull(externalId, EXTERNAL_ID_NULL);
+        Assert.notNull(request, REQUEST_NULL);
         store.put(externalId, request);
     }
 
     public void deletePendingOtpForUser(UUID externalId) {
-        Assert.notNull(externalId, "externalId must not be null");
+        Assert.notNull(externalId, EXTERNAL_ID_NULL);
         store.remove(externalId);
     }
 }

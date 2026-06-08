@@ -31,6 +31,7 @@ import java.util.UUID;
 import org.apache.fineract.consumer.cucumber.clients.FineractClientSeedClient;
 import org.apache.fineract.consumer.cucumber.clients.FineractCodeLookupClient;
 import org.apache.fineract.consumer.cucumber.clients.FineractIdentifierSeedClient;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractHeaders;
 
 public class FineractSeeder {
 
@@ -116,6 +117,6 @@ public class FineractSeeder {
     }
 
     private static RequestInterceptor tenantInterceptor() {
-        return template -> template.header("Fineract-Platform-TenantId", TENANT);
+        return template -> template.header(FineractHeaders.TENANT_ID, TENANT);
     }
 }

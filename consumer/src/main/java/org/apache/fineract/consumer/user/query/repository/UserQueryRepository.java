@@ -28,7 +28,10 @@ import org.springframework.data.repository.Repository;
 
 public interface UserQueryRepository extends Repository<User, Long> {
 
-    @Query("SELECT new org.apache.fineract.consumer.user.query.data.UserQueryData(u.id, u.externalId, u.email, u.status) "
-            + "FROM User u WHERE u.externalId = :externalId")
+    @Query("""
+            SELECT new org.apache.fineract.consumer.user.query.data.UserQueryData(u.id, u.externalId, u.email, u.status)
+            FROM User u
+            WHERE u.externalId = :externalId
+            """)
     Optional<UserQueryData> findByExternalId(UUID externalId);
 }

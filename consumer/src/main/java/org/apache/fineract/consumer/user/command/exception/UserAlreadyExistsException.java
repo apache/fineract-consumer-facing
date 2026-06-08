@@ -24,7 +24,9 @@ import org.springframework.http.HttpStatus;
 
 public class UserAlreadyExistsException extends AbstractConsumerException {
 
+    public static final String CODE = "error.msg.consumer.user.already.exists";
+
     public UserAlreadyExistsException() {
-        super(HttpStatus.CONFLICT, "user already exists for this email or fineract client");
+        super(HttpStatus.CONFLICT, CODE, "user already exists for this email or fineract client");
     }
 }

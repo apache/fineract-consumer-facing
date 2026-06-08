@@ -24,7 +24,9 @@ import org.springframework.http.HttpStatus;
 
 public class OtpDeliveryFailedException extends AbstractConsumerException {
 
+    public static final String CODE = "error.msg.consumer.otp.delivery.failed";
+
     public OtpDeliveryFailedException(Throwable cause) {
-        super(HttpStatus.BAD_GATEWAY, "verification code could not be sent", cause);
+        super(HttpStatus.BAD_GATEWAY, CODE, "verification code could not be sent", cause);
     }
 }

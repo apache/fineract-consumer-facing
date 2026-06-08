@@ -19,7 +19,6 @@
 
 package org.apache.fineract.consumer.infrastructure.exception;
 
-import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -34,10 +33,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class MissingRequestHeaderExceptionHandler {
 
+    public static final String CODE = "error.msg.consumer.request.header.missing";
+    private static final String DEFAULT_MESSAGE = "invalid request";
+
     @ExceptionHandler(MissingRequestHeaderException.class)
-    public ResponseEntity<Map<String, String>> handle(MissingRequestHeaderException ex) {
+    public ResponseEntity<ConsumerApiError> handle(MissingRequestHeaderException ex) {
         log.info("missing request header: {}", ex.getHeaderName());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", "invalid request"));
+                .body(ConsumerApiError.builder()
+                        .code(CODE)
+                        .defaultMessage(DEFAULT_MESSAGE)
+                        .build());
     }
 }

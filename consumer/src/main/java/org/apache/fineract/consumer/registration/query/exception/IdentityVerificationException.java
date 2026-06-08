@@ -24,7 +24,9 @@ import org.springframework.http.HttpStatus;
 
 public class IdentityVerificationException extends AbstractConsumerException {
 
+    public static final String CODE = "error.msg.consumer.identity.verification.unavailable";
+
     public IdentityVerificationException(Throwable cause) {
-        super(HttpStatus.BAD_GATEWAY, "identity verification temporarily unavailable", cause);
+        super(HttpStatus.BAD_GATEWAY, CODE, "identity verification temporarily unavailable", cause);
     }
 }

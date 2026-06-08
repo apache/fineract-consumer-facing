@@ -26,17 +26,20 @@ import org.springframework.http.HttpStatus;
 public abstract class AbstractConsumerException extends RuntimeException {
 
     private final HttpStatus httpStatus;
+    private final String code;
     private final String errorMessage;
 
-    protected AbstractConsumerException(HttpStatus httpStatus, String errorMessage) {
+    protected AbstractConsumerException(HttpStatus httpStatus, String code, String errorMessage) {
         super(errorMessage);
         this.httpStatus = httpStatus;
+        this.code = code;
         this.errorMessage = errorMessage;
     }
 
-    protected AbstractConsumerException(HttpStatus httpStatus, String errorMessage, Throwable cause) {
+    protected AbstractConsumerException(HttpStatus httpStatus, String code, String errorMessage, Throwable cause) {
         super(errorMessage, cause);
         this.httpStatus = httpStatus;
+        this.code = code;
         this.errorMessage = errorMessage;
     }
 }
