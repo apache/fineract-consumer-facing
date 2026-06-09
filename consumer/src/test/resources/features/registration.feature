@@ -41,6 +41,7 @@ Feature: Consumer registration
 
   Scenario: Verifying a wrong OTP is rejected
     When I submit registration with the matching Passport
+    Then registration is accepted in PENDING_OTP state
     And I request an email OTP
     And I verify a wrong OTP
     Then the OTP is rejected as invalid
