@@ -53,7 +53,6 @@ class UserCommandServiceImplTest {
     private static final String EMAIL = "user@test.com";
     private static final String PASSWORD_HASH = "{bcrypt}$2a$10$hash";
     private static final Long FINERACT_CLIENT_ID = 42L;
-    private static final String DEVICE_FINGERPRINT = "test-device";
 
     @Mock
     private UserCommandRepository repository;
@@ -66,12 +65,11 @@ class UserCommandServiceImplTest {
                 .email(EMAIL)
                 .passwordHash(PASSWORD_HASH)
                 .fineractClientId(FINERACT_CLIENT_ID)
-                .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
     }
 
     private static User existingUser() {
-        return User.createPendingOtp(EXTERNAL_ID, EMAIL, PASSWORD_HASH, FINERACT_CLIENT_ID, DEVICE_FINGERPRINT);
+        return User.createPendingOtp(EXTERNAL_ID, EMAIL, PASSWORD_HASH, FINERACT_CLIENT_ID);
     }
 
     @Nested
@@ -94,7 +92,6 @@ class UserCommandServiceImplTest {
             assertThat(saved.getValue().getEmail()).isEqualTo(EMAIL);
             assertThat(saved.getValue().getPasswordHash()).isEqualTo(PASSWORD_HASH);
             assertThat(saved.getValue().getFineractClientId()).isEqualTo(FINERACT_CLIENT_ID);
-            assertThat(saved.getValue().getDeviceFingerprint()).isEqualTo(DEVICE_FINGERPRINT);
             assertThat(saved.getValue().getStatus()).isEqualTo(UserStatus.PENDING_OTP);
             assertThat(saved.getValue().getExternalId()).isNotNull();
 

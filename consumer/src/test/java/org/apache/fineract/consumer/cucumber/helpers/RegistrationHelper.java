@@ -43,11 +43,11 @@ public class RegistrationHelper {
 
     public record BoundUser(String email, String password) {}
 
-    public BoundUser registerBoundUser(String deviceFingerprint) {
+    public BoundUser registerBoundUser() {
         FineractSeeder.SeededClient seededClient = fineractSeeder.seedClientWithPassport();
         String email = "user-" + UUID.randomUUID().toString().substring(0, 8) + "@test.com";
 
-        SubmitRegistrationCommandData submitted = bff.submit(deviceFingerprint,
+        SubmitRegistrationCommandData submitted = bff.submit(
                 new SubmitRegistrationCommandRequest()
                         .fineractClientId(seededClient.fineractClientId())
                         .email(email)

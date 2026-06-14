@@ -64,11 +64,6 @@ databaseChangeLog:
                   name: bound_at
                   type: TIMESTAMP WITH TIME ZONE
               - column:
-                  name: device_fingerprint
-                  type: VARCHAR(255)
-                  constraints:
-                    nullable: false
-              - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
                   constraints:

@@ -71,7 +71,7 @@ public class LoginSteps {
 
     @Given("a registered and bound user exists")
     public void registeredAndBoundUser() {
-        user = registrationHelper.registerBoundUser(DEVICE_FINGERPRINT);
+        user = registrationHelper.registerBoundUser();
     }
 
     @When("I log in with my correct password")

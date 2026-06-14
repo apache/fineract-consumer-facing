@@ -45,7 +45,6 @@ import tools.jackson.databind.json.JsonMapper;
 public class RegistrationSteps {
 
     private static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
-    private static final String DEVICE_FINGERPRINT = "cucumber-test-device";
     private static final String WRONG_OTP = "WRONG1";
     private static final String PASSWORD = "Cucumber-password1";
     private static final ObjectMapper JSON = JsonMapper.builder().build();
@@ -199,7 +198,7 @@ public class RegistrationSteps {
                 .documentTypeName(client.documentTypeName())
                 .documentKey(documentKey);
         try {
-            lastSubmit = bff.submit(DEVICE_FINGERPRINT, request);
+            lastSubmit = bff.submit(request);
             lastError = null;
         } catch (FeignException e) {
             lastError = e;

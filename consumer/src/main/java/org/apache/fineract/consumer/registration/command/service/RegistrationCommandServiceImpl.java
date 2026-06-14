@@ -72,7 +72,6 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
                 .email(command.getEmail())
                 .passwordHash(passwordEncoder.encode(command.getPassword()))
                 .fineractClientId(command.getFineractClientId())
-                .deviceFingerprint(command.getDeviceFingerprint())
                 .build();
         UserCreatedCommandData createdUser = userCommandService.create(createUser);
 

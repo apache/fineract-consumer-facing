@@ -50,8 +50,7 @@ public class UserCommandServiceImpl implements UserCommandService {
                 UUID.randomUUID(),
                 command.getEmail(),
                 command.getPasswordHash(),
-                command.getFineractClientId(),
-                command.getDeviceFingerprint());
+                command.getFineractClientId());
         User saved;
         try {
             saved = repository.save(user);

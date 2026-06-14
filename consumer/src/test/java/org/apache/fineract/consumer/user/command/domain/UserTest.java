@@ -32,10 +32,9 @@ class UserTest {
     private static final String EMAIL = "user@test.com";
     private static final String PASSWORD_HASH = "{bcrypt}$2a$10$hash";
     private static final Long FINERACT_CLIENT_ID = 42L;
-    private static final String DEVICE_FINGERPRINT = "test-device";
 
     private static User pendingOtpUser() {
-        return User.createPendingOtp(EXTERNAL_ID, EMAIL, PASSWORD_HASH, FINERACT_CLIENT_ID, DEVICE_FINGERPRINT);
+        return User.createPendingOtp(EXTERNAL_ID, EMAIL, PASSWORD_HASH, FINERACT_CLIENT_ID);
     }
 
     @Test
@@ -46,7 +45,6 @@ class UserTest {
         assertThat(user.getEmail()).isEqualTo(EMAIL);
         assertThat(user.getPasswordHash()).isEqualTo(PASSWORD_HASH);
         assertThat(user.getFineractClientId()).isEqualTo(FINERACT_CLIENT_ID);
-        assertThat(user.getDeviceFingerprint()).isEqualTo(DEVICE_FINGERPRINT);
         assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_OTP);
         assertThat(user.getBoundAt()).isNull();
         assertThat(user.getCreatedAt()).isNotNull();

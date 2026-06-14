@@ -35,5 +35,4 @@ public final class SubmitRegistrationCommand {
     private final String password;
     private final String documentTypeName;
     private final String documentKey;
-    private final String deviceFingerprint;
 }

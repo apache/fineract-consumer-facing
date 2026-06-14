@@ -34,5 +34,4 @@ public final class CreateUserCommand {
     private final String email;
     private final String passwordHash;
     private final Long fineractClientId;
-    private final String deviceFingerprint;
 }

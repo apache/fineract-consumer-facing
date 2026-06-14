@@ -66,17 +66,13 @@ public class User {
     @Column(name = "bound_at")
     private Instant boundAt;
 
-    @Column(name = "device_fingerprint", nullable = false)
-    private String deviceFingerprint;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public static User createPendingOtp(UUID externalId, String email, String passwordHash, Long fineractClientId,
-            String deviceFingerprint) {
+    public static User createPendingOtp(UUID externalId, String email, String passwordHash, Long fineractClientId) {
         Instant now = Instant.now();
         User user = new User();
         user.externalId = externalId;
@@ -84,7 +80,6 @@ public class User {
         user.passwordHash = passwordHash;
         user.fineractClientId = fineractClientId;
         user.status = UserStatus.PENDING_OTP;
-        user.deviceFingerprint = deviceFingerprint;
         user.createdAt = now;
         user.updatedAt = now;
         return user;
