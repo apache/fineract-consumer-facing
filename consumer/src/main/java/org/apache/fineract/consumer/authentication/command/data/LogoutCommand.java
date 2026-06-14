@@ -17,10 +17,9 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.otp.command.data;
+package org.apache.fineract.consumer.authentication.command.data;
 
 import lombok.Builder;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
@@ -28,9 +27,8 @@ import lombok.ToString;
 @Getter
 @RequiredArgsConstructor
 @Builder
-@EqualsAndHashCode
-@ToString
-public final class OtpDeliveryMethod {
-    private final String name;
-    private final String target;
+@ToString(onlyExplicitlyIncluded = true)
+public final class LogoutCommand {
+
+    private final String refreshToken;
 }

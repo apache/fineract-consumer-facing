@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.cucumber.helpers;
+package org.apache.fineract.consumer.cucumber.clients;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,7 +32,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class MailpitProbe {
+public class MailpitClient {
 
     private static final String BASE_URL = System.getenv().getOrDefault("MAILPIT_URL", "http://localhost:8025");
     private static final Duration POLL_TIMEOUT = Duration.ofSeconds(5);
@@ -43,6 +43,10 @@ public class MailpitProbe {
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .build();
+
+    public void deleteMessages(String recipient) {
+        delete("/api/v1/search?query=" + urlEncode("to:" + recipient));
+    }
 
     public String waitForOtp(String recipient) {
         long deadline = System.nanoTime() + POLL_TIMEOUT.toNanos();
@@ -87,6 +91,25 @@ public class MailpitProbe {
                         + ": " + response.body());
             }
             return MAPPER.readTree(response.body());
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void delete(String path) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(BASE_URL + path))
+                    .timeout(Duration.ofSeconds(5))
+                    .DELETE()
+                    .build();
+            HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                throw new RuntimeException("Mailpit DELETE " + path + " failed with " + response.statusCode()
+                        + ": " + response.body());
+            }
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {

@@ -19,10 +19,12 @@
 
 package org.apache.fineract.consumer.user.query.service;
 
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.query.Query;
 import org.apache.fineract.consumer.user.command.exception.UserNotFoundException;
+import org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.repository.UserQueryRepository;
 import org.springframework.stereotype.Service;
@@ -38,5 +40,18 @@ public class UserQueryServiceImpl implements UserQueryService {
     public UserQueryData findByExternalId(UUID externalId) {
         return repository.findByExternalId(externalId)
                 .orElseThrow(UserNotFoundException::new);
+    }
+
+    @Override
+    @Query
+    public UserQueryData findById(Long id) {
+        return repository.findById(id)
+                .orElseThrow(UserNotFoundException::new);
+    }
+
+    @Override
+    @Query
+    public Optional<UserCredentialsQueryData> findCredentialsByEmail(String email) {
+        return repository.findCredentialsByEmail(email);
     }
 }

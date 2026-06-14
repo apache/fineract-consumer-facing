@@ -20,12 +20,12 @@
 package org.apache.fineract.consumer.otp.command.service;
 
 import java.util.UUID;
-import org.apache.fineract.consumer.otp.command.data.OtpDeliveryMethod;
+import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.data.PendingOtp;
 
 public interface OtpCommandService {
 
-    PendingOtp createOtp(UUID externalId, OtpDeliveryMethod method);
+    PendingOtp createOtp(UUID externalId, OtpDestination destination);
 
     void validateOtp(UUID externalId, String token);
 }

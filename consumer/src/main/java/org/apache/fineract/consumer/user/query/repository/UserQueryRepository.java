@@ -22,6 +22,7 @@ package org.apache.fineract.consumer.user.query.repository;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.fineract.consumer.user.command.domain.User;
+import org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -34,4 +35,18 @@ public interface UserQueryRepository extends Repository<User, Long> {
             WHERE u.externalId = :externalId
             """)
     Optional<UserQueryData> findByExternalId(UUID externalId);
+
+    @Query("""
+            SELECT new org.apache.fineract.consumer.user.query.data.UserQueryData(u.id, u.externalId, u.email, u.status)
+            FROM User u
+            WHERE u.id = :id
+            """)
+    Optional<UserQueryData> findById(Long id);
+
+    @Query("""
+            SELECT new org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData(u.id, u.externalId, u.status, u.passwordHash)
+            FROM User u
+            WHERE u.email = :email
+            """)
+    Optional<UserCredentialsQueryData> findCredentialsByEmail(String email);
 }

@@ -34,11 +34,11 @@ public final class PendingOtp {
     private final String token;
     private final OtpMetadata metadata;
 
-    public static PendingOtp create(String token, int tokenLiveTimeInSec, OtpDeliveryMethod deliveryMethod) {
+    public static PendingOtp create(String token, int tokenLiveTimeInSec, OtpDestination destination) {
         OtpMetadata metadata = OtpMetadata.builder()
                 .requestTime(ZonedDateTime.now())
                 .tokenLiveTimeInSec(tokenLiveTimeInSec)
-                .deliveryMethod(deliveryMethod)
+                .destination(destination)
                 .build();
         return new PendingOtp(token, metadata);
     }

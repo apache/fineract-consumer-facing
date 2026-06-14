@@ -100,7 +100,10 @@ services:
       FINERACT_BASE_URL: http://fineract:8080/fineract-provider/api/v1
       SPRING_MAIL_HOST: mailpit
       SERVER_FORWARD_HEADERS_STRATEGY: framework
+      JWT_KEY_LOCATION: file:/etc/bff/jwt-key.pem
       JAVA_TOOL_OPTIONS: "-Xmx768m -Xms256m"
+    volumes:
+      - ./dev-jwt-key.pem:/etc/bff/jwt-key.pem:ro
     ports:
       - "8080:8080"
     healthcheck:

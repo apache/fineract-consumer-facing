@@ -32,7 +32,7 @@ public final class SubmitRegistrationCommand {
 
     private final Long fineractClientId;
     private final String email;
+    private final String password;
     private final String documentTypeName;
     private final String documentKey;
-    private final String deviceFingerprint;
 }

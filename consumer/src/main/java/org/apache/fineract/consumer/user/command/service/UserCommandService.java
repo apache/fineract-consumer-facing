@@ -27,6 +27,4 @@ public interface UserCommandService {
     UserCreatedCommandData create(CreateUserCommand command);
 
     void markOtpVerified(Long userId);
-
-    void completeBinding(Long userId);
 }

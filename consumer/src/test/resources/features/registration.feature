@@ -27,7 +27,7 @@ Feature: Consumer registration
     Then an OTP is delivered to my email
     When I retrieve the OTP from Mailpit
     And I verify the OTP
-    Then my registration advances to PENDING_2FA
+    Then my registration advances to BOUND
 
   Scenario: Submit with mismatched identifier is rejected
     When I submit registration with a non-matching Passport value
@@ -45,3 +45,15 @@ Feature: Consumer registration
     And I request an email OTP
     And I verify a wrong OTP
     Then the OTP is rejected as invalid
+
+  Scenario: Registering the same email twice is rejected
+    When I submit registration with the matching Passport
+    Then registration is accepted in PENDING_OTP state
+    When a second Fineract client submits registration with the same email
+    Then registration is rejected as an existing user
+
+  Scenario: A Fineract client that already has a registration cannot register again
+    When I submit registration with the matching Passport
+    Then registration is accepted in PENDING_OTP state
+    When I submit registration again with a different email
+    Then registration is rejected as an existing user

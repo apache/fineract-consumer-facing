@@ -22,7 +22,7 @@ package org.apache.fineract.consumer.registration.command.service;
 import java.time.ZonedDateTime;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.command.Command;
-import org.apache.fineract.consumer.otp.command.data.OtpDeliveryMethod;
+import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.data.PendingOtp;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
 import org.apache.fineract.consumer.registration.command.data.SendOtpCommand;
@@ -41,6 +41,7 @@ import org.apache.fineract.consumer.user.command.domain.UserStatus;
 import org.apache.fineract.consumer.user.command.service.UserCommandService;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -51,6 +52,7 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
     private final UserCommandService userCommandService;
     private final UserQueryService userQueryService;
     private final OtpCommandService otpCommandService;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     @Command
@@ -68,8 +70,8 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
 
         CreateUserCommand createUser = CreateUserCommand.builder()
                 .email(command.getEmail())
+                .passwordHash(passwordEncoder.encode(command.getPassword()))
                 .fineractClientId(command.getFineractClientId())
-                .deviceFingerprint(command.getDeviceFingerprint())
                 .build();
         UserCreatedCommandData createdUser = userCommandService.create(createUser);
 
@@ -84,11 +86,11 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
     @Command
     public SendOtpCommandData sendOtp(SendOtpCommand command) {
         UserQueryData user = userQueryService.findByExternalId(command.getRegistrationId());
-        OtpDeliveryMethod method = OtpDeliveryMethod.builder()
-                .name(command.getDeliveryMethod())
+        OtpDestination destination = OtpDestination.builder()
+                .deliveryMethod(command.getDeliveryMethod())
                 .target(user.getEmail())
                 .build();
-        PendingOtp request = otpCommandService.createOtp(user.getExternalId(), method);
+        PendingOtp request = otpCommandService.createOtp(user.getExternalId(), destination);
         ZonedDateTime expiresAt = request.getMetadata().getRequestTime()
                 .plusSeconds(request.getMetadata().getTokenLiveTimeInSec());
         return SendOtpCommandData.builder()
@@ -105,7 +107,7 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
         otpCommandService.validateOtp(user.getExternalId(), command.getToken());
         userCommandService.markOtpVerified(user.getId());
         return VerifyOtpCommandData.builder()
-                .status(UserStatus.PENDING_2FA)
+                .status(UserStatus.BOUND)
                 .build();
     }
 

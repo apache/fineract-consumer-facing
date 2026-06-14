@@ -22,7 +22,9 @@ package org.apache.fineract.consumer.registration.command.data;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,11 @@ public final class SubmitRegistrationCommandRequest {
     @NotBlank
     @Email
     private final String email;
+
+    @NotBlank
+    @Size(min = 15, max = 64)
+    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$")
+    private final String password;
 
     @NotBlank
     private final String documentTypeName;

@@ -21,6 +21,5 @@ package org.apache.fineract.consumer.user.command.domain;
 
 public enum UserStatus {
     PENDING_OTP,
-    PENDING_2FA,
     BOUND
 }

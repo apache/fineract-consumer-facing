@@ -65,6 +65,9 @@ jobs:
         with:
           validate-wrappers: true
 
+      - name: Generate dev JWT signing key
+        run: ./scripts/generate-dev-jwt-key.sh
+
       - name: Start application stack
         run: docker compose up -d --build --wait --wait-timeout 180
 

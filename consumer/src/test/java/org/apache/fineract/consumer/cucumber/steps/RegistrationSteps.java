@@ -33,23 +33,24 @@ import org.apache.fineract.consumer.client.model.SubmitRegistrationCommandData;
 import org.apache.fineract.consumer.client.model.SubmitRegistrationCommandRequest;
 import org.apache.fineract.consumer.client.model.VerifyOtpCommandData;
 import org.apache.fineract.consumer.client.model.VerifyOtpCommandRequest;
+import org.apache.fineract.consumer.cucumber.clients.MailpitClient;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
-import org.apache.fineract.consumer.cucumber.helpers.MailpitProbe;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.registration.command.exception.IdentityNotVerifiedException;
+import org.apache.fineract.consumer.user.command.exception.UserAlreadyExistsException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 public class RegistrationSteps {
 
     private static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
-    private static final String DEVICE_FINGERPRINT = "cucumber-test-device";
     private static final String WRONG_OTP = "WRONG1";
+    private static final String PASSWORD = "Cucumber-password1";
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     private final FineractSeeder fineractSeed = new FineractSeeder();
-    private final MailpitProbe mailpit = new MailpitProbe();
+    private final MailpitClient mailpit = new MailpitClient();
     private final RegistrationCommandControllerApi bff = buildBffClient();
 
     private FineractSeeder.SeededClient seededClient;
@@ -74,6 +75,18 @@ public class RegistrationSteps {
     @When("I submit registration with a non-matching Passport value")
     public void submitMismatch() {
         submit("WRONG-VALUE-" + UUID.randomUUID().toString().substring(0, 4).toUpperCase());
+    }
+
+    @When("a second Fineract client submits registration with the same email")
+    public void secondClientSubmitsSameEmail() {
+        FineractSeeder.SeededClient secondClient = fineractSeed.seedClientWithPassport();
+        submit(secondClient, email, secondClient.documentKey());
+    }
+
+    @When("I submit registration again with a different email")
+    public void submitAgainWithDifferentEmail() {
+        String differentEmail = "user-" + UUID.randomUUID().toString().substring(0, 8) + "@test.com";
+        submit(seededClient, differentEmail, seededClient.documentKey());
     }
 
     @Then("registration is accepted in PENDING_OTP state")
@@ -149,14 +162,21 @@ public class RegistrationSteps {
         otpDelivered();
         retrieveOtpFromMailpit();
         verifyCorrectOtp();
-        advancedToPending2fa();
+        advancedToBound();
     }
 
-    @Then("my registration advances to PENDING_2FA")
-    public void advancedToPending2fa() {
+    @Then("my registration advances to BOUND")
+    public void advancedToBound() {
         assertThat(lastError).as("expected verify success, got error").isNull();
         assertThat(lastVerify).isNotNull();
-        assertThat(lastVerify.getStatus()).isEqualTo(VerifyOtpCommandData.StatusEnum.PENDING_2_FA);
+        assertThat(lastVerify.getStatus()).isEqualTo(VerifyOtpCommandData.StatusEnum.BOUND);
+    }
+
+    @Then("registration is rejected as an existing user")
+    public void registrationRejectedAsExistingUser() {
+        assertThat(lastError).as("expected conflict, got success").isNotNull();
+        assertThat(lastError.status()).isEqualTo(409);
+        assertThat(readCode(lastError.contentUTF8())).isEqualTo(UserAlreadyExistsException.CODE);
     }
 
     @Then("the OTP is rejected as invalid")
@@ -167,13 +187,18 @@ public class RegistrationSteps {
     }
 
     private void submit(String documentKey) {
+        submit(seededClient, email, documentKey);
+    }
+
+    private void submit(FineractSeeder.SeededClient client, String email, String documentKey) {
         SubmitRegistrationCommandRequest request = new SubmitRegistrationCommandRequest()
-                .fineractClientId(seededClient.fineractClientId())
+                .fineractClientId(client.fineractClientId())
                 .email(email)
-                .documentTypeName(seededClient.documentTypeName())
+                .password(PASSWORD)
+                .documentTypeName(client.documentTypeName())
                 .documentKey(documentKey);
         try {
-            lastSubmit = bff.submit(DEVICE_FINGERPRINT, request);
+            lastSubmit = bff.submit(request);
             lastError = null;
         } catch (FeignException e) {
             lastError = e;

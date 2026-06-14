@@ -19,10 +19,14 @@
 
 package org.apache.fineract.consumer.infrastructure.configs;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -30,7 +34,8 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+            @Qualifier("accessTokenJwtDecoder") JwtDecoder accessTokenJwtDecoder) throws Exception {
         return http
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers(
@@ -41,8 +46,14 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/api/v1/registration/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/authentication/login",
+                                "/api/v1/authentication/2fa",
+                                "/api/v1/authentication/refresh"
+                        ).permitAll()
                         .anyRequest().authenticated())
-                // TODO: Setup CSRF
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(accessTokenJwtDecoder)))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
                 .build();
     }

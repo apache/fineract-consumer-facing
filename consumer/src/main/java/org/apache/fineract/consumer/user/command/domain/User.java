@@ -52,6 +52,9 @@ public class User {
     @Column(name = "email", nullable = false, unique = true)
     private String email;
 
+    @Column(name = "password_hash", nullable = false, length = 100)
+    private String passwordHash;
+
     @Column(name = "client_id", nullable = false, unique = true)
     private Long fineractClientId;
 
@@ -63,23 +66,20 @@ public class User {
     @Column(name = "bound_at")
     private Instant boundAt;
 
-    @Column(name = "device_fingerprint", nullable = false)
-    private String deviceFingerprint;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public static User createPendingOtp(UUID externalId, String email, Long fineractClientId, String deviceFingerprint) {
+    public static User createPendingOtp(UUID externalId, String email, String passwordHash, Long fineractClientId) {
         Instant now = Instant.now();
         User user = new User();
         user.externalId = externalId;
         user.email = email;
+        user.passwordHash = passwordHash;
         user.fineractClientId = fineractClientId;
         user.status = UserStatus.PENDING_OTP;
-        user.deviceFingerprint = deviceFingerprint;
         user.createdAt = now;
         user.updatedAt = now;
         return user;
@@ -87,14 +87,6 @@ public class User {
 
     public void markOtpVerified() {
         if (status != UserStatus.PENDING_OTP) {
-            throw new InvalidBindingStateException();
-        }
-        status = UserStatus.PENDING_2FA;
-        updatedAt = Instant.now();
-    }
-
-    public void completeBinding() {
-        if (status != UserStatus.PENDING_2FA) {
             throw new InvalidBindingStateException();
         }
         Instant now = Instant.now();

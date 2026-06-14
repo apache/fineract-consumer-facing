@@ -17,16 +17,12 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.otp.command.exception;
+package org.apache.fineract.consumer.infrastructure.web;
 
-import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
-import org.springframework.http.HttpStatus;
+public final class ConsumerHeaders {
 
-public class OtpDeliveryMethodInvalidException extends AbstractConsumerException {
-
-    public static final String CODE = "error.msg.consumer.otp.delivery.method.invalid";
-
-    public OtpDeliveryMethodInvalidException() {
-        super(HttpStatus.BAD_REQUEST, CODE, "unsupported delivery method");
+    private ConsumerHeaders() {
     }
+
+    public static final String DEVICE_FINGERPRINT = "X-Device-Fingerprint";
 }

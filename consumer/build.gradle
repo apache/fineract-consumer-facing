@@ -91,7 +91,7 @@ tasks.named('test') {
 
 cucumber {
 	featurePath = 'src/test/resources/features'
-	glue = 'org.apache.fineract.consumer.cucumber.steps'
+	glue = 'org.apache.fineract.consumer.cucumber'
 	plugin = ['pretty']
 }
 

@@ -19,10 +19,16 @@
 
 package org.apache.fineract.consumer.user.query.service;
 
+import java.util.Optional;
 import java.util.UUID;
+import org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 
 public interface UserQueryService {
 
     UserQueryData findByExternalId(UUID externalId);
+
+    UserQueryData findById(Long id);
+
+    Optional<UserCredentialsQueryData> findCredentialsByEmail(String email);
 }

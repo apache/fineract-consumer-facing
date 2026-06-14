@@ -49,8 +49,8 @@ public class UserCommandServiceImpl implements UserCommandService {
         User user = User.createPendingOtp(
                 UUID.randomUUID(),
                 command.getEmail(),
-                command.getFineractClientId(),
-                command.getDeviceFingerprint());
+                command.getPasswordHash(),
+                command.getFineractClientId());
         User saved;
         try {
             saved = repository.save(user);
@@ -68,14 +68,6 @@ public class UserCommandServiceImpl implements UserCommandService {
     public void markOtpVerified(Long userId) {
         User user = repository.findById(userId).orElseThrow(UserNotFoundException::new);
         user.markOtpVerified();
-        repository.save(user);
-    }
-
-    @Override
-    @Command
-    public void completeBinding(Long userId) {
-        User user = repository.findById(userId).orElseThrow(UserNotFoundException::new);
-        user.completeBinding();
         repository.save(user);
     }
 }

@@ -52,3 +52,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Local secrets — never commit ###
+dev-jwt-key.pem

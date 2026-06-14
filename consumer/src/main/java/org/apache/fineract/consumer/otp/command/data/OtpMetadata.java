@@ -34,5 +34,5 @@ import lombok.ToString;
 public final class OtpMetadata {
     private final ZonedDateTime requestTime;
     private final int tokenLiveTimeInSec;
-    private final OtpDeliveryMethod deliveryMethod;
+    private final OtpDestination destination;
 }

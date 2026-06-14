@@ -103,6 +103,10 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      - name: Generate dev JWT signing key
+        working-directory: ${{ github.workspace }}
+        run: ./consumer/scripts/generate-dev-jwt-key.sh
+
       - name: Bring up e2e stack
         working-directory: ${{ github.workspace }}
         run: docker compose -f docker-compose.e2e.yml up -d --build --wait --wait-timeout 360
