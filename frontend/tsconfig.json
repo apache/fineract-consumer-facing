@@ -12,10 +12,9 @@
     "importHelpers": true,
     "target": "ES2022",
     "module": "preserve",
-    "baseUrl": "./src",
     "paths": {
-      "@bff/client": ["openapi-client"],
-      "@bff/client/*": ["openapi-client/*"]
+      "@bff/client": ["./src/openapi-client"],
+      "@bff/client/*": ["./src/openapi-client/*"]
     }
   },
   "angularCompilerOptions": {
