@@ -30,21 +30,21 @@ import org.springframework.data.repository.Repository;
 public interface UserQueryRepository extends Repository<User, Long> {
 
     @Query("""
-            SELECT new org.apache.fineract.consumer.user.query.data.UserQueryData(u.id, u.externalId, u.email, u.status)
+            SELECT new org.apache.fineract.consumer.user.query.data.UserQueryData(u.id, u.publicId, u.fineractClientId, u.email, u.status)
             FROM User u
-            WHERE u.externalId = :externalId
+            WHERE u.publicId = :publicId
             """)
-    Optional<UserQueryData> findByExternalId(UUID externalId);
+    Optional<UserQueryData> findByPublicId(UUID publicId);
 
     @Query("""
-            SELECT new org.apache.fineract.consumer.user.query.data.UserQueryData(u.id, u.externalId, u.email, u.status)
+            SELECT new org.apache.fineract.consumer.user.query.data.UserQueryData(u.id, u.publicId, u.fineractClientId, u.email, u.status)
             FROM User u
             WHERE u.id = :id
             """)
     Optional<UserQueryData> findById(Long id);
 
     @Query("""
-            SELECT new org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData(u.id, u.externalId, u.status, u.passwordHash)
+            SELECT new org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData(u.id, u.publicId, u.status, u.passwordHash)
             FROM User u
             WHERE u.email = :email
             """)

@@ -51,6 +51,9 @@ public class SecurityConfig {
                                 "/api/v1/authentication/2fa",
                                 "/api/v1/authentication/refresh"
                         ).permitAll()
+                        .requestMatchers("/api/v1/savings/**").authenticated()
+                        .requestMatchers("/api/v1/loans/**").authenticated()
+                        .requestMatchers("/api/v1/transfers/**").authenticated()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(accessTokenJwtDecoder)))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

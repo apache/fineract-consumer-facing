@@ -37,8 +37,8 @@ public class UserQueryServiceImpl implements UserQueryService {
 
     @Override
     @Query
-    public UserQueryData findByExternalId(UUID externalId) {
-        return repository.findByExternalId(externalId)
+    public UserQueryData findByPublicId(UUID publicId) {
+        return repository.findByPublicId(publicId)
                 .orElseThrow(UserNotFoundException::new);
     }
 

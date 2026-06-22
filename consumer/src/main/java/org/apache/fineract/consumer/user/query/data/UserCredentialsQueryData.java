@@ -34,7 +34,7 @@ import org.apache.fineract.consumer.user.command.domain.UserStatus;
 @ToString(onlyExplicitlyIncluded = true)
 public final class UserCredentialsQueryData {
     private final Long id;
-    private final UUID externalId;
+    private final UUID publicId;
     private final UserStatus status;
     private final String passwordHash;
 }

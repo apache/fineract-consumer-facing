@@ -46,8 +46,8 @@ public class User {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @Column(name = "external_id", nullable = false, unique = true, updatable = false)
-    private UUID externalId;
+    @Column(name = "public_id", nullable = false, unique = true, updatable = false)
+    private UUID publicId;
 
     @Column(name = "email", nullable = false, unique = true)
     private String email;
@@ -72,10 +72,10 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public static User createPendingOtp(UUID externalId, String email, String passwordHash, Long fineractClientId) {
+    public static User createPendingOtp(UUID publicId, String email, String passwordHash, Long fineractClientId) {
         Instant now = Instant.now();
         User user = new User();
-        user.externalId = externalId;
+        user.publicId = publicId;
         user.email = email;
         user.passwordHash = passwordHash;
         user.fineractClientId = fineractClientId;

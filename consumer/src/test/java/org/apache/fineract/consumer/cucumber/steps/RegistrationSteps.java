@@ -120,7 +120,7 @@ public class RegistrationSteps {
                 .registrationId(registrationId)
                 .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME);
         try {
-            bff.sendOtp(request);
+            bff.sendRegistrationOtp(request);
             lastError = null;
         } catch (FeignException e) {
             lastError = e;
@@ -198,7 +198,7 @@ public class RegistrationSteps {
                 .documentTypeName(client.documentTypeName())
                 .documentKey(documentKey);
         try {
-            lastSubmit = bff.submit(request);
+            lastSubmit = bff.submitRegistration(request);
             lastError = null;
         } catch (FeignException e) {
             lastError = e;
@@ -211,7 +211,7 @@ public class RegistrationSteps {
                 .registrationId(registrationId)
                 .token(token);
         try {
-            lastVerify = bff.verifyOtp(request);
+            lastVerify = bff.verifyRegistrationOtp(request);
             lastError = null;
         } catch (FeignException e) {
             lastError = e;

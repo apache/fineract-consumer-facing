@@ -45,11 +45,11 @@ public class OtpCommandServiceImpl implements OtpCommandService {
 
     @Override
     @Command
-    public PendingOtp createOtp(UUID externalId, OtpDestination destination) {
+    public PendingOtp createOtp(UUID publicId, OtpDestination destination) {
         if (OtpConstants.EMAIL_DELIVERY_METHOD_NAME.equalsIgnoreCase(destination.getDeliveryMethod())) {
             PendingOtp request = generateNewToken(destination);
             otpEmailDeliveryService.deliver(destination.getTarget(), request.getToken());
-            otpCommandRepository.addPendingOtp(externalId, request);
+            otpCommandRepository.addPendingOtp(publicId, request);
             return request;
         }
         throw new OtpDestinationInvalidException();
@@ -57,12 +57,12 @@ public class OtpCommandServiceImpl implements OtpCommandService {
 
     @Override
     @Command
-    public void validateOtp(UUID externalId, String token) {
-        PendingOtp otpRequest = otpCommandRepository.getPendingOtpForUser(externalId);
+    public void validateOtp(UUID publicId, String token) {
+        PendingOtp otpRequest = otpCommandRepository.getPendingOtpForUser(publicId);
         if (otpRequest == null || !otpRequest.isValid() || !otpRequest.getToken().equalsIgnoreCase(token)) {
             throw new OtpTokenInvalidException();
         }
-        otpCommandRepository.deletePendingOtpForUser(externalId);
+        otpCommandRepository.deletePendingOtpForUser(publicId);
     }
 
     private PendingOtp generateNewToken(OtpDestination destination) {

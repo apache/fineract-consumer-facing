@@ -49,7 +49,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class UserCommandServiceImplTest {
 
     private static final Long USER_ID = 7L;
-    private static final UUID EXTERNAL_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
+    private static final UUID PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
     private static final String EMAIL = "user@test.com";
     private static final String PASSWORD_HASH = "{bcrypt}$2a$10$hash";
     private static final Long FINERACT_CLIENT_ID = 42L;
@@ -69,7 +69,7 @@ class UserCommandServiceImplTest {
     }
 
     private static User existingUser() {
-        return User.createPendingOtp(EXTERNAL_ID, EMAIL, PASSWORD_HASH, FINERACT_CLIENT_ID);
+        return User.createPendingOtp(PUBLIC_ID, EMAIL, PASSWORD_HASH, FINERACT_CLIENT_ID);
     }
 
     @Nested
@@ -93,10 +93,10 @@ class UserCommandServiceImplTest {
             assertThat(saved.getValue().getPasswordHash()).isEqualTo(PASSWORD_HASH);
             assertThat(saved.getValue().getFineractClientId()).isEqualTo(FINERACT_CLIENT_ID);
             assertThat(saved.getValue().getStatus()).isEqualTo(UserStatus.PENDING_OTP);
-            assertThat(saved.getValue().getExternalId()).isNotNull();
+            assertThat(saved.getValue().getPublicId()).isNotNull();
 
             assertThat(created.getUserId()).isEqualTo(USER_ID);
-            assertThat(created.getExternalId()).isEqualTo(saved.getValue().getExternalId());
+            assertThat(created.getPublicId()).isEqualTo(saved.getValue().getPublicId());
         }
 
         @Test

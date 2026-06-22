@@ -43,30 +43,47 @@ public class RegistrationHelper {
 
     public record BoundUser(String email, String password) {}
 
+    public record BoundUserWithAccounts(
+            String email, String password, long savingsAccountId, long loanAccountId) {}
+
     public BoundUser registerBoundUser() {
         FineractSeeder.SeededClient seededClient = fineractSeeder.seedClientWithPassport();
+        String email = bindUser(seededClient.fineractClientId(),
+                seededClient.documentTypeName(), seededClient.documentKey());
+        return new BoundUser(email, PASSWORD);
+    }
+
+    public BoundUserWithAccounts registerBoundUserWithAccounts() {
+        FineractSeeder.SeededClientWithAccounts seededClient = fineractSeeder.seedActiveClientWithAccounts();
+        String email = bindUser(seededClient.fineractClientId(),
+                seededClient.documentTypeName(), seededClient.documentKey());
+        return new BoundUserWithAccounts(
+                email, PASSWORD, seededClient.savingsAccountId(), seededClient.loanAccountId());
+    }
+
+    private String bindUser(long fineractClientId, String documentTypeName, String documentKey) {
         String email = "user-" + UUID.randomUUID().toString().substring(0, 8) + "@test.com";
 
-        SubmitRegistrationCommandData submitted = bff.submit(
+        SubmitRegistrationCommandData submitted = bff.submitRegistration(
                 new SubmitRegistrationCommandRequest()
-                        .fineractClientId(seededClient.fineractClientId())
+                        .fineractClientId(fineractClientId)
                         .email(email)
                         .password(PASSWORD)
-                        .documentTypeName(seededClient.documentTypeName())
-                        .documentKey(seededClient.documentKey()));
+                        .documentTypeName(documentTypeName)
+                        .documentKey(documentKey));
         assertThat(submitted.getStatus()).isEqualTo(SubmitRegistrationCommandData.StatusEnum.PENDING_OTP);
 
-        bff.sendOtp(new SendOtpCommandRequest()
+        bff.sendRegistrationOtp(new SendOtpCommandRequest()
                 .registrationId(submitted.getRegistrationId())
                 .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME));
 
         String otp = mailpit.waitForOtp(email);
-        VerifyOtpCommandData verified = bff.verifyOtp(new VerifyOtpCommandRequest()
+        VerifyOtpCommandData verified = bff.verifyRegistrationOtp(new VerifyOtpCommandRequest()
                 .registrationId(submitted.getRegistrationId())
                 .token(otp));
         assertThat(verified.getStatus()).isEqualTo(VerifyOtpCommandData.StatusEnum.BOUND);
 
-        return new BoundUser(email, PASSWORD);
+        return email;
     }
 
     private static RegistrationCommandControllerApi buildBffClient() {

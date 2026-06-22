@@ -28,20 +28,20 @@ import org.junit.jupiter.api.Test;
 
 class UserTest {
 
-    private static final UUID EXTERNAL_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
+    private static final UUID PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
     private static final String EMAIL = "user@test.com";
     private static final String PASSWORD_HASH = "{bcrypt}$2a$10$hash";
     private static final Long FINERACT_CLIENT_ID = 42L;
 
     private static User pendingOtpUser() {
-        return User.createPendingOtp(EXTERNAL_ID, EMAIL, PASSWORD_HASH, FINERACT_CLIENT_ID);
+        return User.createPendingOtp(PUBLIC_ID, EMAIL, PASSWORD_HASH, FINERACT_CLIENT_ID);
     }
 
     @Test
     void createPendingOtpSetsAllFieldsAndStartsUnbound() {
         User user = pendingOtpUser();
 
-        assertThat(user.getExternalId()).isEqualTo(EXTERNAL_ID);
+        assertThat(user.getPublicId()).isEqualTo(PUBLIC_ID);
         assertThat(user.getEmail()).isEqualTo(EMAIL);
         assertThat(user.getPasswordHash()).isEqualTo(PASSWORD_HASH);
         assertThat(user.getFineractClientId()).isEqualTo(FINERACT_CLIENT_ID);

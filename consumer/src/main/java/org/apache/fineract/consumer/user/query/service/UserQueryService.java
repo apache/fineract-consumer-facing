@@ -26,7 +26,7 @@ import org.apache.fineract.consumer.user.query.data.UserQueryData;
 
 public interface UserQueryService {
 
-    UserQueryData findByExternalId(UUID externalId);
+    UserQueryData findByPublicId(UUID publicId);
 
     UserQueryData findById(Long id);
 

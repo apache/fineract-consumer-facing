@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.authentication.command.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import java.time.Instant;
@@ -58,6 +59,7 @@ public class AuthenticationCommandController {
     private final AuthenticationCommandService authenticationCommandService;
     private final AuthenticationProperties authenticationProperties;
 
+    @Operation(operationId = "login")
     @PostMapping("/login")
     public ResponseEntity<LoginChallengeCommandData> login(
             @Valid @RequestBody LoginCommandRequest request,
@@ -70,6 +72,7 @@ public class AuthenticationCommandController {
         return ResponseEntity.ok(authenticationCommandService.login(command));
     }
 
+    @Operation(operationId = "verifyTwoFactor")
     @PostMapping("/2fa")
     public ResponseEntity<SessionCommandData> verifyTwoFactor(
             @Valid @RequestBody VerifyTwoFactorCommandRequest request,
@@ -82,6 +85,7 @@ public class AuthenticationCommandController {
         return sessionResponse(authenticationCommandService.verifyTwoFactor(command));
     }
 
+    @Operation(operationId = "refreshSession")
     @PostMapping("/refresh")
     public ResponseEntity<SessionCommandData> refresh(
             @CookieValue(value = AuthenticationConstants.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshToken,
@@ -96,6 +100,7 @@ public class AuthenticationCommandController {
         return sessionResponse(authenticationCommandService.refresh(command));
     }
 
+    @Operation(operationId = "logout")
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
             @CookieValue(value = AuthenticationConstants.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshToken) {

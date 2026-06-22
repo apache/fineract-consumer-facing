@@ -33,5 +33,5 @@ import lombok.ToString;
 @ToString
 public final class UserCreatedCommandData {
     private final Long userId;
-    private final UUID externalId;
+    private final UUID publicId;
 }
