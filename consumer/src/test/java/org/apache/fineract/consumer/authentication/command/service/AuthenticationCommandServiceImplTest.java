@@ -86,6 +86,7 @@ class AuthenticationCommandServiceImplTest {
     private static final String OTP_TOKEN = "ABC123";
     private static final String CHALLENGE_TOKEN = "challenge-token";
     private static final String PRESENTED_REFRESH_TOKEN = "presented-refresh-token";
+    private static final String PRESENTED_TOKEN_HASH = "hash-of-presented-token";
     private static final Long NEW_TOKEN_ID = 42L;
     private static final Long SUCCESSOR_ID = 43L;
 
@@ -297,7 +298,7 @@ class AuthenticationCommandServiceImplTest {
         }
 
         private RefreshToken activeToken() {
-            return RefreshToken.issue(USER_ID, "hash-of-presented-token", DEVICE_FINGERPRINT,
+            return RefreshToken.issue(USER_ID, PRESENTED_TOKEN_HASH, DEVICE_FINGERPRINT,
                     Instant.now().plusSeconds(3600));
         }
 
@@ -364,7 +365,7 @@ class AuthenticationCommandServiceImplTest {
 
         @Test
         void expiredTokenIsRejected() {
-            RefreshToken expired = RefreshToken.issue(USER_ID, "hash-of-presented-token", DEVICE_FINGERPRINT,
+            RefreshToken expired = RefreshToken.issue(USER_ID, PRESENTED_TOKEN_HASH, DEVICE_FINGERPRINT,
                     Instant.now().minusSeconds(1));
             when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(expired));
 
@@ -386,7 +387,7 @@ class AuthenticationCommandServiceImplTest {
 
         @Test
         void knownTokenIsRevoked() {
-            RefreshToken token = RefreshToken.issue(USER_ID, "hash-of-presented-token", DEVICE_FINGERPRINT,
+            RefreshToken token = RefreshToken.issue(USER_ID, PRESENTED_TOKEN_HASH, DEVICE_FINGERPRINT,
                     Instant.now().plusSeconds(3600));
             when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(token));
             when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
