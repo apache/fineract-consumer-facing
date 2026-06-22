@@ -199,7 +199,7 @@ task generateFineractClient(type: GenerateTask) {
 	dependsOn 'sanitizeFineractSpec'
 }
 
-task generateTypeScriptClient(type: GenerateTask) {
+task generateTypescriptClient(type: GenerateTask) {
 	description = 'Generate TypeScript/Angular client for the frontend.'
 	group = 'documentation'
 	generatorName = 'typescript-angular'
@@ -221,5 +221,5 @@ task generateTypeScriptClient(type: GenerateTask) {
 task generateClients {
 	description = 'Generate Java + TypeScript clients from the OpenAPI spec.'
 	group = 'documentation'
-	dependsOn 'generateJavaClient', 'generateTypeScriptClient'
+	dependsOn 'generateJavaClient', 'generateTypescriptClient'
 }
