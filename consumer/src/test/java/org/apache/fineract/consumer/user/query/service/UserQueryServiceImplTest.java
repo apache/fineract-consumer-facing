@@ -40,7 +40,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class UserQueryServiceImplTest {
 
     private static final Long USER_ID = 7L;
-    private static final UUID EXTERNAL_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
+    private static final UUID PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
     private static final String EMAIL = "user@test.com";
     private static final String PASSWORD_HASH = "{bcrypt}$2a$10$hash";
 
@@ -53,25 +53,25 @@ class UserQueryServiceImplTest {
     private static UserQueryData userQueryData() {
         return UserQueryData.builder()
                 .id(USER_ID)
-                .externalId(EXTERNAL_ID)
+                .publicId(PUBLIC_ID)
                 .email(EMAIL)
                 .status(UserStatus.BOUND)
                 .build();
     }
 
     @Test
-    void findByExternalIdReturnsUser() {
+    void findByPublicIdReturnsUser() {
         UserQueryData user = userQueryData();
-        when(repository.findByExternalId(EXTERNAL_ID)).thenReturn(Optional.of(user));
+        when(repository.findByPublicId(PUBLIC_ID)).thenReturn(Optional.of(user));
 
-        assertThat(service.findByExternalId(EXTERNAL_ID)).isEqualTo(user);
+        assertThat(service.findByPublicId(PUBLIC_ID)).isEqualTo(user);
     }
 
     @Test
-    void findByExternalIdUnknownIsRejected() {
-        when(repository.findByExternalId(EXTERNAL_ID)).thenReturn(Optional.empty());
+    void findByPublicIdUnknownIsRejected() {
+        when(repository.findByPublicId(PUBLIC_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.findByExternalId(EXTERNAL_ID))
+        assertThatThrownBy(() -> service.findByPublicId(PUBLIC_ID))
                 .isInstanceOf(UserNotFoundException.class);
     }
 
@@ -95,7 +95,7 @@ class UserQueryServiceImplTest {
     void findCredentialsByEmailReturnsCredentialsWhenPresent() {
         UserCredentialsQueryData credentials = UserCredentialsQueryData.builder()
                 .id(USER_ID)
-                .externalId(EXTERNAL_ID)
+                .publicId(PUBLIC_ID)
                 .status(UserStatus.BOUND)
                 .passwordHash(PASSWORD_HASH)
                 .build();

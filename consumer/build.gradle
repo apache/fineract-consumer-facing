@@ -18,6 +18,8 @@
  */
 
 import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
 
 plugins {
 	id 'java'
@@ -78,11 +80,20 @@ dependencyManagement {
 }
 
 sourceSets {
+	main {
+		java {
+			srcDir "$buildDir/generated/fineractclient/src/main/java"
+		}
+	}
 	test {
 		java {
 			srcDir "$buildDir/generated/java-client/src/main/java"
 		}
 	}
+}
+
+tasks.named('compileJava') {
+	dependsOn 'generateFineractClient'
 }
 
 tasks.named('test') {
@@ -130,6 +141,62 @@ task generateJavaClient(type: GenerateTask) {
 		useJakartaEe        : 'true'
 	]
 	dependsOn 'openapi'
+}
+
+def fineractRawSpec = file("$projectDir/src/main/java/org/apache/fineract/consumer/infrastructure/fineractclient/spec/fineract.json")
+def fineractSanitizedSpec = file("$buildDir/fineract-spec/fineract.sanitized.json")
+
+def stripNullOnlyEnums(node) {
+	if (node instanceof Map) {
+		if (node.enum instanceof List && node.enum && node.enum.every { it == null }) node.remove('enum')
+		node.values().each { stripNullOnlyEnums(it) }
+	} else if (node instanceof List) {
+		node.each { stripNullOnlyEnums(it) }
+	}
+}
+
+task sanitizeFineractSpec {
+	description = 'Strip null-only enums from the vendored Fineract spec before code generation.'
+	group = 'documentation'
+	inputs.file fineractRawSpec
+	outputs.file fineractSanitizedSpec
+	doLast {
+		def spec = new JsonSlurper().parse(fineractRawSpec)
+		stripNullOnlyEnums(spec)
+		fineractSanitizedSpec.parentFile.mkdirs()
+		fineractSanitizedSpec.text = JsonOutput.toJson(spec)
+	}
+}
+
+task generateFineractClient(type: GenerateTask) {
+	description = 'Generate Spring Cloud Feign client for Fineract Core (full surface).'
+	group = 'documentation'
+	generatorName  = 'spring'
+	library        = 'spring-cloud'
+	skipValidateSpec = true
+	inputSpec      = fineractSanitizedSpec.path
+	outputDir      = "$buildDir/generated/fineractclient"
+	ignoreFileOverride = "$projectDir/src/main/java/org/apache/fineract/consumer/infrastructure/fineractclient/spec/fineract.ignore"
+	apiPackage     = 'org.apache.fineract.consumer.infrastructure.fineractclient.generated.api'
+	modelPackage   = 'org.apache.fineract.consumer.infrastructure.fineractclient.generated.model'
+	invokerPackage = 'org.apache.fineract.consumer.infrastructure.fineractclient.generated'
+	templateDir    = "$projectDir/src/main/java/org/apache/fineract/consumer/infrastructure/fineractclient/templates"
+	generateApiTests           = false
+	generateModelTests         = false
+	generateApiDocumentation   = false
+	generateModelDocumentation = false
+	configOptions = [
+		useJakartaEe         : 'true',
+		useTags              : 'true',
+		interfaceOnly        : 'false',
+		useResponseEntity    : 'false',
+		dateLibrary          : 'java8',
+		documentationProvider: 'none',
+		annotationLibrary    : 'none',
+		useBeanValidation    : 'false',
+		openApiNullable      : 'false'
+	]
+	dependsOn 'sanitizeFineractSpec'
 }
 
 task generateTypeScriptClient(type: GenerateTask) {

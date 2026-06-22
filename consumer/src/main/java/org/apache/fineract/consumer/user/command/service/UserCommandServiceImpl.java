@@ -59,7 +59,7 @@ public class UserCommandServiceImpl implements UserCommandService {
         }
         return UserCreatedCommandData.builder()
                 .userId(saved.getId())
-                .externalId(saved.getExternalId())
+                .publicId(saved.getPublicId())
                 .build();
     }
 

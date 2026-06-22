@@ -21,10 +21,9 @@ package org.apache.fineract.consumer.registration.query.service;
 
 import feign.FeignException;
 import java.util.List;
-import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.fineractclient.clients.FineractClientIdentifiersClient;
-import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractClientIdentifierData;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientIdentifierApi;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.ClientIdentifierData;
 import org.apache.fineract.consumer.infrastructure.query.Query;
 import org.apache.fineract.consumer.registration.query.data.IdentityVerificationQuery;
 import org.apache.fineract.consumer.registration.query.data.IdentityVerificationQueryData;
@@ -35,22 +34,24 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class IdentityQueryServiceImpl implements IdentityQueryService {
 
-    private final FineractClientIdentifiersClient identifiersClient;
+    private final ClientIdentifierApi identifiersClient;
 
     @Override
     @Query
     public IdentityVerificationQueryData verifyIdentity(IdentityVerificationQuery query) {
+        String typeName = query.getDocumentTypeName();
+        String normalizedKey = normalize(query.getDocumentKey());
         return fetchIdentifiers(query.getFineractClientId()).stream()
-                .filter(matchesDocumentType(query.getDocumentTypeName()))
-                .filter(matchesNormalizedKey(query.getDocumentKey()))
+                .filter(i -> matchesDocumentType(i, typeName))
+                .filter(i -> matchesNormalizedKey(i, normalizedKey))
                 .findFirst()
                 .map(i -> IdentityVerificationQueryData.verified(lastFour(i.getDocumentKey())))
                 .orElseGet(IdentityVerificationQueryData::denied);
     }
 
-    private List<FineractClientIdentifierData> fetchIdentifiers(Long clientId) {
+    private List<ClientIdentifierData> fetchIdentifiers(Long clientId) {
         try {
-            List<FineractClientIdentifierData> result = identifiersClient.getIdentifiers(clientId);
+            List<ClientIdentifierData> result = identifiersClient.retrieveAllClientIdentifiers(clientId);
             return result == null ? List.of() : result;
         } catch (FeignException.NotFound e) {
             return List.of();
@@ -59,13 +60,12 @@ public class IdentityQueryServiceImpl implements IdentityQueryService {
         }
     }
 
-    private static Predicate<FineractClientIdentifierData> matchesDocumentType(String typeName) {
-        return i -> i.getDocumentType() != null && typeName.equals(i.getDocumentType().getName());
+    private static boolean matchesDocumentType(ClientIdentifierData i, String typeName) {
+        return i.getDocumentType() != null && typeName.equals(i.getDocumentType().getName());
     }
 
-    private static Predicate<FineractClientIdentifierData> matchesNormalizedKey(String documentKey) {
-        String target = normalize(documentKey);
-        return i -> i.getDocumentKey() != null && normalize(i.getDocumentKey()).equals(target);
+    private static boolean matchesNormalizedKey(ClientIdentifierData i, String normalizedKey) {
+        return i.getDocumentKey() != null && normalize(i.getDocumentKey()).equals(normalizedKey);
     }
 
     private static String normalize(String input) {

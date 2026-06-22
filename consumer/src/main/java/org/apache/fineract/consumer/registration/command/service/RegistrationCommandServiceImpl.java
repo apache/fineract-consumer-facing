@@ -43,6 +43,7 @@ import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +57,7 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
 
     @Override
     @Command
+    @Transactional
     public SubmitRegistrationCommandData submit(SubmitRegistrationCommand command) {
         IdentityVerificationQuery verification = IdentityVerificationQuery.builder()
                 .fineractClientId(command.getFineractClientId())
@@ -76,7 +78,7 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
         UserCreatedCommandData createdUser = userCommandService.create(createUser);
 
         return SubmitRegistrationCommandData.builder()
-                .registrationId(createdUser.getExternalId())
+                .registrationId(createdUser.getPublicId())
                 .status(UserStatus.PENDING_OTP)
                 .maskedLastFour(verificationResult.getMaskedLastFour())
                 .build();
@@ -85,12 +87,12 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
     @Override
     @Command
     public SendOtpCommandData sendOtp(SendOtpCommand command) {
-        UserQueryData user = userQueryService.findByExternalId(command.getRegistrationId());
+        UserQueryData user = userQueryService.findByPublicId(command.getRegistrationId());
         OtpDestination destination = OtpDestination.builder()
                 .deliveryMethod(command.getDeliveryMethod())
                 .target(user.getEmail())
                 .build();
-        PendingOtp request = otpCommandService.createOtp(user.getExternalId(), destination);
+        PendingOtp request = otpCommandService.createOtp(user.getPublicId(), destination);
         ZonedDateTime expiresAt = request.getMetadata().getRequestTime()
                 .plusSeconds(request.getMetadata().getTokenLiveTimeInSec());
         return SendOtpCommandData.builder()
@@ -102,9 +104,10 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
 
     @Override
     @Command
+    @Transactional
     public VerifyOtpCommandData verifyOtp(VerifyOtpCommand command) {
-        UserQueryData user = userQueryService.findByExternalId(command.getRegistrationId());
-        otpCommandService.validateOtp(user.getExternalId(), command.getToken());
+        UserQueryData user = userQueryService.findByPublicId(command.getRegistrationId());
+        otpCommandService.validateOtp(user.getPublicId(), command.getToken());
         userCommandService.markOtpVerified(user.getId());
         return VerifyOtpCommandData.builder()
                 .status(UserStatus.BOUND)

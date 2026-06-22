@@ -76,7 +76,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class AuthenticationCommandServiceImplTest {
 
     private static final Long USER_ID = 7L;
-    private static final UUID EXTERNAL_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
+    private static final UUID PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
     private static final String EMAIL = "user@test.com";
     private static final String RAW_PASSWORD = "Correct-password1";
     private static final String PASSWORD_HASH = "{bcrypt}$2a$10$hash";
@@ -86,6 +86,7 @@ class AuthenticationCommandServiceImplTest {
     private static final String OTP_TOKEN = "ABC123";
     private static final String CHALLENGE_TOKEN = "challenge-token";
     private static final String PRESENTED_REFRESH_TOKEN = "presented-refresh-token";
+    private static final String PRESENTED_TOKEN_HASH = "hash-of-presented-token";
     private static final Long NEW_TOKEN_ID = 42L;
     private static final Long SUCCESSOR_ID = 43L;
 
@@ -118,7 +119,7 @@ class AuthenticationCommandServiceImplTest {
     private static UserCredentialsQueryData credentials(UserStatus status) {
         return UserCredentialsQueryData.builder()
                 .id(USER_ID)
-                .externalId(EXTERNAL_ID)
+                .publicId(PUBLIC_ID)
                 .status(status)
                 .passwordHash(PASSWORD_HASH)
                 .build();
@@ -146,18 +147,18 @@ class AuthenticationCommandServiceImplTest {
         void successSendsOtpAndIssuesDeviceBoundChallenge() {
             when(userQueryService.findCredentialsByEmail(EMAIL)).thenReturn(Optional.of(credentials(UserStatus.BOUND)));
             when(passwordEncoder.matches(RAW_PASSWORD, PASSWORD_HASH)).thenReturn(true);
-            when(jwtIssuer.issue(eq(EXTERNAL_ID.toString()), anyMap(), eq(PROPERTIES.getChallengeTokenTtl())))
+            when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getChallengeTokenTtl())))
                     .thenReturn(issuedJwt(CHALLENGE_TOKEN, PROPERTIES.getChallengeTokenTtl()));
 
             LoginChallengeCommandData challenge = service.login(loginCommand());
 
-            verify(otpCommandService).createOtp(EXTERNAL_ID, OtpDestination.builder()
+            verify(otpCommandService).createOtp(PUBLIC_ID, OtpDestination.builder()
                     .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
                     .target(EMAIL)
                     .build());
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Map<String, Object>> claims = ArgumentCaptor.forClass(Map.class);
-            verify(jwtIssuer).issue(eq(EXTERNAL_ID.toString()), claims.capture(),
+            verify(jwtIssuer).issue(eq(PUBLIC_ID.toString()), claims.capture(),
                     eq(PROPERTIES.getChallengeTokenTtl()));
             assertThat(claims.getValue())
                     .containsEntry(JwtClaims.PURPOSE, AuthenticationConstants.CHALLENGE_PURPOSE_VALUE)
@@ -210,7 +211,7 @@ class AuthenticationCommandServiceImplTest {
         private Jwt challengeJwt(String purpose, String deviceFingerprint) {
             return Jwt.withTokenValue(CHALLENGE_TOKEN)
                     .header("alg", "ES256")
-                    .subject(EXTERNAL_ID.toString())
+                    .subject(PUBLIC_ID.toString())
                     .claim(JwtClaims.PURPOSE, purpose)
                     .claim(JwtClaims.DEVICE_FINGERPRINT, deviceFingerprint)
                     .build();
@@ -220,19 +221,19 @@ class AuthenticationCommandServiceImplTest {
         void successEstablishesSessionWithHashedPersistedRefreshToken() {
             when(jwtDecoder.decode(CHALLENGE_TOKEN))
                     .thenReturn(challengeJwt(AuthenticationConstants.CHALLENGE_PURPOSE_VALUE, DEVICE_FINGERPRINT));
-            when(userQueryService.findByExternalId(EXTERNAL_ID)).thenReturn(UserQueryData.builder()
+            when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(UserQueryData.builder()
                     .id(USER_ID)
-                    .externalId(EXTERNAL_ID)
+                    .publicId(PUBLIC_ID)
                     .email(EMAIL)
                     .status(UserStatus.BOUND)
                     .build());
-            when(jwtIssuer.issue(eq(EXTERNAL_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
+            when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
                     .thenReturn(issuedJwt("access-token", PROPERTIES.getAccessTokenTtl()));
             when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
             EstablishedSessionCommandData session = service.verifyTwoFactor(command());
 
-            verify(otpCommandService).validateOtp(EXTERNAL_ID, OTP_TOKEN);
+            verify(otpCommandService).validateOtp(PUBLIC_ID, OTP_TOKEN);
             assertThat(session.getAccessToken()).isEqualTo("access-token");
             assertThat(session.getRefreshToken()).isNotBlank();
 
@@ -278,7 +279,7 @@ class AuthenticationCommandServiceImplTest {
             when(jwtDecoder.decode(CHALLENGE_TOKEN))
                     .thenReturn(challengeJwt(AuthenticationConstants.CHALLENGE_PURPOSE_VALUE, DEVICE_FINGERPRINT));
             org.mockito.Mockito.doThrow(new OtpTokenInvalidException())
-                    .when(otpCommandService).validateOtp(EXTERNAL_ID, OTP_TOKEN);
+                    .when(otpCommandService).validateOtp(PUBLIC_ID, OTP_TOKEN);
 
             assertThatThrownBy(() -> service.verifyTwoFactor(command()))
                     .isInstanceOf(TwoFactorInvalidException.class);
@@ -297,7 +298,7 @@ class AuthenticationCommandServiceImplTest {
         }
 
         private RefreshToken activeToken() {
-            return RefreshToken.issue(USER_ID, "hash-of-presented-token", DEVICE_FINGERPRINT,
+            return RefreshToken.issue(USER_ID, PRESENTED_TOKEN_HASH, DEVICE_FINGERPRINT,
                     Instant.now().plusSeconds(3600));
         }
 
@@ -307,11 +308,11 @@ class AuthenticationCommandServiceImplTest {
             when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(predecessor));
             when(userQueryService.findById(USER_ID)).thenReturn(UserQueryData.builder()
                     .id(USER_ID)
-                    .externalId(EXTERNAL_ID)
+                    .publicId(PUBLIC_ID)
                     .email(EMAIL)
                     .status(UserStatus.BOUND)
                     .build());
-            when(jwtIssuer.issue(eq(EXTERNAL_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
+            when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
                     .thenReturn(issuedJwt("new-access-token", PROPERTIES.getAccessTokenTtl()));
             when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> {
                 RefreshToken saved = invocation.getArgument(0);
@@ -364,7 +365,7 @@ class AuthenticationCommandServiceImplTest {
 
         @Test
         void expiredTokenIsRejected() {
-            RefreshToken expired = RefreshToken.issue(USER_ID, "hash-of-presented-token", DEVICE_FINGERPRINT,
+            RefreshToken expired = RefreshToken.issue(USER_ID, PRESENTED_TOKEN_HASH, DEVICE_FINGERPRINT,
                     Instant.now().minusSeconds(1));
             when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(expired));
 
@@ -386,7 +387,7 @@ class AuthenticationCommandServiceImplTest {
 
         @Test
         void knownTokenIsRevoked() {
-            RefreshToken token = RefreshToken.issue(USER_ID, "hash-of-presented-token", DEVICE_FINGERPRINT,
+            RefreshToken token = RefreshToken.issue(USER_ID, PRESENTED_TOKEN_HASH, DEVICE_FINGERPRINT,
                     Instant.now().plusSeconds(3600));
             when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(token));
             when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

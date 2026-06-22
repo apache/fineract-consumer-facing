@@ -25,7 +25,7 @@ import org.apache.fineract.consumer.otp.command.data.PendingOtp;
 
 public interface OtpCommandService {
 
-    PendingOtp createOtp(UUID externalId, OtpDestination destination);
+    PendingOtp createOtp(UUID publicId, OtpDestination destination);
 
-    void validateOtp(UUID externalId, String token);
+    void validateOtp(UUID publicId, String token);
 }

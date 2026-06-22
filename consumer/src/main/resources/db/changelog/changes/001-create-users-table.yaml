@@ -33,7 +33,7 @@ databaseChangeLog:
                     primaryKey: true
                     nullable: false
               - column:
-                  name: external_id
+                  name: public_id
                   type: UUID
                   constraints:
                     nullable: false

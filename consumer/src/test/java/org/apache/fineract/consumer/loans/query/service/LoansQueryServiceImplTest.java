@@ -1,0 +1,91 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.fineract.consumer.loans.query.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import feign.FeignException;
+import java.util.List;
+import java.util.Set;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccounts;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccountsStatus;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoansAccountsCurrency;
+import org.apache.fineract.consumer.loans.query.data.LoanAccountListItemQueryData;
+import org.apache.fineract.consumer.loans.query.exception.LoanUpstreamUnavailableException;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class LoansQueryServiceImplTest {
+
+    private static final Long CLIENT_ID = 11L;
+
+    @Mock
+    private ClientApi clientApi;
+
+    @InjectMocks
+    private LoansQueryServiceImpl service;
+
+    @Test
+    void listAccountsMapsIndexFields() {
+        GetClientsLoanAccounts account = new GetClientsLoanAccounts()
+                .id(77L)
+                .accountNo("000000077")
+                .productName("Personal Loan")
+                .status(new GetClientsLoanAccountsStatus().code("loanStatusType.active"))
+                .currency(new GetClientsLoansAccountsCurrency().code("USD"));
+        when(clientApi.retrieveAllClientAccounts(CLIENT_ID))
+                .thenReturn(new GetClientsClientIdAccountsResponse().loanAccounts(Set.of(account)));
+
+        List<LoanAccountListItemQueryData> result = service.listAccounts(CLIENT_ID);
+
+        assertThat(result).hasSize(1);
+        LoanAccountListItemQueryData item = result.get(0);
+        assertThat(item.getId()).isEqualTo(77L);
+        assertThat(item.getAccountNo()).isEqualTo("000000077");
+        assertThat(item.getProductName()).isEqualTo("Personal Loan");
+        assertThat(item.getStatus()).isEqualTo("loanStatusType.active");
+        assertThat(item.getCurrency()).isEqualTo("USD");
+    }
+
+    @Test
+    void listAccountsEmptyWhenNoLoanAccounts() {
+        when(clientApi.retrieveAllClientAccounts(CLIENT_ID))
+                .thenReturn(new GetClientsClientIdAccountsResponse());
+
+        assertThat(service.listAccounts(CLIENT_ID)).isEmpty();
+    }
+
+    @Test
+    void listAccountsTranslatesUpstreamFailure() {
+        when(clientApi.retrieveAllClientAccounts(CLIENT_ID)).thenThrow(mock(FeignException.class));
+
+        assertThatThrownBy(() -> service.listAccounts(CLIENT_ID))
+                .isInstanceOf(LoanUpstreamUnavailableException.class);
+    }
+}

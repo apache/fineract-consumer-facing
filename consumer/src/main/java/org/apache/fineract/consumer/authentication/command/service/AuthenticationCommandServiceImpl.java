@@ -60,6 +60,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -90,10 +91,10 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
                 .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
                 .target(command.getEmail())
                 .build();
-        otpCommandService.createOtp(user.getExternalId(), destination);
+        otpCommandService.createOtp(user.getPublicId(), destination);
 
         IssuedJwt challenge = jwtIssuer.issue(
-                user.getExternalId().toString(),
+                user.getPublicId().toString(),
                 Map.of(
                         JwtClaims.PURPOSE, AuthenticationConstants.CHALLENGE_PURPOSE_VALUE,
                         JwtClaims.DEVICE_FINGERPRINT, command.getDeviceFingerprint()),
@@ -108,6 +109,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
 
     @Override
     @Command
+    @Transactional
     public EstablishedSessionCommandData verifyTwoFactor(VerifyTwoFactorCommand command) {
         Jwt challenge = decodeChallengeToken(command.getChallengeToken());
         boolean purposeValid = AuthenticationConstants.CHALLENGE_PURPOSE_VALUE
@@ -118,19 +120,20 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
             throw new TwoFactorInvalidException();
         }
 
-        UUID externalId = UUID.fromString(challenge.getSubject());
+        UUID publicId = UUID.fromString(challenge.getSubject());
         try {
-            otpCommandService.validateOtp(externalId, command.getToken());
+            otpCommandService.validateOtp(publicId, command.getToken());
         } catch (OtpTokenInvalidException e) {
             throw new TwoFactorInvalidException(e);
         }
 
-        UserQueryData user = userQueryService.findByExternalId(externalId);
-        return establishSession(user.getId(), externalId, command.getDeviceFingerprint(), null);
+        UserQueryData user = userQueryService.findByPublicId(publicId);
+        return establishSession(user.getId(), publicId, command.getDeviceFingerprint(), null);
     }
 
     @Override
     @Command
+    @Transactional(noRollbackFor = RefreshTokenInvalidException.class)
     public EstablishedSessionCommandData refresh(RefreshSessionCommand command) {
         RefreshToken current = refreshTokenCommandRepository.findByTokenHash(sha256Hex(command.getRefreshToken()))
                 .orElseThrow(RefreshTokenInvalidException::new);
@@ -147,11 +150,12 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         }
 
         UserQueryData user = userQueryService.findById(current.getUserId());
-        return establishSession(user.getId(), user.getExternalId(), command.getDeviceFingerprint(), current);
+        return establishSession(user.getId(), user.getPublicId(), command.getDeviceFingerprint(), current);
     }
 
     @Override
     @Command
+    @Transactional
     public void logout(LogoutCommand command) {
         refreshTokenCommandRepository.findByTokenHash(sha256Hex(command.getRefreshToken()))
                 .ifPresent(token -> {
@@ -160,10 +164,10 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
                 });
     }
 
-    private EstablishedSessionCommandData establishSession(Long userId, UUID externalId, String deviceFingerprint,
+    private EstablishedSessionCommandData establishSession(Long userId, UUID publicId, String deviceFingerprint,
             RefreshToken predecessor) {
         IssuedJwt accessToken = jwtIssuer.issue(
-                externalId.toString(),
+                publicId.toString(),
                 Map.of(JwtClaims.TENANT, fineractClientProperties.getTenantId()),
                 authenticationProperties.getAccessTokenTtl());
 

@@ -27,4 +27,5 @@ public final class JwtClaims {
     public static final String PURPOSE = "purpose";
     public static final String DEVICE_FINGERPRINT = "device_fingerprint";
     public static final String TENANT = "tenant";
+    public static final String ACTION_FINGERPRINT = "action_fingerprint";
 }

@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.registration.command.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.registration.command.data.SendOtpCommand;
@@ -45,6 +46,7 @@ public class RegistrationCommandController {
 
     private final RegistrationCommandService registrationCommandService;
 
+    @Operation(operationId = "submitRegistration")
     @PostMapping("/submit")
     public ResponseEntity<SubmitRegistrationCommandData> submit(
             @Valid @RequestBody SubmitRegistrationCommandRequest request) {
@@ -59,6 +61,7 @@ public class RegistrationCommandController {
         return ResponseEntity.status(HttpStatus.CREATED).body(data);
     }
 
+    @Operation(operationId = "sendRegistrationOtp")
     @PostMapping("/otp/send")
     public ResponseEntity<SendOtpCommandData> sendOtp(@Valid @RequestBody SendOtpCommandRequest request) {
         SendOtpCommand command = SendOtpCommand.builder()
@@ -69,6 +72,7 @@ public class RegistrationCommandController {
         return ResponseEntity.status(HttpStatus.CREATED).body(data);
     }
 
+    @Operation(operationId = "verifyRegistrationOtp")
     @PostMapping("/otp/verify")
     public ResponseEntity<VerifyOtpCommandData> verifyOtp(@Valid @RequestBody VerifyOtpCommandRequest request) {
         VerifyOtpCommand command = VerifyOtpCommand.builder()

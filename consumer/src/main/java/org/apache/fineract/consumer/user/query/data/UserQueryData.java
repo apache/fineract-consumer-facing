@@ -34,7 +34,8 @@ import org.apache.fineract.consumer.user.command.domain.UserStatus;
 @ToString
 public final class UserQueryData {
     private final Long id;
-    private final UUID externalId;
+    private final UUID publicId;
+    private final Long fineractClientId;
     private final String email;
     private final UserStatus status;
 }
