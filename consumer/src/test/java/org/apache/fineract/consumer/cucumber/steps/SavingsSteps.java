@@ -44,7 +44,7 @@ public class SavingsSteps {
     private static final String DEVICE_FINGERPRINT = "cucumber-savings-device";
     private static final String BEARER_AUTH = "bearerAuth";
     private static final int UNAUTHORIZED = 401;
-    private static final int NOT_FOUND = 404;
+    private static final int FORBIDDEN = 403;
     private static final long ARBITRARY_CHARGE_ID = 1L;
     private static final BigDecimal CHARGE_AMOUNT = new BigDecimal("10.00");
 
@@ -111,9 +111,9 @@ public class SavingsSteps {
         errorStatus = captureErrorStatus(() -> savingsApi.getSavingsAccount(foreignSavingsId));
     }
 
-    @Then("the savings request is denied as not found")
-    public void savingsDeniedNotFound() {
-        assertThat(errorStatus).isEqualTo(NOT_FOUND);
+    @Then("the savings request is denied as forbidden")
+    public void savingsDeniedForbidden() {
+        assertThat(errorStatus).isEqualTo(FORBIDDEN);
     }
 
     @When("I initiate a charge payment without a session")

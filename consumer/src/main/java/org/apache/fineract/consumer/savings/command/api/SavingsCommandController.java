@@ -30,6 +30,7 @@ import org.apache.fineract.consumer.savings.command.data.InitiateSavingsChargePa
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentChallengeCommandData;
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentCommandData;
 import org.apache.fineract.consumer.savings.command.service.SavingsCommandService;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -41,7 +42,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/savings")
+@RequestMapping(value = "/api/v1/savings", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class SavingsCommandController {
 

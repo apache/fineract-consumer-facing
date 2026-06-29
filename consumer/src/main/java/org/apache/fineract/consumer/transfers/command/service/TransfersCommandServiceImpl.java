@@ -44,6 +44,7 @@ import org.apache.fineract.consumer.transfers.command.data.InitiateTransferComma
 import org.apache.fineract.consumer.transfers.command.data.TransferChallengeCommandData;
 import org.apache.fineract.consumer.transfers.command.data.TransferCommandData;
 import org.apache.fineract.consumer.transfers.command.data.TransferConstants;
+import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferInvalidException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferNotFoundException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferStepUpInvalidException;
@@ -133,8 +134,9 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         } else {
             SavingsAccountData destination =
                     call(() -> savingsAccountApi.retrieveSavingsAccount(command.getToAccountId(), null, null, null));
-            toClientId = destination.getClientId();
-            toOfficeId = destination.getOfficeId();
+            Long destinationClientId = destination.getClientId();
+            toClientId = destinationClientId;
+            toOfficeId = call(() -> clientApi.retrieveOneClient(destinationClientId, false)).getOfficeId();
         }
 
         AccountTransferRequest request = new AccountTransferRequest()
@@ -180,7 +182,7 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         boolean allowed = accessPolicyEvaluator.canAccessSavings(callerClientId, fromAccountId)
                 && (!toLoan || accessPolicyEvaluator.canAccessLoans(callerClientId, toAccountId));
         if (!allowed) {
-            throw new TransferNotFoundException();
+            throw new TransferAccessDeniedException();
         }
     }
 

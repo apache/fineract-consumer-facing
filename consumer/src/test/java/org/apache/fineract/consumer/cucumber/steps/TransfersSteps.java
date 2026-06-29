@@ -44,7 +44,7 @@ public class TransfersSteps {
     private static final String DEVICE_FINGERPRINT = "cucumber-transfers-device";
     private static final String BEARER_AUTH = "bearerAuth";
     private static final int UNAUTHORIZED = 401;
-    private static final int NOT_FOUND = 404;
+    private static final int FORBIDDEN = 403;
     private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("1000.00");
     private static final BigDecimal TRANSFER_AMOUNT = new BigDecimal("100.00");
 
@@ -126,9 +126,9 @@ public class TransfersSteps {
                         .amount(TRANSFER_AMOUNT)));
     }
 
-    @Then("the transfer request is denied as not found")
-    public void transferDeniedNotFound() {
-        assertThat(errorStatus).isEqualTo(NOT_FOUND);
+    @Then("the transfer request is denied as forbidden")
+    public void transferDeniedForbidden() {
+        assertThat(errorStatus).isEqualTo(FORBIDDEN);
     }
 
     private static int captureErrorStatus(Runnable call) {

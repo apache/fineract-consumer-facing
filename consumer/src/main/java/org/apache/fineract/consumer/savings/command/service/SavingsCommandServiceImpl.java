@@ -41,6 +41,7 @@ import org.apache.fineract.consumer.savings.command.data.InitiateSavingsChargePa
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentChallengeCommandData;
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentCommandData;
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentConstants;
+import org.apache.fineract.consumer.savings.command.exception.SavingsAccountAccessDeniedException;
 import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentInvalidException;
 import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentNotFoundException;
 import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentStepUpInvalidException;
@@ -141,7 +142,7 @@ public class SavingsCommandServiceImpl implements SavingsCommandService {
 
     private void requireAccess(Long callerClientId, Long savingsId) {
         if (!accessPolicyEvaluator.canAccessSavings(callerClientId, savingsId)) {
-            throw new SavingsChargePaymentNotFoundException();
+            throw new SavingsAccountAccessDeniedException();
         }
     }
 

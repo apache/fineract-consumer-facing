@@ -40,6 +40,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdRepaymentSchedule;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdSummary;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdTransactionsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdTransactionsTransactionIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GuarantorData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansRepaymentSchedulePeriods;
@@ -55,7 +56,9 @@ import org.apache.fineract.consumer.loans.query.data.LoanChargeQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanGuarantorQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanProductOptionQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanScheduleQueryData;
+import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
+import org.apache.fineract.consumer.loans.query.exception.LoanAccessDeniedException;
 import org.apache.fineract.consumer.loans.query.exception.LoanNotFoundException;
 import org.apache.fineract.consumer.loans.query.exception.LoanProductNotFoundException;
 import org.apache.fineract.consumer.loans.query.exception.LoanSchedulePreviewInvalidException;
@@ -104,6 +107,18 @@ public class LoansQueryServiceImpl implements LoansQueryService {
         requireAccess(clientId, loanId);
         GetLoansLoanIdResponse loan = fetch(() -> loansApi.retrieveLoan(loanId, false, ASSOCIATIONS, null, null));
         return toAccountData(loan);
+    }
+
+    @Override
+    @Query
+    public List<LoanTransactionQueryData> listTransactions(Long clientId, LoanTransactionListQuery query) {
+        requireAccess(clientId, query.getLoanId());
+        GetLoansLoanIdTransactionsResponse response = fetch(() -> loanTransactionsApi.retrieveTransactionsByLoanId(
+                query.getLoanId(), null, query.getPage(), query.getSize(), query.getSort()));
+        if (response == null || response.getContent() == null) {
+            return List.of();
+        }
+        return response.getContent().stream().map(this::toTransactionData).toList();
     }
 
     @Override
@@ -160,7 +175,7 @@ public class LoansQueryServiceImpl implements LoansQueryService {
 
     private void requireAccess(Long clientId, Long loanId) {
         if (!accessPolicyEvaluator.canAccessLoans(clientId, loanId)) {
-            throw new LoanNotFoundException();
+            throw new LoanAccessDeniedException();
         }
     }
 

@@ -35,7 +35,7 @@ Feature: Consumer savings reads
   Scenario: Reading another client's savings account is denied
     Given another client owns a savings account
     When I get the other client's savings account
-    Then the savings request is denied as not found
+    Then the savings request is denied as forbidden
 
   Scenario: Initiating a charge payment without a session is rejected
     When I initiate a charge payment without a session
@@ -44,4 +44,4 @@ Feature: Consumer savings reads
   Scenario: Initiating a charge payment on another client's savings account is denied
     Given another client owns a savings account
     When I initiate a charge payment on the other client's savings account
-    Then the savings request is denied as not found
+    Then the savings request is denied as forbidden

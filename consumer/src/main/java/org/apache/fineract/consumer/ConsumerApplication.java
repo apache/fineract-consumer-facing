@@ -19,12 +19,13 @@
 
 package org.apache.fineract.consumer;
 
+import org.apache.fineract.consumer.infrastructure.fineractclient.configs.FineractFeignConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
 @SpringBootApplication
-@EnableFeignClients(basePackages = "org.apache.fineract.consumer")
+@EnableFeignClients(basePackages = "org.apache.fineract.consumer", defaultConfiguration = FineractFeignConfig.class)
 public class ConsumerApplication {
 
 	public static void main(String[] args) {

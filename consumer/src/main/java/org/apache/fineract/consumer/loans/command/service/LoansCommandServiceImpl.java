@@ -48,6 +48,7 @@ import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentConstant
 import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.WithdrawLoanApplicationCommand;
+import org.apache.fineract.consumer.loans.command.exception.LoanAccessDeniedException;
 import org.apache.fineract.consumer.loans.command.exception.LoanApplicationInvalidException;
 import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentInvalidException;
 import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentNotFoundException;
@@ -195,7 +196,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
 
     private void requireChargeAccess(Long clientId, Long loanId) {
         if (!accessPolicyEvaluator.canAccessLoans(clientId, loanId)) {
-            throw new LoanChargePaymentNotFoundException();
+            throw new LoanAccessDeniedException();
         }
     }
 
@@ -227,7 +228,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
 
     private void requireAccess(Long clientId, Long loanId) {
         if (!accessPolicyEvaluator.canAccessLoans(clientId, loanId)) {
-            throw new LoanNotFoundException();
+            throw new LoanAccessDeniedException();
         }
     }
 

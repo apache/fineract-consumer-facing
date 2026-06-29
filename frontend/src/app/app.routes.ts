@@ -18,5 +18,42 @@
  */
 
 import { Routes } from '@angular/router';
+import { authGuard } from './core/guards/auth.guard';
 
-export const routes: Routes = [];
+export const routes: Routes = [
+  { path: '', pathMatch: 'full', redirectTo: 'login' },
+  {
+    path: 'login',
+    loadComponent: () => import('./features/auth/login.component').then(m => m.LoginComponent),
+  },
+  {
+    path: 'register',
+    loadComponent: () =>
+      import('./features/registration/registration.component').then(m => m.RegistrationComponent),
+  },
+  {
+    path: '',
+    canActivate: [authGuard],
+    loadComponent: () => import('./layout/shell.component').then(m => m.ShellComponent),
+    children: [
+      {
+        path: 'summary',
+        loadComponent: () =>
+          import('./features/summary/summary.component').then(m => m.SummaryComponent),
+      },
+      {
+        path: 'savings',
+        loadChildren: () => import('./features/savings/savings.routes').then(m => m.SAVINGS_ROUTES),
+      },
+      {
+        path: 'loans',
+        loadChildren: () => import('./features/loans/loans.routes').then(m => m.LOANS_ROUTES),
+      },
+      {
+        path: 'transfers',
+        loadComponent: () =>
+          import('./features/transfers/transfer.component').then(m => m.TransferComponent),
+      },
+    ],
+  },
+];

@@ -32,8 +32,10 @@ import org.apache.fineract.consumer.loans.query.data.LoanChargeQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanGuarantorQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanScheduleQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanSchedulePreviewQueryRequest;
+import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
 import org.apache.fineract.consumer.loans.query.service.LoansQueryService;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,7 +47,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/loans")
+@RequestMapping(value = "/api/v1/loans", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class LoansQueryController {
 
@@ -89,6 +91,24 @@ public class LoansQueryController {
     public LoanAccountQueryData getLoan(@AuthenticationPrincipal Jwt jwt, @PathVariable Long loanId) {
         Long clientId = userClientResolver.resolveClientId(jwt);
         return loansQueryService.getLoan(clientId, loanId);
+    }
+
+    @Operation(operationId = "listLoanTransactions")
+    @GetMapping("/{loanId}/transactions")
+    public List<LoanTransactionQueryData> listTransactions(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long loanId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
+        Long clientId = userClientResolver.resolveClientId(jwt);
+        LoanTransactionListQuery query = LoanTransactionListQuery.builder()
+                .loanId(loanId)
+                .page(page)
+                .size(size)
+                .sort(sort)
+                .build();
+        return loansQueryService.listTransactions(clientId, query);
     }
 
     @Operation(operationId = "getLoanTransaction")

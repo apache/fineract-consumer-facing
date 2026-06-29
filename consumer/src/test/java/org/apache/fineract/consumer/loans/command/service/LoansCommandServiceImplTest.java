@@ -41,7 +41,7 @@ import org.apache.fineract.consumer.loans.command.data.InitiateLoanChargePayment
 import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentChallengeCommandData;
 import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentCommandData;
 import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentConstants;
-import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentNotFoundException;
+import org.apache.fineract.consumer.loans.command.exception.LoanAccessDeniedException;
 import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentStepUpInvalidException;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
@@ -157,9 +157,9 @@ class LoansCommandServiceImplTest {
         when(accessPolicyEvaluator.canAccessLoans(CLIENT_ID, LOAN_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.initiateChargePayment(jwt(), initiateCommand()))
-                .isInstanceOf(LoanChargePaymentNotFoundException.class)
-                .extracting(e -> LoanChargePaymentNotFoundException.CODE)
-                .isEqualTo(LoanChargePaymentNotFoundException.CODE);
+                .isInstanceOf(LoanAccessDeniedException.class)
+                .extracting(e -> LoanAccessDeniedException.CODE)
+                .isEqualTo(LoanAccessDeniedException.CODE);
 
         verify(otpCommandService, never()).createOtp(any(), any());
     }

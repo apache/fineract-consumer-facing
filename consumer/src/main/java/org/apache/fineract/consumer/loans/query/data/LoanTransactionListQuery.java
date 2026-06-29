@@ -12,14 +12,27 @@
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
+ * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
 
-import { expect, test } from '@playwright/test';
+package org.apache.fineract.consumer.loans.query.data;
 
-test('home page loads and renders the app title', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('h1')).toContainText('Hello, frontend');
-});
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
+
+@Getter
+@RequiredArgsConstructor
+@Builder
+@EqualsAndHashCode
+@ToString
+public final class LoanTransactionListQuery {
+    private final Long loanId;
+    private final Integer page;
+    private final Integer size;
+    private final String sort;
+}

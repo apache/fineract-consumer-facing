@@ -27,6 +27,7 @@ import org.apache.fineract.consumer.loans.query.data.LoanApplicationTemplateQuer
 import org.apache.fineract.consumer.loans.query.data.LoanChargeQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanGuarantorQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanScheduleQueryData;
+import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
 
 public interface LoansQueryService {
@@ -38,6 +39,8 @@ public interface LoansQueryService {
     LoanScheduleQueryData calculateSchedule(Long clientId, CalculateLoanScheduleQuery query);
 
     LoanAccountQueryData getLoan(Long clientId, Long loanId);
+
+    List<LoanTransactionQueryData> listTransactions(Long clientId, LoanTransactionListQuery query);
 
     LoanTransactionQueryData getTransaction(Long clientId, Long loanId, Long transactionId);
 

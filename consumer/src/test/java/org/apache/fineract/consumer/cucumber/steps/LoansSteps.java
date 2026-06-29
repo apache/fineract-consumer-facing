@@ -42,7 +42,7 @@ public class LoansSteps {
     private static final String DEVICE_FINGERPRINT = "cucumber-loans-device";
     private static final String BEARER_AUTH = "bearerAuth";
     private static final int UNAUTHORIZED = 401;
-    private static final int NOT_FOUND = 404;
+    private static final int FORBIDDEN = 403;
     private static final long ARBITRARY_CHARGE_ID = 1L;
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
@@ -108,9 +108,9 @@ public class LoansSteps {
         errorStatus = captureErrorStatus(() -> loansApi.getLoanAccount(foreignLoanId));
     }
 
-    @Then("the loan request is denied as not found")
-    public void loanDeniedNotFound() {
-        assertThat(errorStatus).isEqualTo(NOT_FOUND);
+    @Then("the loan request is denied as forbidden")
+    public void loanDeniedForbidden() {
+        assertThat(errorStatus).isEqualTo(FORBIDDEN);
     }
 
     @When("I initiate a loan charge payment without a session")

@@ -38,6 +38,7 @@ import org.apache.fineract.consumer.loans.command.data.WithdrawLoanApplicationCo
 import org.apache.fineract.consumer.loans.command.exception.LoanApplicationInvalidException;
 import org.apache.fineract.consumer.loans.command.service.LoansCommandService;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -51,7 +52,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/loans")
+@RequestMapping(value = "/api/v1/loans", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class LoansCommandController {
 

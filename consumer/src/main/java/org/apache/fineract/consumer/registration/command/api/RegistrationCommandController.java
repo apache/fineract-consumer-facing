@@ -33,6 +33,7 @@ import org.apache.fineract.consumer.registration.command.data.VerifyOtpCommandDa
 import org.apache.fineract.consumer.registration.command.data.VerifyOtpCommandRequest;
 import org.apache.fineract.consumer.registration.command.service.RegistrationCommandService;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,7 +41,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/registration")
+@RequestMapping(value = "/api/v1/registration", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class RegistrationCommandController {
 

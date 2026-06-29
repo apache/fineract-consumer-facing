@@ -32,6 +32,7 @@ import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryDa
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionSearchQuery;
 import org.apache.fineract.consumer.savings.query.service.SavingsQueryService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,7 +42,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/savings")
+@RequestMapping(value = "/api/v1/savings", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class SavingsQueryController {
 

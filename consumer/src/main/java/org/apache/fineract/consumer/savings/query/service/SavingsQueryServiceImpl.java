@@ -49,6 +49,7 @@ import org.apache.fineract.consumer.savings.query.data.SavingsChargeQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsProductOptionQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionSearchQuery;
+import org.apache.fineract.consumer.savings.query.exception.SavingsAccountAccessDeniedException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsProductNotFoundException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsRequestInvalidException;
@@ -145,7 +146,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
 
     private void requireAccess(Long clientId, Long savingsId) {
         if (!accessPolicyEvaluator.canAccessSavings(clientId, savingsId)) {
-            throw new SavingsAccountNotFoundException();
+            throw new SavingsAccountAccessDeniedException();
         }
     }
 

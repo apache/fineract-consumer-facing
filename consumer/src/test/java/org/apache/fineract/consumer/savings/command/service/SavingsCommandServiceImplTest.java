@@ -45,7 +45,7 @@ import org.apache.fineract.consumer.savings.command.data.InitiateSavingsChargePa
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentChallengeCommandData;
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentCommandData;
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentConstants;
-import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentNotFoundException;
+import org.apache.fineract.consumer.savings.command.exception.SavingsAccountAccessDeniedException;
 import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentStepUpInvalidException;
 import org.apache.fineract.consumer.user.command.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
@@ -157,9 +157,9 @@ class SavingsCommandServiceImplTest {
         when(accessPolicyEvaluator.canAccessSavings(CLIENT_ID, SAVINGS_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.initiateChargePayment(jwt(), initiateCommand()))
-                .isInstanceOf(SavingsChargePaymentNotFoundException.class)
-                .extracting(e -> SavingsChargePaymentNotFoundException.CODE)
-                .isEqualTo(SavingsChargePaymentNotFoundException.CODE);
+                .isInstanceOf(SavingsAccountAccessDeniedException.class)
+                .extracting(e -> SavingsAccountAccessDeniedException.CODE)
+                .isEqualTo(SavingsAccountAccessDeniedException.CODE);
 
         verify(otpCommandService, never()).createOtp(any(), any());
     }

@@ -31,4 +31,4 @@ Feature: Consumer transfers
   Scenario: Initiating a transfer from another client's account is denied
     Given another client owns a savings account I can target
     When I initiate a transfer from the other client's savings account
-    Then the transfer request is denied as not found
+    Then the transfer request is denied as forbidden

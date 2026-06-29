@@ -35,7 +35,7 @@ Feature: Consumer loan reads
   Scenario: Reading another client's loan account is denied
     Given another client owns a loan account
     When I get the other client's loan account
-    Then the loan request is denied as not found
+    Then the loan request is denied as forbidden
 
   Scenario: Initiating a loan charge payment without a session is rejected
     When I initiate a loan charge payment without a session
@@ -44,4 +44,4 @@ Feature: Consumer loan reads
   Scenario: Initiating a loan charge payment on another client's loan account is denied
     Given another client owns a loan account
     When I initiate a loan charge payment on the other client's loan account
-    Then the loan request is denied as not found
+    Then the loan request is denied as forbidden

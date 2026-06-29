@@ -30,6 +30,7 @@ import org.apache.fineract.consumer.transfers.command.data.InitiateTransferComma
 import org.apache.fineract.consumer.transfers.command.data.TransferChallengeCommandData;
 import org.apache.fineract.consumer.transfers.command.data.TransferCommandData;
 import org.apache.fineract.consumer.transfers.command.service.TransfersCommandService;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -40,7 +41,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/transfers")
+@RequestMapping(value = "/api/v1/transfers", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class TransfersCommandController {
 

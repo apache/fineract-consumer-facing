@@ -39,6 +39,7 @@ import org.apache.fineract.consumer.authentication.command.service.Authenticatio
 import org.apache.fineract.consumer.infrastructure.configs.AuthenticationProperties;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -49,7 +50,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/authentication")
+@RequestMapping(value = "/api/v1/authentication", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class AuthenticationCommandController {
 

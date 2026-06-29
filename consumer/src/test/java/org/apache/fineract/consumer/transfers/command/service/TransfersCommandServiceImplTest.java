@@ -50,7 +50,7 @@ import org.apache.fineract.consumer.transfers.command.data.TransferChallengeComm
 import org.apache.fineract.consumer.transfers.command.data.TransferCommandData;
 import org.apache.fineract.consumer.transfers.command.data.TransferConstants;
 import org.apache.fineract.consumer.transfers.command.exception.TransferInvalidException;
-import org.apache.fineract.consumer.transfers.command.exception.TransferNotFoundException;
+import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferStepUpInvalidException;
 import org.apache.fineract.consumer.user.command.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
@@ -178,6 +178,8 @@ class TransfersCommandServiceImplTest {
         when(accessPolicyEvaluator.canAccessSavings(CLIENT_ID, FROM_SAVINGS_ID)).thenReturn(true);
         when(clientApi.retrieveOneClient(CLIENT_ID, false))
                 .thenReturn(new GetClientsClientIdResponse().officeId(CALLER_OFFICE_ID));
+        when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false))
+                .thenReturn(new GetClientsClientIdResponse().officeId(DEST_OFFICE_ID));
         when(savingsAccountApi.retrieveSavingsAccount(TO_SAVINGS_ID, null, null, null))
                 .thenReturn(new SavingsAccountData().clientId(DEST_CLIENT_ID).officeId(DEST_OFFICE_ID));
         when(accountTransfersApi.createAccountTransfer(any()))
@@ -231,9 +233,9 @@ class TransfersCommandServiceImplTest {
         when(accessPolicyEvaluator.canAccessSavings(CLIENT_ID, FROM_SAVINGS_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.initiate(jwt(), initiateSavingsCommand()))
-                .isInstanceOf(TransferNotFoundException.class)
-                .extracting(e -> TransferNotFoundException.CODE)
-                .isEqualTo(TransferNotFoundException.CODE);
+                .isInstanceOf(TransferAccessDeniedException.class)
+                .extracting(e -> TransferAccessDeniedException.CODE)
+                .isEqualTo(TransferAccessDeniedException.CODE);
 
         verify(otpCommandService, never()).createOtp(any(), any());
     }
