@@ -24,6 +24,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
+import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
 import { ChargePaymentComponent } from './charge-payment.component';
@@ -42,9 +43,10 @@ import { LoansStore } from './loans.store';
     PageHeaderComponent,
     StatusBadgeComponent,
     ChargePaymentComponent,
+    TranslatePipe,
   ],
   template: `
-    <app-page-header title="Loan account" />
+    <app-page-header [title]="'loans.detail.title' | translate" />
 
     @if (store.loading()) {
       <mat-progress-bar mode="indeterminate" />
@@ -59,44 +61,47 @@ import { LoansStore } from './loans.store';
           }
         </mat-card-header>
         <mat-card-content>
-          <p>Principal disbursed: {{ loan.principalDisbursed | currency: loan.currency }}</p>
-          <p>Total outstanding: {{ loan.totalOutstanding | currency: loan.currency }}</p>
-          <p>Interest outstanding: {{ loan.interestOutstanding | currency: loan.currency }}</p>
-          <p>Annual interest rate: {{ loan.annualInterestRate }}%</p>
-          <p>Next due: {{ loan.nextDueAmount | currency: loan.currency }} on {{ loan.nextDueDate | date: 'mediumDate' }}</p>
+          <p>{{ 'loans.detail.principalDisbursedLabel' | translate }} {{ loan.principalDisbursed | currency: loan.currency }}</p>
+          <p>{{ 'loans.detail.totalOutstandingLabel' | translate }} {{ loan.totalOutstanding | currency: loan.currency }}</p>
+          <p>{{ 'loans.detail.interestOutstandingLabel' | translate }} {{ loan.interestOutstanding | currency: loan.currency }}</p>
+          <p>{{ 'loans.detail.annualInterestRateLabel' | translate }} {{ loan.annualInterestRate }}%</p>
+          <p>
+            {{ 'loans.detail.nextDueLabel' | translate }} {{ loan.nextDueAmount | currency: loan.currency }}
+            {{ 'loans.detail.nextDueOn' | translate }} {{ loan.nextDueDate | date: 'mediumDate' }}
+          </p>
         </mat-card-content>
       </mat-card>
     }
 
     <mat-card>
       <mat-card-header>
-        <mat-card-title>Charges</mat-card-title>
+        <mat-card-title>{{ 'common.section.charges' | translate }}</mat-card-title>
       </mat-card-header>
       <mat-card-content>
         <table mat-table [dataSource]="store.charges()">
           <ng-container matColumnDef="name">
-            <th mat-header-cell *matHeaderCellDef>Charge</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.charge' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.name }}</td>
           </ng-container>
           <ng-container matColumnDef="amount">
-            <th mat-header-cell *matHeaderCellDef class="num">Amount</th>
+            <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.amount' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.amount | currency: row.currency }}</td>
           </ng-container>
           <ng-container matColumnDef="amountOutstanding">
-            <th mat-header-cell *matHeaderCellDef class="num">Outstanding</th>
+            <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.outstanding' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.amountOutstanding | currency: row.currency }}</td>
           </ng-container>
           <ng-container matColumnDef="actions">
             <th mat-header-cell *matHeaderCellDef></th>
             <td mat-cell *matCellDef="let row">
-              <button mat-button color="primary" (click)="pay(row.id)">Pay</button>
+              <button mat-button color="primary" (click)="pay(row.id)">{{ 'common.action.pay' | translate }}</button>
             </td>
           </ng-container>
 
           <tr mat-header-row *matHeaderRowDef="chargeColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: chargeColumns"></tr>
           <tr class="empty-row" *matNoDataRow>
-            <td [attr.colspan]="chargeColumns.length">No charges.</td>
+            <td [attr.colspan]="chargeColumns.length">{{ 'common.table.noCharges' | translate }}</td>
           </tr>
         </table>
 
@@ -113,27 +118,27 @@ import { LoansStore } from './loans.store';
 
     <mat-card>
       <mat-card-header>
-        <mat-card-title>Guarantors</mat-card-title>
+        <mat-card-title>{{ 'common.section.guarantors' | translate }}</mat-card-title>
       </mat-card-header>
       <mat-card-content>
         <table mat-table [dataSource]="store.guarantors()">
           <ng-container matColumnDef="displayName">
-            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.name' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.displayName }}</td>
           </ng-container>
           <ng-container matColumnDef="guarantorType">
-            <th mat-header-cell *matHeaderCellDef>Type</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.type' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.guarantorType }}</td>
           </ng-container>
           <ng-container matColumnDef="relationship">
-            <th mat-header-cell *matHeaderCellDef>Relationship</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.relationship' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.relationship }}</td>
           </ng-container>
 
           <tr mat-header-row *matHeaderRowDef="guarantorColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: guarantorColumns"></tr>
           <tr class="empty-row" *matNoDataRow>
-            <td [attr.colspan]="guarantorColumns.length">No guarantors.</td>
+            <td [attr.colspan]="guarantorColumns.length">{{ 'loans.detail.noGuarantors' | translate }}</td>
           </tr>
         </table>
       </mat-card-content>
@@ -141,24 +146,24 @@ import { LoansStore } from './loans.store';
 
     <mat-card>
       <mat-card-header>
-        <mat-card-title>Transactions</mat-card-title>
+        <mat-card-title>{{ 'common.section.transactions' | translate }}</mat-card-title>
       </mat-card-header>
       <mat-card-content>
         <table mat-table [dataSource]="store.transactions()">
           <ng-container matColumnDef="date">
-            <th mat-header-cell *matHeaderCellDef>Date</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.date' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.date | date: 'mediumDate' }}</td>
           </ng-container>
           <ng-container matColumnDef="type">
-            <th mat-header-cell *matHeaderCellDef>Type</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.type' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.type }}</td>
           </ng-container>
           <ng-container matColumnDef="amount">
-            <th mat-header-cell *matHeaderCellDef class="num">Amount</th>
+            <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.amount' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.amount | currency: row.currency }}</td>
           </ng-container>
           <ng-container matColumnDef="outstandingLoanBalance">
-            <th mat-header-cell *matHeaderCellDef class="num">Balance</th>
+            <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.balance' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.outstandingLoanBalance | currency: row.currency }}</td>
           </ng-container>
 
@@ -170,7 +175,7 @@ import { LoansStore } from './loans.store';
             (click)="openTransaction(row.id)"
           ></tr>
           <tr class="empty-row" *matNoDataRow>
-            <td [attr.colspan]="txColumns.length">No transactions.</td>
+            <td [attr.colspan]="txColumns.length">{{ 'common.table.noTransactions' | translate }}</td>
           </tr>
         </table>
       </mat-card-content>

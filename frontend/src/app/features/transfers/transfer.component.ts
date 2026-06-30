@@ -28,6 +28,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
+import { TranslatePipe } from '@ngx-translate/core';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { TransfersStore } from './transfers.store';
 
@@ -44,12 +45,13 @@ import { TransfersStore } from './transfers.store';
     MatProgressBarModule,
     MatSelectModule,
     DecimalPipe,
+    TranslatePipe,
     OtpComponent,
   ],
   template: `
     <mat-card class="transfer-card">
       <mat-card-header>
-        <mat-card-title>Transfer money</mat-card-title>
+        <mat-card-title>{{ 'transfers.title' | translate }}</mat-card-title>
       </mat-card-header>
 
       @if (loading()) {
@@ -61,23 +63,23 @@ import { TransfersStore } from './transfers.store';
           @case ('form') {
             <form [formGroup]="form" (ngSubmit)="initiate()">
               <mat-form-field appearance="fill">
-                <mat-label>From account</mat-label>
+                <mat-label>{{ 'transfers.form.fromAccountLabel' | translate }}</mat-label>
                 <input matInput type="number" formControlName="fromAccountId" />
               </mat-form-field>
               <mat-form-field appearance="fill">
-                <mat-label>To account</mat-label>
+                <mat-label>{{ 'transfers.form.toAccountLabel' | translate }}</mat-label>
                 <input matInput type="number" formControlName="toAccountId" />
               </mat-form-field>
               <mat-form-field appearance="fill">
-                <mat-label>To account type</mat-label>
+                <mat-label>{{ 'transfers.form.toAccountTypeLabel' | translate }}</mat-label>
                 <mat-select formControlName="toAccountType">
                   @for (type of accountTypes; track type.value) {
-                    <mat-option [value]="type.value">{{ type.label }}</mat-option>
+                    <mat-option [value]="type.value">{{ type.labelKey | translate }}</mat-option>
                   }
                 </mat-select>
               </mat-form-field>
               <mat-form-field appearance="fill">
-                <mat-label>Amount</mat-label>
+                <mat-label>{{ 'transfers.form.amountLabel' | translate }}</mat-label>
                 <input matInput type="number" step="0.01" formControlName="amount" />
               </mat-form-field>
               <div class="actions">
@@ -88,7 +90,7 @@ import { TransfersStore } from './transfers.store';
                   [disabled]="loading() || form.invalid"
                 >
                   <mat-icon>swap_horiz</mat-icon>
-                  Send transfer
+                  {{ 'transfers.form.submitCta' | translate }}
                 </button>
               </div>
             </form>
@@ -103,16 +105,16 @@ import { TransfersStore } from './transfers.store';
           }
           @case ('done') {
             <div class="done">
-              <p>Transfer complete.</p>
+              <p>{{ 'transfers.done.complete' | translate }}</p>
               @if (store.result(); as result) {
                 <dl>
-                  <dt>Reference</dt>
+                  <dt>{{ 'transfers.done.reference' | translate }}</dt>
                   <dd>{{ result.transferId }}</dd>
-                  <dt>From</dt>
+                  <dt>{{ 'common.filter.from' | translate }}</dt>
                   <dd>{{ result.fromAccountId }}</dd>
-                  <dt>To</dt>
+                  <dt>{{ 'common.filter.to' | translate }}</dt>
                   <dd>{{ result.toAccountId }}</dd>
-                  <dt>Amount</dt>
+                  <dt>{{ 'transfers.done.amount' | translate }}</dt>
                   <dd>{{ result.amount | number: '1.2-2' }}</dd>
                 </dl>
               }
@@ -163,8 +165,8 @@ export class TransferComponent {
   protected readonly loading = signal(false);
 
   protected readonly accountTypes = [
-    { value: 'SAVINGS', label: 'Savings' },
-    { value: 'LOAN', label: 'Loan' },
+    { value: 'SAVINGS', labelKey: 'transfers.accountType.savings' },
+    { value: 'LOAN', labelKey: 'transfers.accountType.loan' },
   ];
 
   protected readonly form = this.fb.group({

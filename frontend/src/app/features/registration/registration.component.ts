@@ -27,6 +27,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
+import { TranslatePipe } from '@ngx-translate/core';
 import { VerifyOtpCommandData } from '@bff/client';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { RegistrationService } from './registration.service';
@@ -44,12 +45,13 @@ import { RegistrationService } from './registration.service';
     MatProgressBarModule,
     MatSelectModule,
     OtpComponent,
+    TranslatePipe,
   ],
   template: `
     <mat-card class="registration-card">
       @if (step() !== 'done') {
         <mat-card-header>
-          <mat-card-title>Create your account</mat-card-title>
+          <mat-card-title>{{ 'registration.title' | translate }}</mat-card-title>
         </mat-card-header>
       }
 
@@ -62,32 +64,32 @@ import { RegistrationService } from './registration.service';
           @case ('identity') {
             <form [formGroup]="identityForm" (ngSubmit)="submitIdentity()">
               <mat-form-field appearance="fill">
-                <mat-label>Fineract client ID</mat-label>
+                <mat-label>{{ 'registration.identity.clientIdLabel' | translate }}</mat-label>
                 <input matInput type="number" formControlName="fineractClientId" min="1" />
               </mat-form-field>
               <mat-form-field appearance="fill">
-                <mat-label>Email</mat-label>
+                <mat-label>{{ 'common.field.email' | translate }}</mat-label>
                 <input matInput type="email" formControlName="email" autocomplete="username" />
               </mat-form-field>
               <mat-form-field appearance="fill">
-                <mat-label>Password</mat-label>
+                <mat-label>{{ 'common.field.password' | translate }}</mat-label>
                 <input
                   matInput
                   type="password"
                   formControlName="password"
                   autocomplete="new-password"
                 />
-                <mat-hint>15–64 chars, with upper, lower, digit and special character.</mat-hint>
+                <mat-hint>{{ 'registration.identity.passwordHint' | translate }}</mat-hint>
               </mat-form-field>
               <mat-form-field appearance="fill">
-                <mat-label>Document type</mat-label>
+                <mat-label>{{ 'registration.identity.documentTypeLabel' | translate }}</mat-label>
                 <mat-select formControlName="documentTypeName">
                   <mat-option value="SSN">SSN</mat-option>
                   <mat-option value="Aadhaar">Aadhaar</mat-option>
                 </mat-select>
               </mat-form-field>
               <mat-form-field appearance="fill">
-                <mat-label>Document number</mat-label>
+                <mat-label>{{ 'registration.identity.documentNumberLabel' | translate }}</mat-label>
                 <input
                   matInput
                   type="password"
@@ -101,7 +103,7 @@ import { RegistrationService } from './registration.service';
                 type="submit"
                 [disabled]="loading() || identityForm.invalid"
               >
-                Continue
+                {{ 'common.action.continue' | translate }}
               </button>
             </form>
           }
@@ -119,19 +121,23 @@ import { RegistrationService } from './registration.service';
               (click)="resend()"
             >
               @if (resendCooldown() > 0) {
-                Resend code in {{ resendCooldown() }}s
+                {{ 'registration.otp.resendIn' | translate: { seconds: resendCooldown() } }}
               } @else {
-                Resend code
+                {{ 'registration.otp.resend' | translate }}
               }
             </button>
           }
           @case ('done') {
             <div class="done">
-              <h2 class="done-title">Your account is created.</h2>
+              <h2 class="done-title">{{ 'registration.done.title' | translate }}</h2>
               @if (maskedLastFour()) {
-                <p class="done-sub">ID ending &bull;&bull;{{ maskedLastFour() }}</p>
+                <p class="done-sub">
+                  {{ 'registration.done.idEnding' | translate: { lastFour: maskedLastFour() } }}
+                </p>
               }
-              <a mat-flat-button color="primary" routerLink="/login">Continue to sign in</a>
+              <a mat-flat-button color="primary" routerLink="/login">{{
+                'registration.done.continueToLogin' | translate
+              }}</a>
             </div>
           }
         }

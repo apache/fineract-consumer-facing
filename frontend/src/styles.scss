@@ -46,6 +46,7 @@
 
 html {
   height: 100%;
+  font-size: 125%;
   @include mat.theme((
     color: (
       primary: mat.$azure-palette,
@@ -107,8 +108,18 @@ a {
 }
 
 .mat-sidenav {
-  background-color: var(--card-bg);
-  border-right: 1px solid var(--border-color);
+  background-color: var(--secondary-color);
+
+  .mat-mdc-list-item {
+    --mdc-list-list-item-label-text-color: rgba(255, 255, 255, 0.85);
+    --mdc-list-list-item-leading-icon-color: rgba(255, 255, 255, 0.85);
+    --mdc-list-list-item-hover-label-text-color: #fff;
+    --mdc-list-list-item-hover-leading-icon-color: #fff;
+  }
+
+  .mat-mdc-list-item:hover:not(.active-link) {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
 }
 
 .mat-drawer-content {
@@ -119,8 +130,7 @@ a {
   --mdc-list-list-item-label-text-color: #fff;
   --mdc-list-list-item-leading-icon-color: #fff;
   --mdc-list-list-item-hover-label-text-color: #fff;
-  border-left: 3px solid var(--primary-dark);
-  background-color: var(--primary-color);
+  background-color: rgba(255, 255, 255, 0.12);
   color: #fff;
   font-weight: 600;
 }

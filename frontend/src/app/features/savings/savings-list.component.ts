@@ -23,6 +23,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
+import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
 import { SavingsStore } from './savings.store';
@@ -35,11 +36,12 @@ import { SavingsStore } from './savings.store';
     MatCardModule,
     MatProgressBarModule,
     MatTableModule,
+    TranslatePipe,
     PageHeaderComponent,
     StatusBadgeComponent,
   ],
   template: `
-    <app-page-header title="Savings accounts" />
+    <app-page-header [title]="'savings.list.title' | translate" />
 
     <mat-card>
       @if (store.loading()) {
@@ -49,15 +51,15 @@ import { SavingsStore } from './savings.store';
       <mat-card-content>
         <table mat-table [dataSource]="store.accounts()">
           <ng-container matColumnDef="accountNo">
-            <th mat-header-cell *matHeaderCellDef>Account</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.account' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.accountNo }}</td>
           </ng-container>
           <ng-container matColumnDef="productName">
-            <th mat-header-cell *matHeaderCellDef>Product</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.product' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.productName }}</td>
           </ng-container>
           <ng-container matColumnDef="status">
-            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.status' | translate }}</th>
             <td mat-cell *matCellDef="let row">
               @if (row.status) {
                 <app-status-badge [status]="row.status" />
@@ -65,14 +67,14 @@ import { SavingsStore } from './savings.store';
             </td>
           </ng-container>
           <ng-container matColumnDef="currency">
-            <th mat-header-cell *matHeaderCellDef>Currency</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.currency' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.currency }}</td>
           </ng-container>
 
           <tr mat-header-row *matHeaderRowDef="columns"></tr>
           <tr mat-row *matRowDef="let row; columns: columns" class="clickable" (click)="open(row.id)"></tr>
           <tr class="empty-row" *matNoDataRow>
-            <td [attr.colspan]="columns.length">No savings accounts yet.</td>
+            <td [attr.colspan]="columns.length">{{ 'savings.list.empty' | translate }}</td>
           </tr>
         </table>
 
@@ -83,7 +85,7 @@ import { SavingsStore } from './savings.store';
             surfaces as a snackbar — never a raw 403 page. 999999 is a deliberately non-owned id.
           -->
           <button mat-stroked-button color="warn" (click)="tryForbiddenAccount()">
-            Try a forbidden savings account
+            {{ 'savings.list.tryForbidden' | translate }}
           </button>
         </div>
       </mat-card-content>

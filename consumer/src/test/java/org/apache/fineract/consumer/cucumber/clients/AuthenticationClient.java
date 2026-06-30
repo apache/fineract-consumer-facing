@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.springframework.http.MediaType;
 
 public final class AuthenticationClient {
 
@@ -80,11 +81,11 @@ public final class AuthenticationClient {
     private interface Api {
 
         @RequestLine("POST /api/v1/authentication/login")
-        @Headers({ "Content-Type: application/json", ConsumerHeaders.DEVICE_FINGERPRINT + ": {fingerprint}" })
+        @Headers({ "Content-Type: " + MediaType.APPLICATION_JSON_VALUE, ConsumerHeaders.DEVICE_FINGERPRINT + ": {fingerprint}" })
         Response login(@Param("fingerprint") String fingerprint, Map<String, Object> body);
 
         @RequestLine("POST /api/v1/authentication/2fa")
-        @Headers({ "Content-Type: application/json", ConsumerHeaders.DEVICE_FINGERPRINT + ": {fingerprint}" })
+        @Headers({ "Content-Type: " + MediaType.APPLICATION_JSON_VALUE, ConsumerHeaders.DEVICE_FINGERPRINT + ": {fingerprint}" })
         Response verifyTwoFactor(@Param("fingerprint") String fingerprint, Map<String, Object> body);
 
         @RequestLine("POST /api/v1/authentication/refresh")

@@ -22,18 +22,23 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { TranslatePipe } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-otp',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, TranslatePipe],
   template: `
     <p>
-      Enter the verification code@if (sentTo()) { sent to {{ sentTo() }} }.
+      @if (sentTo()) {
+        {{ 'common.otp.promptSentTo' | translate: { target: sentTo() } }}
+      } @else {
+        {{ 'common.otp.prompt' | translate }}
+      }
     </p>
     <form [formGroup]="form" (ngSubmit)="submit()">
       <mat-form-field appearance="fill">
-        <mat-label>Verification code</mat-label>
+        <mat-label>{{ 'common.otp.codeLabel' | translate }}</mat-label>
         <input
           matInput
           formControlName="otp"
@@ -46,11 +51,11 @@ import { MatInputModule } from '@angular/material/input';
       <div class="actions">
         @if (showCancel()) {
           <button mat-button type="button" [disabled]="loading()" (click)="cancelled.emit()">
-            Cancel
+            {{ 'common.action.cancel' | translate }}
           </button>
         }
         <button mat-flat-button color="primary" type="submit" [disabled]="loading() || form.invalid">
-          Verify
+          {{ 'common.action.verify' | translate }}
         </button>
       </div>
     </form>

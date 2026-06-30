@@ -23,7 +23,9 @@ import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateService } from '@ngx-translate/core';
 import { ConsumerApiError } from '../../api/consumer-api-error';
+import { AuthService } from '../auth/auth.service';
 import { errorInterceptor } from './error.interceptor';
 
 describe('errorInterceptor', () => {
@@ -40,6 +42,13 @@ describe('errorInterceptor', () => {
         provideHttpClient(withInterceptors([errorInterceptor])),
         provideHttpClientTesting(),
         { provide: MatSnackBar, useValue: { open } },
+        { provide: AuthService, useValue: {} },
+        {
+          provide: TranslateService,
+          useValue: {
+            instant: (key: string) => (key === 'common.action.dismiss' ? 'Dismiss' : key),
+          },
+        },
       ],
     });
     http = TestBed.inject(HttpClient);

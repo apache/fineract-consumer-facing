@@ -26,6 +26,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { TranslatePipe } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth/auth.service';
 import { OtpComponent } from '../../shared/otp/otp.component';
 
@@ -41,11 +42,12 @@ import { OtpComponent } from '../../shared/otp/otp.component';
     MatProgressBarModule,
     OtpComponent,
     RouterLink,
+    TranslatePipe,
   ],
   template: `
     <mat-card class="login-card">
       <mat-card-header>
-        <mat-card-title>Sign in</mat-card-title>
+        <mat-card-title>{{ 'auth.login.title' | translate }}</mat-card-title>
       </mat-card-header>
 
       @if (loading()) {
@@ -56,11 +58,11 @@ import { OtpComponent } from '../../shared/otp/otp.component';
         @if (step() === 'credentials') {
           <form [formGroup]="credentialsForm" (ngSubmit)="submitCredentials()">
             <mat-form-field appearance="fill">
-              <mat-label>Email</mat-label>
+              <mat-label>{{ 'common.field.email' | translate }}</mat-label>
               <input matInput type="email" formControlName="email" autocomplete="username" />
             </mat-form-field>
             <mat-form-field appearance="fill">
-              <mat-label>Password</mat-label>
+              <mat-label>{{ 'common.field.password' | translate }}</mat-label>
               <input
                 matInput
                 type="password"
@@ -74,11 +76,12 @@ import { OtpComponent } from '../../shared/otp/otp.component';
               type="submit"
               [disabled]="loading() || credentialsForm.invalid"
             >
-              Continue
+              {{ 'common.action.continue' | translate }}
             </button>
           </form>
           <p class="register-prompt">
-            Need to register? <a routerLink="/register">Create an account</a>
+            {{ 'auth.login.registerPrompt' | translate }}
+            <a routerLink="/register">{{ 'auth.login.registerLink' | translate }}</a>
           </p>
         } @else {
           <app-otp

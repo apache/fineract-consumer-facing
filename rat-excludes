@@ -3,6 +3,7 @@
 **/dist/**
 **/build/**
 frontend/src/openapi-client/**
+frontend/public/i18n/**
 consumer/gradle/wrapper/**
 **/*.log
 rat-excludes

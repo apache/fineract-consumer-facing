@@ -1,0 +1,254 @@
+{
+  "common": {
+    "action": {
+      "applyFilter": "Apply filter",
+      "backToAccount": "Back to account",
+      "cancel": "Cancel",
+      "changeLanguage": "Change language",
+      "continue": "Continue",
+      "dismiss": "Dismiss",
+      "pay": "Pay",
+      "verify": "Verify"
+    },
+    "charge": {
+      "confirmed": "Payment confirmed.",
+      "payCta": "Pay {{name}}"
+    },
+    "error": {
+      "generic": "Something went wrong. Please try again."
+    },
+    "field": {
+      "email": "Email",
+      "password": "Password"
+    },
+    "filter": {
+      "from": "From",
+      "to": "To",
+      "limit": "Limit",
+      "offset": "Offset"
+    },
+    "language": {
+      "en": "English",
+      "hi": "Hindi"
+    },
+    "otp": {
+      "prompt": "Enter the verification code.",
+      "promptSentTo": "Enter the verification code sent to {{target}}.",
+      "codeLabel": "Verification code"
+    },
+    "placeholder": {
+      "date": "yyyy-MM-dd"
+    },
+    "section": {
+      "charges": "Charges",
+      "transactions": "Transactions",
+      "guarantors": "Guarantors"
+    },
+    "table": {
+      "account": "Account",
+      "product": "Product",
+      "status": "Status",
+      "currency": "Currency",
+      "charge": "Charge",
+      "amount": "Amount",
+      "outstanding": "Outstanding",
+      "date": "Date",
+      "type": "Type",
+      "balance": "Balance",
+      "name": "Name",
+      "relationship": "Relationship",
+      "noCharges": "No charges.",
+      "noTransactions": "No transactions."
+    },
+    "transaction": {
+      "title": "Transaction {{id}}"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in",
+      "registerPrompt": "Need to register?",
+      "registerLink": "Create an account"
+    }
+  },
+  "registration": {
+    "title": "Create your account",
+    "identity": {
+      "clientIdLabel": "Fineract client ID",
+      "passwordHint": "15–64 chars, with upper, lower, digit and special character.",
+      "documentTypeLabel": "Document type",
+      "documentNumberLabel": "Document number"
+    },
+    "otp": {
+      "resend": "Resend code",
+      "resendIn": "Resend code in {{seconds}}s"
+    },
+    "done": {
+      "title": "Your account is created.",
+      "idEnding": "ID ending ••{{lastFour}}",
+      "continueToLogin": "Continue to sign in"
+    }
+  },
+  "savings": {
+    "list": {
+      "title": "Savings accounts",
+      "empty": "No savings accounts yet.",
+      "tryForbidden": "Try a forbidden savings account"
+    },
+    "detail": {
+      "title": "Savings account",
+      "balanceLabel": "Balance:",
+      "availableLabel": "Available:",
+      "interestRateLabel": "Interest rate:"
+    },
+    "transaction": {
+      "typeLabel": "Type:",
+      "amountLabel": "Amount:",
+      "runningBalanceLabel": "Running balance:"
+    },
+    "charge": {
+      "amountLabel": "Amount to pay"
+    }
+  },
+  "loans": {
+    "list": {
+      "title": "Loan accounts",
+      "applyCta": "Apply for a loan",
+      "empty": "No loan accounts yet.",
+      "tryForbidden": "Try a forbidden loan"
+    },
+    "detail": {
+      "title": "Loan account",
+      "principalDisbursedLabel": "Principal disbursed:",
+      "totalOutstandingLabel": "Total outstanding:",
+      "interestOutstandingLabel": "Interest outstanding:",
+      "annualInterestRateLabel": "Annual interest rate:",
+      "nextDueLabel": "Next due:",
+      "nextDueOn": "on",
+      "noGuarantors": "No guarantors."
+    },
+    "transaction": {
+      "typeLabel": "Type:",
+      "amountLabel": "Amount:",
+      "outstandingLabel": "Outstanding loan balance:",
+      "backToLoan": "Back to loan"
+    },
+    "charge": {
+      "confirmPrompt": "Pay outstanding {{amount}} on {{name}}?"
+    },
+    "apply": {
+      "title": "Apply for a loan",
+      "productLabel": "Product",
+      "principalLabel": "Principal",
+      "numberOfRepaymentsLabel": "Number of repayments",
+      "repaymentEveryLabel": "Repay every",
+      "loanTermFrequencyLabel": "Loan term frequency",
+      "interestRateLabel": "Interest rate per period",
+      "expectedDisbursementDateLabel": "Expected disbursement date",
+      "submittedOnDateLabel": "Submitted on date",
+      "previewCta": "Preview schedule",
+      "submitCta": "Submit application",
+      "scheduleTitle": "Repayment schedule",
+      "totalRepaymentExpected": "Total repayment expected: {{amount}} {{currency}}",
+      "draftTitle": "Draft application #{{id}}",
+      "draftHint": "Edit the terms above, then modify or withdraw this draft.",
+      "modifyCta": "Modify draft",
+      "withdrawCta": "Withdraw draft",
+      "schedule": {
+        "period": "#",
+        "dueDate": "Due date",
+        "totalDue": "Total due"
+      }
+    }
+  },
+  "transfers": {
+    "title": "Transfer money",
+    "form": {
+      "fromAccountLabel": "From account",
+      "toAccountLabel": "To account",
+      "toAccountTypeLabel": "To account type",
+      "amountLabel": "Amount",
+      "submitCta": "Send transfer"
+    },
+    "accountType": {
+      "savings": "Savings",
+      "loan": "Loan"
+    },
+    "done": {
+      "complete": "Transfer complete.",
+      "reference": "Reference",
+      "amount": "Amount"
+    }
+  },
+  "summary": {
+    "title": "Account summary",
+    "section": {
+      "savings": "Savings",
+      "loans": "Loans"
+    },
+    "savings": {
+      "availableLabel": "Available:",
+      "empty": "No savings accounts."
+    },
+    "loan": {
+      "outstandingLabel": "Outstanding:",
+      "empty": "No loan accounts."
+    }
+  },
+  "layout": {
+    "shell": {
+      "brand": "Fineract Consumer",
+      "logout": "Logout",
+      "toggleNav": "Toggle navigation"
+    },
+    "nav": {
+      "summary": "Summary",
+      "savings": "Savings",
+      "loans": "Loans",
+      "transfers": "Transfers"
+    }
+  },
+  "error.msg.consumer.auth.invalid.credentials": "Incorrect email or password.",
+  "error.msg.consumer.auth.refresh.token.invalid": "Your session has expired. Please sign in again.",
+  "error.msg.consumer.auth.two.factor.invalid": "That verification code is invalid or has expired.",
+  "error.msg.consumer.internal.error": "Something went wrong on our end. Please try again.",
+  "error.msg.consumer.request.body.malformed": "We couldn't read your request. Please try again.",
+  "error.msg.consumer.request.validation.failed": "Please check the form for errors and try again.",
+  "error.msg.consumer.request.header.missing": "Your request is missing required information. Please try again.",
+  "error.msg.consumer.loans.command.access.denied": "You don't have access to this loan.",
+  "error.msg.consumer.loans.command.application.invalid": "We couldn't process this loan application. Please review the details and try again.",
+  "error.msg.consumer.loans.command.charge.payment.invalid": "This charge payment couldn't be processed. Please review the details and try again.",
+  "error.msg.consumer.loans.command.charge.payment.not.found": "We couldn't find that loan charge.",
+  "error.msg.consumer.loans.command.charge.payment.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
+  "error.msg.consumer.loans.command.charge.payment.upstream.unavailable": "Loan charge payments are temporarily unavailable. Please try again later.",
+  "error.msg.consumer.loans.command.not.found": "We couldn't find that loan.",
+  "error.msg.consumer.loans.command.upstream.unavailable": "Loans are temporarily unavailable. Please try again later.",
+  "error.msg.consumer.loans.access.denied": "You don't have access to this loan.",
+  "error.msg.consumer.loans.not.found": "We couldn't find that loan.",
+  "error.msg.consumer.loans.product.not.found": "We couldn't find that loan product.",
+  "error.msg.consumer.loans.query.schedule.invalid": "We couldn't generate a repayment schedule. Please review the details and try again.",
+  "error.msg.consumer.loans.upstream.unavailable": "Loans are temporarily unavailable. Please try again later.",
+  "error.msg.consumer.otp.delivery.failed": "We couldn't send your verification code. Please try again.",
+  "error.msg.consumer.otp.delivery.method.invalid": "That delivery destination is invalid. Please check it and try again.",
+  "error.msg.consumer.otp.invalid": "That verification code is invalid or has expired.",
+  "error.msg.consumer.registration.identity.not.verified": "We couldn't verify your identity with the details provided.",
+  "error.msg.consumer.identity.verification.unavailable": "Identity verification is temporarily unavailable. Please try again later.",
+  "error.msg.consumer.savings.command.access.denied": "You don't have access to this savings account.",
+  "error.msg.consumer.savings.command.charge.payment.invalid": "This charge payment couldn't be processed. Please review the details and try again.",
+  "error.msg.consumer.savings.command.charge.payment.not.found": "We couldn't find that savings charge.",
+  "error.msg.consumer.savings.command.charge.payment.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
+  "error.msg.consumer.savings.command.charge.payment.upstream.unavailable": "Savings charge payments are temporarily unavailable. Please try again later.",
+  "error.msg.consumer.savings.account.access.denied": "You don't have access to this savings account.",
+  "error.msg.consumer.savings.account.not.found": "We couldn't find that savings account.",
+  "error.msg.consumer.savings.product.not.found": "We couldn't find that savings product.",
+  "error.msg.consumer.savings.request.invalid": "Please review the details and try again.",
+  "error.msg.consumer.savings.upstream.unavailable": "Savings are temporarily unavailable. Please try again later.",
+  "error.msg.consumer.transfers.command.access.denied": "You don't have access to one of these accounts.",
+  "error.msg.consumer.transfers.command.invalid": "This transfer couldn't be processed. Please review the details and try again.",
+  "error.msg.consumer.transfers.command.not.found": "We couldn't find that transfer.",
+  "error.msg.consumer.transfers.command.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
+  "error.msg.consumer.transfers.command.upstream.unavailable": "Transfers are temporarily unavailable. Please try again later.",
+  "error.msg.consumer.user.binding.state.invalid": "Your account isn't in the right state for this action.",
+  "error.msg.consumer.user.already.exists": "An account with these details already exists.",
+  "error.msg.consumer.user.not.found": "We couldn't find your account."
+}

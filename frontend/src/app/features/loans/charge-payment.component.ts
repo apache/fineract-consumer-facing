@@ -21,6 +21,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, input, output, 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { TranslatePipe } from '@ngx-translate/core';
 import { LoanChargeQueryData } from '@bff/client';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { LoansStore } from './loans.store';
@@ -28,7 +29,7 @@ import { LoansStore } from './loans.store';
 @Component({
   selector: 'app-charge-payment',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatProgressBarModule, OtpComponent],
+  imports: [MatButtonModule, MatProgressBarModule, OtpComponent, TranslatePipe],
   template: `
     <div class="charge-payment">
       @if (loading()) {
@@ -37,13 +38,18 @@ import { LoansStore } from './loans.store';
 
       @switch (step()) {
         @case ('initiate') {
-          <p>Pay outstanding {{ charge().amountOutstanding }} on {{ charge().name }}?</p>
+          <p>
+            {{
+              'loans.charge.confirmPrompt'
+                | translate: { amount: charge().amountOutstanding, name: charge().name }
+            }}
+          </p>
           <div class="actions">
             <button mat-button type="button" [disabled]="loading()" (click)="cancelled.emit()">
-              Cancel
+              {{ 'common.action.cancel' | translate }}
             </button>
             <button mat-flat-button color="primary" type="button" [disabled]="loading()" (click)="initiate()">
-              Pay {{ charge().name }}
+              {{ 'common.charge.payCta' | translate: { name: charge().name } }}
             </button>
           </div>
         }
@@ -56,7 +62,7 @@ import { LoansStore } from './loans.store';
           />
         }
         @case ('done') {
-          <p class="done">Payment confirmed.</p>
+          <p class="done">{{ 'common.charge.confirmed' | translate }}</p>
         }
       }
     </div>

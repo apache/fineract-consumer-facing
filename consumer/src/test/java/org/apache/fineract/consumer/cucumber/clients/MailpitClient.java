@@ -31,6 +31,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.springframework.http.MediaType;
 
 public class MailpitClient {
 
@@ -82,7 +83,7 @@ public class MailpitClient {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(BASE_URL + path))
                     .timeout(Duration.ofSeconds(5))
-                    .header("Accept", "application/json")
+                    .header("Accept", MediaType.APPLICATION_JSON_VALUE)
                     .GET()
                     .build();
             HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());

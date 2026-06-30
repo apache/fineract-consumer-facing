@@ -22,26 +22,27 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { TranslatePipe } from '@ngx-translate/core';
 import { LoansStore } from './loans.store';
 
 @Component({
   selector: 'app-loans-transaction',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatCardModule, RouterLink, CurrencyPipe, DatePipe],
+  imports: [MatButtonModule, MatCardModule, RouterLink, CurrencyPipe, DatePipe, TranslatePipe],
   template: `
     @if (store.selectedTransaction(); as tx) {
       <mat-card>
         <mat-card-header>
-          <mat-card-title>Transaction {{ tx.id }}</mat-card-title>
+          <mat-card-title>{{ 'common.transaction.title' | translate: { id: tx.id } }}</mat-card-title>
           <mat-card-subtitle>{{ tx.date | date: 'mediumDate' }}</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <p>Type: {{ tx.type }}</p>
-          <p>Amount: {{ tx.amount | currency: tx.currency }}</p>
-          <p>Outstanding loan balance: {{ tx.outstandingLoanBalance | currency: tx.currency }}</p>
+          <p>{{ 'loans.transaction.typeLabel' | translate }} {{ tx.type }}</p>
+          <p>{{ 'loans.transaction.amountLabel' | translate }} {{ tx.amount | currency: tx.currency }}</p>
+          <p>{{ 'loans.transaction.outstandingLabel' | translate }} {{ tx.outstandingLoanBalance | currency: tx.currency }}</p>
         </mat-card-content>
         <mat-card-actions>
-          <a mat-button [routerLink]="['/loans', loanId]">Back to loan</a>
+          <a mat-button [routerLink]="['/loans', loanId]">{{ 'loans.transaction.backToLoan' | translate }}</a>
         </mat-card-actions>
       </mat-card>
     }

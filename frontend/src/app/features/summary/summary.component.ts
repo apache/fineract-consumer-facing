@@ -22,22 +22,30 @@ import { CurrencyPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { SummaryStore } from './summary.store';
 
 @Component({
   selector: 'app-summary',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MatCardModule, MatProgressBarModule, CurrencyPipe, PageHeaderComponent],
+  imports: [
+    RouterLink,
+    MatCardModule,
+    MatProgressBarModule,
+    CurrencyPipe,
+    TranslatePipe,
+    PageHeaderComponent,
+  ],
   template: `
-    <app-page-header title="Account summary" />
+    <app-page-header [title]="'summary.title' | translate" />
 
     @if (store.loading()) {
       <mat-progress-bar mode="indeterminate" />
     }
 
     <section>
-      <h2>Savings</h2>
+      <h2>{{ 'summary.section.savings' | translate }}</h2>
       <div class="cards">
         @for (card of store.savingsCards(); track card.id) {
           <mat-card [routerLink]="['/savings', card.id]" role="link" tabindex="0">
@@ -47,17 +55,17 @@ import { SummaryStore } from './summary.store';
             </mat-card-header>
             <mat-card-content>
               <p class="amount">{{ card.balance | currency: card.currency }}</p>
-              <p>Available: {{ card.availableBalance | currency: card.currency }}</p>
+              <p>{{ 'summary.savings.availableLabel' | translate }} {{ card.availableBalance | currency: card.currency }}</p>
             </mat-card-content>
           </mat-card>
         } @empty {
-          <p>No savings accounts.</p>
+          <p>{{ 'summary.savings.empty' | translate }}</p>
         }
       </div>
     </section>
 
     <section>
-      <h2>Loans</h2>
+      <h2>{{ 'summary.section.loans' | translate }}</h2>
       <div class="cards">
         @for (card of store.loanCards(); track card.id) {
           <mat-card [routerLink]="['/loans', card.id]" role="link" tabindex="0">
@@ -66,11 +74,11 @@ import { SummaryStore } from './summary.store';
               <mat-card-subtitle>{{ card.accountNo }}</mat-card-subtitle>
             </mat-card-header>
             <mat-card-content>
-              <p class="amount">Outstanding: {{ card.totalOutstanding | currency: card.currency }}</p>
+              <p class="amount">{{ 'summary.loan.outstandingLabel' | translate }} {{ card.totalOutstanding | currency: card.currency }}</p>
             </mat-card-content>
           </mat-card>
         } @empty {
-          <p>No loan accounts.</p>
+          <p>{{ 'summary.loan.empty' | translate }}</p>
         }
       </div>
     </section>
@@ -80,6 +88,11 @@ import { SummaryStore } from './summary.store';
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
+    }
+    section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
     }
     .cards {
       display: flex;

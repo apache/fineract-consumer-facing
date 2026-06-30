@@ -19,6 +19,8 @@
 
 import { expect, test } from '@playwright/test';
 
+import { JSON_CONTENT_TYPE } from './constants';
+
 const OTP_CODE = 'ABC123';
 const DOCUMENT_KEY = 'SECRET-DOC-9999';
 
@@ -28,21 +30,21 @@ test('registration walks identity -> OTP -> success and never persists the OTP o
   await page.route('**/api/v1/registration/submit', route =>
     route.fulfill({
       status: 200,
-      contentType: 'application/json',
+      contentType: JSON_CONTENT_TYPE,
       body: JSON.stringify({ registrationId: 'reg-1', status: 'PENDING_OTP', maskedLastFour: '6789' }),
     }),
   );
   await page.route('**/api/v1/registration/otp/send', route =>
     route.fulfill({
       status: 200,
-      contentType: 'application/json',
+      contentType: JSON_CONTENT_TYPE,
       body: JSON.stringify({ sentTo: 'j***@example.com', tokenLiveTimeInSec: 300 }),
     }),
   );
   await page.route('**/api/v1/registration/otp/verify', route =>
     route.fulfill({
       status: 200,
-      contentType: 'application/json',
+      contentType: JSON_CONTENT_TYPE,
       body: JSON.stringify({ status: 'BOUND' }),
     }),
   );

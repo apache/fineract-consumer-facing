@@ -19,11 +19,13 @@
 
 import { type Page, expect, test } from '@playwright/test';
 
+import { JSON_CONTENT_TYPE } from './constants';
+
 async function mockResumedSession(page: Page): Promise<void> {
   await page.route('**/api/v1/authentication/refresh', route =>
     route.fulfill({
       status: 200,
-      contentType: 'application/json',
+      contentType: JSON_CONTENT_TYPE,
       body: JSON.stringify({ accessToken: 'fake-jwt' }),
     }),
   );
@@ -51,14 +53,14 @@ test('logged-in: form -> OTP step-up -> confirm -> success', async ({ page }) =>
   await page.route('**/api/v1/transfers/initiate', route =>
     route.fulfill({
       status: 200,
-      contentType: 'application/json',
+      contentType: JSON_CONTENT_TYPE,
       body: JSON.stringify({ stepUpToken: 'tok', sentTo: 'a***@example.com' }),
     }),
   );
   await page.route('**/api/v1/transfers/confirm', route =>
     route.fulfill({
       status: 200,
-      contentType: 'application/json',
+      contentType: JSON_CONTENT_TYPE,
       body: JSON.stringify({ transferId: 100, fromAccountId: 1, toAccountId: 2, amount: 50 }),
     }),
   );
@@ -83,14 +85,14 @@ test('wrong OTP: surfaces the ConsumerApiError snackbar and stays on the OTP ste
   await page.route('**/api/v1/transfers/initiate', route =>
     route.fulfill({
       status: 200,
-      contentType: 'application/json',
+      contentType: JSON_CONTENT_TYPE,
       body: JSON.stringify({ stepUpToken: 'tok', sentTo: 'a***@example.com' }),
     }),
   );
   await page.route('**/api/v1/transfers/confirm', route =>
     route.fulfill({
       status: 400,
-      contentType: 'application/json',
+      contentType: JSON_CONTENT_TYPE,
       body: JSON.stringify({ code: 'otp.invalid', defaultMessage: 'Invalid verification code' }),
     }),
   );

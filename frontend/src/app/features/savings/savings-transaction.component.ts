@@ -22,26 +22,30 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { TranslatePipe } from '@ngx-translate/core';
 import { SavingsStore } from './savings.store';
 
 @Component({
   selector: 'app-savings-transaction',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatCardModule, RouterLink, DatePipe, DecimalPipe],
+  imports: [MatButtonModule, MatCardModule, RouterLink, DatePipe, DecimalPipe, TranslatePipe],
   template: `
     @if (store.selectedTransaction(); as tx) {
       <mat-card>
         <mat-card-header>
-          <mat-card-title>Transaction {{ tx.id }}</mat-card-title>
+          <mat-card-title>{{ 'common.transaction.title' | translate: { id: tx.id } }}</mat-card-title>
           <mat-card-subtitle>{{ tx.date | date: 'mediumDate' }}</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <p>Type: {{ tx.type }}</p>
-          <p>Amount: {{ tx.amount | number: '1.2-2' }}</p>
-          <p>Running balance: {{ tx.runningBalance | number: '1.2-2' }}</p>
+          <p>{{ 'savings.transaction.typeLabel' | translate }} {{ tx.type }}</p>
+          <p>{{ 'savings.transaction.amountLabel' | translate }} {{ tx.amount | number: '1.2-2' }}</p>
+          <p>
+            {{ 'savings.transaction.runningBalanceLabel' | translate }}
+            {{ tx.runningBalance | number: '1.2-2' }}
+          </p>
         </mat-card-content>
         <mat-card-actions>
-          <a mat-button [routerLink]="['/savings', savingsId]">Back to account</a>
+          <a mat-button [routerLink]="['/savings', savingsId]">{{ 'common.action.backToAccount' | translate }}</a>
         </mat-card-actions>
       </mat-card>
     }

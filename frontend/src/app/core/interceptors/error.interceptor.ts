@@ -21,16 +21,20 @@ import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateService } from '@ngx-translate/core';
 import { catchError, switchMap, throwError } from 'rxjs';
 import { ConsumerApiError } from '../../api/consumer-api-error';
 import { AuthService } from '../auth/auth.service';
 
 const REFRESH_URL = '/api/v1/authentication/refresh';
+const GENERIC_ERROR_KEY = 'common.error.generic';
+const DISMISS_KEY = 'common.action.dismiss';
 
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const snackBar = inject(MatSnackBar);
   const auth = inject(AuthService);
   const router = inject(Router);
+  const translate = inject(TranslateService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -48,14 +52,27 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         );
       }
 
-      notify(snackBar, error);
+      notify(snackBar, translate, error);
       return throwError(() => error);
     }),
   );
 };
 
-function notify(snackBar: MatSnackBar, error: HttpErrorResponse): void {
+function notify(snackBar: MatSnackBar, translate: TranslateService, error: HttpErrorResponse): void {
   const body = error.error as ConsumerApiError | null;
-  const message = body?.defaultMessage ?? 'Something went wrong. Please try again.';
-  snackBar.open(message, 'Dismiss', { duration: 5000 });
+  const message = resolveMessage(translate, body);
+  snackBar.open(message, translate.instant(DISMISS_KEY), { duration: 5000 });
+}
+
+function resolveMessage(translate: TranslateService, body: ConsumerApiError | null): string {
+  if (body?.code) {
+    const translated = translate.instant(body.code);
+    if (translated !== body.code) {
+      return translated;
+    }
+  }
+  if (body?.defaultMessage) {
+    return body.defaultMessage;
+  }
+  return translate.instant(GENERIC_ERROR_KEY);
 }

@@ -28,6 +28,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
+import { TranslatePipe } from '@ngx-translate/core';
 import { SubmitLoanApplicationCommandRequest } from '@bff/client';
 import { LoansStore } from './loans.store';
 
@@ -43,11 +44,12 @@ import { LoansStore } from './loans.store';
     MatProgressBarModule,
     MatSelectModule,
     MatTableModule,
+    TranslatePipe,
   ],
   template: `
     <mat-card>
       <mat-card-header>
-        <mat-card-title>Apply for a loan</mat-card-title>
+        <mat-card-title>{{ 'loans.apply.title' | translate }}</mat-card-title>
       </mat-card-header>
 
       @if (loading()) {
@@ -57,7 +59,7 @@ import { LoansStore } from './loans.store';
       <mat-card-content>
         <form [formGroup]="form" class="terms">
           <mat-form-field appearance="fill">
-            <mat-label>Product</mat-label>
+            <mat-label>{{ 'loans.apply.productLabel' | translate }}</mat-label>
             <mat-select formControlName="productId" (selectionChange)="onProductChange($event.value)">
               @for (option of store.template()?.productOptions ?? []; track option.id) {
                 <mat-option [value]="option.id">{{ option.name }}</mat-option>
@@ -66,41 +68,41 @@ import { LoansStore } from './loans.store';
           </mat-form-field>
 
           <mat-form-field appearance="fill">
-            <mat-label>Principal</mat-label>
+            <mat-label>{{ 'loans.apply.principalLabel' | translate }}</mat-label>
             <input matInput type="number" formControlName="principal" />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>Number of repayments</mat-label>
+            <mat-label>{{ 'loans.apply.numberOfRepaymentsLabel' | translate }}</mat-label>
             <input matInput type="number" formControlName="numberOfRepayments" />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>Repay every</mat-label>
+            <mat-label>{{ 'loans.apply.repaymentEveryLabel' | translate }}</mat-label>
             <input matInput type="number" formControlName="repaymentEvery" />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>Loan term frequency</mat-label>
+            <mat-label>{{ 'loans.apply.loanTermFrequencyLabel' | translate }}</mat-label>
             <input matInput type="number" formControlName="loanTermFrequency" />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>Interest rate per period</mat-label>
+            <mat-label>{{ 'loans.apply.interestRateLabel' | translate }}</mat-label>
             <input matInput type="number" step="0.01" formControlName="interestRatePerPeriod" />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>Expected disbursement date</mat-label>
-            <input matInput placeholder="yyyy-MM-dd" formControlName="expectedDisbursementDate" />
+            <mat-label>{{ 'loans.apply.expectedDisbursementDateLabel' | translate }}</mat-label>
+            <input matInput [placeholder]="'common.placeholder.date' | translate" formControlName="expectedDisbursementDate" />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>Submitted on date</mat-label>
-            <input matInput placeholder="yyyy-MM-dd" formControlName="submittedOnDate" />
+            <mat-label>{{ 'loans.apply.submittedOnDateLabel' | translate }}</mat-label>
+            <input matInput [placeholder]="'common.placeholder.date' | translate" formControlName="submittedOnDate" />
           </mat-form-field>
         </form>
 
         <div class="actions">
           <button mat-stroked-button type="button" [disabled]="loading() || form.invalid" (click)="preview()">
-            Preview schedule
+            {{ 'loans.apply.previewCta' | translate }}
           </button>
           <button mat-flat-button color="primary" type="button" [disabled]="loading() || form.invalid" (click)="submit()">
-            Submit application
+            {{ 'loans.apply.submitCta' | translate }}
           </button>
         </div>
       </mat-card-content>
@@ -109,31 +111,34 @@ import { LoansStore } from './loans.store';
     @if (store.schedulePreview(); as schedule) {
       <mat-card>
         <mat-card-header>
-          <mat-card-title>Repayment schedule</mat-card-title>
+          <mat-card-title>{{ 'loans.apply.scheduleTitle' | translate }}</mat-card-title>
           <mat-card-subtitle>
-            Total repayment expected: {{ schedule.totalRepaymentExpected }} {{ schedule.currency }}
+            {{
+              'loans.apply.totalRepaymentExpected'
+                | translate: { amount: schedule.totalRepaymentExpected, currency: schedule.currency }
+            }}
           </mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
           <table mat-table [dataSource]="schedule.periods ?? []">
             <ng-container matColumnDef="period">
-              <th mat-header-cell *matHeaderCellDef>#</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'loans.apply.schedule.period' | translate }}</th>
               <td mat-cell *matCellDef="let row">{{ row.period }}</td>
             </ng-container>
             <ng-container matColumnDef="dueDate">
-              <th mat-header-cell *matHeaderCellDef>Due date</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'loans.apply.schedule.dueDate' | translate }}</th>
               <td mat-cell *matCellDef="let row">{{ row.dueDate }}</td>
             </ng-container>
             <ng-container matColumnDef="principalDue">
-              <th mat-header-cell *matHeaderCellDef>Principal</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'loans.apply.principalLabel' | translate }}</th>
               <td mat-cell *matCellDef="let row">{{ row.principalDue }}</td>
             </ng-container>
             <ng-container matColumnDef="totalDueForPeriod">
-              <th mat-header-cell *matHeaderCellDef>Total due</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'loans.apply.schedule.totalDue' | translate }}</th>
               <td mat-cell *matCellDef="let row">{{ row.totalDueForPeriod }}</td>
             </ng-container>
             <ng-container matColumnDef="outstandingBalance">
-              <th mat-header-cell *matHeaderCellDef>Balance</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'common.table.balance' | translate }}</th>
               <td mat-cell *matCellDef="let row">{{ row.outstandingBalance }}</td>
             </ng-container>
 
@@ -147,16 +152,16 @@ import { LoansStore } from './loans.store';
     @if (store.draft(); as draft) {
       <mat-card>
         <mat-card-header>
-          <mat-card-title>Draft application #{{ draft.loanId }}</mat-card-title>
+          <mat-card-title>{{ 'loans.apply.draftTitle' | translate: { id: draft.loanId } }}</mat-card-title>
         </mat-card-header>
         <mat-card-content>
-          <p>Edit the terms above, then modify or withdraw this draft.</p>
+          <p>{{ 'loans.apply.draftHint' | translate }}</p>
           <div class="actions">
             <button mat-stroked-button type="button" [disabled]="loading() || form.invalid" (click)="modify(draft.loanId)">
-              Modify draft
+              {{ 'loans.apply.modifyCta' | translate }}
             </button>
             <button mat-stroked-button color="warn" type="button" [disabled]="loading()" (click)="withdraw(draft.loanId)">
-              Withdraw draft
+              {{ 'loans.apply.withdrawCta' | translate }}
             </button>
           </div>
         </mat-card-content>

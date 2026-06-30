@@ -29,6 +29,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
+import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
 import { ChargePaymentComponent } from './charge-payment.component';
@@ -57,6 +58,7 @@ function toIsoDate(value: Date | null): string | undefined {
     MatInputModule,
     MatProgressBarModule,
     MatTableModule,
+    TranslatePipe,
     DatePipe,
     DecimalPipe,
     PageHeaderComponent,
@@ -64,7 +66,7 @@ function toIsoDate(value: Date | null): string | undefined {
     ChargePaymentComponent,
   ],
   template: `
-    <app-page-header title="Savings account" />
+    <app-page-header [title]="'savings.detail.title' | translate" />
 
     @if (store.loading()) {
       <mat-progress-bar mode="indeterminate" />
@@ -79,42 +81,48 @@ function toIsoDate(value: Date | null): string | undefined {
           }
         </mat-card-header>
         <mat-card-content>
-          <p>Balance: {{ account.balance | number: '1.2-2' }}</p>
-          <p>Available: {{ account.availableBalance | number: '1.2-2' }}</p>
-          <p>Interest rate: {{ account.nominalAnnualInterestRate }}%</p>
+          <p>{{ 'savings.detail.balanceLabel' | translate }} {{ account.balance | number: '1.2-2' }}</p>
+          <p>
+            {{ 'savings.detail.availableLabel' | translate }}
+            {{ account.availableBalance | number: '1.2-2' }}
+          </p>
+          <p>
+            {{ 'savings.detail.interestRateLabel' | translate }}
+            {{ account.nominalAnnualInterestRate }}%
+          </p>
         </mat-card-content>
       </mat-card>
     }
 
     <mat-card>
       <mat-card-header>
-        <mat-card-title>Charges</mat-card-title>
+        <mat-card-title>{{ 'common.section.charges' | translate }}</mat-card-title>
       </mat-card-header>
       <mat-card-content>
         <table mat-table [dataSource]="store.charges()">
           <ng-container matColumnDef="name">
-            <th mat-header-cell *matHeaderCellDef>Charge</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.charge' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.name }}</td>
           </ng-container>
           <ng-container matColumnDef="amount">
-            <th mat-header-cell *matHeaderCellDef class="num">Amount</th>
+            <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.amount' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.amount | number: '1.2-2' }}</td>
           </ng-container>
           <ng-container matColumnDef="amountOutstanding">
-            <th mat-header-cell *matHeaderCellDef class="num">Outstanding</th>
+            <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.outstanding' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.amountOutstanding | number: '1.2-2' }}</td>
           </ng-container>
           <ng-container matColumnDef="actions">
             <th mat-header-cell *matHeaderCellDef></th>
             <td mat-cell *matCellDef="let row">
-              <button mat-button color="primary" (click)="pay(row.id)">Pay</button>
+              <button mat-button color="primary" (click)="pay(row.id)">{{ 'common.action.pay' | translate }}</button>
             </td>
           </ng-container>
 
           <tr mat-header-row *matHeaderRowDef="chargeColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: chargeColumns"></tr>
           <tr class="empty-row" *matNoDataRow>
-            <td [attr.colspan]="chargeColumns.length">No charges.</td>
+            <td [attr.colspan]="chargeColumns.length">{{ 'common.table.noCharges' | translate }}</td>
           </tr>
         </table>
 
@@ -131,48 +139,48 @@ function toIsoDate(value: Date | null): string | undefined {
 
     <mat-card>
       <mat-card-header>
-        <mat-card-title>Transactions</mat-card-title>
+        <mat-card-title>{{ 'common.section.transactions' | translate }}</mat-card-title>
       </mat-card-header>
       <mat-card-content>
         <form class="filter" [formGroup]="filterForm" (ngSubmit)="applyFilter()">
           <mat-form-field appearance="fill">
-            <mat-label>From</mat-label>
+            <mat-label>{{ 'common.filter.from' | translate }}</mat-label>
             <input matInput [matDatepicker]="fromPicker" formControlName="fromDate" />
             <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
             <mat-datepicker #fromPicker />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>To</mat-label>
+            <mat-label>{{ 'common.filter.to' | translate }}</mat-label>
             <input matInput [matDatepicker]="toPicker" formControlName="toDate" />
             <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
             <mat-datepicker #toPicker />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>Limit</mat-label>
+            <mat-label>{{ 'common.filter.limit' | translate }}</mat-label>
             <input matInput type="number" formControlName="limit" />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>Offset</mat-label>
+            <mat-label>{{ 'common.filter.offset' | translate }}</mat-label>
             <input matInput type="number" formControlName="offset" />
           </mat-form-field>
-          <button mat-flat-button color="primary" type="submit">Apply filter</button>
+          <button mat-flat-button color="primary" type="submit">{{ 'common.action.applyFilter' | translate }}</button>
         </form>
 
         <table mat-table [dataSource]="store.transactions()">
           <ng-container matColumnDef="date">
-            <th mat-header-cell *matHeaderCellDef>Date</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.date' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.date | date: 'mediumDate' }}</td>
           </ng-container>
           <ng-container matColumnDef="type">
-            <th mat-header-cell *matHeaderCellDef>Type</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.type' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.type }}</td>
           </ng-container>
           <ng-container matColumnDef="amount">
-            <th mat-header-cell *matHeaderCellDef class="num">Amount</th>
+            <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.amount' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.amount | number: '1.2-2' }}</td>
           </ng-container>
           <ng-container matColumnDef="runningBalance">
-            <th mat-header-cell *matHeaderCellDef class="num">Balance</th>
+            <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.balance' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.runningBalance | number: '1.2-2' }}</td>
           </ng-container>
 
@@ -184,7 +192,7 @@ function toIsoDate(value: Date | null): string | undefined {
             (click)="openTransaction(row.id)"
           ></tr>
           <tr class="empty-row" *matNoDataRow>
-            <td [attr.colspan]="txColumns.length">No transactions.</td>
+            <td [attr.colspan]="txColumns.length">{{ 'common.table.noTransactions' | translate }}</td>
           </tr>
         </table>
       </mat-card-content>

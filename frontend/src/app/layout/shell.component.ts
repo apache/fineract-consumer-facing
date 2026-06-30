@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import { NgOptimizedImage } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -35,12 +36,15 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
+import { TranslatePipe } from '@ngx-translate/core';
 import { AuthService } from '../core/auth/auth.service';
+import { LanguageSwitcherComponent } from '../shared/language-switcher.component';
 
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    NgOptimizedImage,
     RouterLink,
     RouterLinkActive,
     RouterOutlet,
@@ -50,6 +54,8 @@ import { AuthService } from '../core/auth/auth.service';
     MatProgressBarModule,
     MatSidenavModule,
     MatToolbarModule,
+    TranslatePipe,
+    LanguageSwitcherComponent,
   ],
   template: `
     @if (loading()) {
@@ -57,28 +63,42 @@ import { AuthService } from '../core/auth/auth.service';
     }
 
     <mat-toolbar>
-      <mat-icon class="brand-icon">account_balance</mat-icon>
-      <span>Fineract Consumer</span>
+      <button
+        mat-icon-button
+        class="toolbar-action nav-toggle-btn"
+        [attr.aria-label]="'layout.shell.toggleNav' | translate"
+        (click)="toggleSidenav()"
+      >
+        <mat-icon>menu</mat-icon>
+      </button>
+      <img ngSrc="/apache-fineract-logo.png" width="32" height="32" alt="" class="brand-icon" priority />
+      <span>{{ 'layout.shell.brand' | translate }}</span>
       <span class="spacer"></span>
-      <button mat-icon-button aria-label="Logout" (click)="logout()">
+      <app-language-switcher />
+      <button
+        mat-icon-button
+        class="toolbar-action logout-btn"
+        [attr.aria-label]="'layout.shell.logout' | translate"
+        (click)="logout()"
+      >
         <mat-icon>logout</mat-icon>
       </button>
     </mat-toolbar>
 
     <mat-sidenav-container>
-      <mat-sidenav mode="side" opened>
+      <mat-sidenav mode="side" [opened]="sidenavOpened()">
         <mat-nav-list>
           <a mat-list-item routerLink="/summary" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>dashboard</mat-icon>Summary
+            <mat-icon matListItemIcon>dashboard</mat-icon>{{ 'layout.nav.summary' | translate }}
           </a>
           <a mat-list-item routerLink="/savings" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>savings</mat-icon>Savings
+            <mat-icon matListItemIcon>savings</mat-icon>{{ 'layout.nav.savings' | translate }}
           </a>
           <a mat-list-item routerLink="/loans" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>request_quote</mat-icon>Loans
+            <mat-icon matListItemIcon>request_quote</mat-icon>{{ 'layout.nav.loans' | translate }}
           </a>
           <a mat-list-item routerLink="/transfers" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>swap_horiz</mat-icon>Transfers
+            <mat-icon matListItemIcon>swap_horiz</mat-icon>{{ 'layout.nav.transfers' | translate }}
           </a>
         </mat-nav-list>
       </mat-sidenav>
@@ -92,6 +112,21 @@ import { AuthService } from '../core/auth/auth.service';
   styles: `
     .brand-icon {
       margin-right: 0.5rem;
+    }
+    .toolbar-action {
+      width: 3rem;
+      height: 3rem;
+    }
+    .toolbar-action mat-icon {
+      font-size: 1.75rem;
+      width: 1.75rem;
+      height: 1.75rem;
+    }
+    .nav-toggle-btn {
+      margin-right: 0.5rem;
+    }
+    .logout-btn {
+      margin-left: 0.75rem;
     }
     .spacer {
       flex: 1 1 auto;
@@ -113,6 +148,7 @@ export class ShellComponent {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly loading = signal(false);
+  protected readonly sidenavOpened = signal(true);
 
   constructor() {
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((event) => {
@@ -126,6 +162,10 @@ export class ShellComponent {
         this.loading.set(false);
       }
     });
+  }
+
+  protected toggleSidenav(): void {
+    this.sidenavOpened.update((v) => !v);
   }
 
   protected logout(): void {

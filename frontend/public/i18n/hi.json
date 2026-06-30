@@ -1,0 +1,254 @@
+{
+  "common": {
+    "action": {
+      "applyFilter": "फ़िल्टर लागू करें",
+      "backToAccount": "खाते पर वापस जाएँ",
+      "cancel": "रद्द करें",
+      "changeLanguage": "भाषा बदलें",
+      "continue": "जारी रखें",
+      "dismiss": "खारिज करें",
+      "pay": "भुगतान करें",
+      "verify": "सत्यापित करें"
+    },
+    "charge": {
+      "confirmed": "भुगतान की पुष्टि हो गई।",
+      "payCta": "{{name}} को भुगतान करें"
+    },
+    "error": {
+      "generic": "कुछ ग़लत हो गया। कृपया पुनः प्रयास करें।"
+    },
+    "field": {
+      "email": "ईमेल",
+      "password": "पासवर्ड"
+    },
+    "filter": {
+      "from": "से",
+      "to": "तक",
+      "limit": "सीमा",
+      "offset": "ऑफ़सेट"
+    },
+    "language": {
+      "en": "अंग्रेज़ी",
+      "hi": "हिन्दी"
+    },
+    "otp": {
+      "prompt": "सत्यापन कोड दर्ज करें।",
+      "promptSentTo": "{{target}} पर भेजा गया सत्यापन कोड दर्ज करें।",
+      "codeLabel": "सत्यापन कोड"
+    },
+    "placeholder": {
+      "date": "yyyy-MM-dd"
+    },
+    "section": {
+      "charges": "शुल्क",
+      "transactions": "लेन-देन",
+      "guarantors": "गारंटर"
+    },
+    "table": {
+      "account": "खाता",
+      "product": "उत्पाद",
+      "status": "स्थिति",
+      "currency": "मुद्रा",
+      "charge": "शुल्क",
+      "amount": "राशि",
+      "outstanding": "बकाया",
+      "date": "तारीख़",
+      "type": "प्रकार",
+      "balance": "शेष",
+      "name": "नाम",
+      "relationship": "संबंध",
+      "noCharges": "कोई शुल्क नहीं।",
+      "noTransactions": "कोई लेन-देन नहीं।"
+    },
+    "transaction": {
+      "title": "लेन-देन {{id}}"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "साइन इन करें",
+      "registerPrompt": "पंजीकरण करना है?",
+      "registerLink": "खाता बनाएँ"
+    }
+  },
+  "registration": {
+    "title": "अपना खाता बनाएँ",
+    "identity": {
+      "clientIdLabel": "Fineract क्लाइंट आईडी",
+      "passwordHint": "15–64 अक्षर, जिनमें बड़े, छोटे अक्षर, अंक और विशेष वर्ण हों।",
+      "documentTypeLabel": "दस्तावेज़ प्रकार",
+      "documentNumberLabel": "दस्तावेज़ संख्या"
+    },
+    "otp": {
+      "resend": "कोड फिर से भेजें",
+      "resendIn": "{{seconds}} सेकंड में कोड फिर से भेजें"
+    },
+    "done": {
+      "title": "आपका खाता बन गया है।",
+      "idEnding": "आईडी अंत ••{{lastFour}}",
+      "continueToLogin": "साइन इन करने के लिए आगे बढ़ें"
+    }
+  },
+  "savings": {
+    "list": {
+      "title": "बचत खाते",
+      "empty": "अभी तक कोई बचत खाता नहीं।",
+      "tryForbidden": "एक निषिद्ध बचत खाता आज़माएँ"
+    },
+    "detail": {
+      "title": "बचत खाता",
+      "balanceLabel": "शेष:",
+      "availableLabel": "उपलब्ध:",
+      "interestRateLabel": "ब्याज दर:"
+    },
+    "transaction": {
+      "typeLabel": "प्रकार:",
+      "amountLabel": "राशि:",
+      "runningBalanceLabel": "चालू शेष:"
+    },
+    "charge": {
+      "amountLabel": "भुगतान की राशि"
+    }
+  },
+  "loans": {
+    "list": {
+      "title": "ऋण खाते",
+      "applyCta": "ऋण के लिए आवेदन करें",
+      "empty": "अभी तक कोई ऋण खाता नहीं।",
+      "tryForbidden": "एक निषिद्ध ऋण आज़माएँ"
+    },
+    "detail": {
+      "title": "ऋण खाता",
+      "principalDisbursedLabel": "वितरित मूलधन:",
+      "totalOutstandingLabel": "कुल बकाया:",
+      "interestOutstandingLabel": "बकाया ब्याज:",
+      "annualInterestRateLabel": "वार्षिक ब्याज दर:",
+      "nextDueLabel": "अगली देय:",
+      "nextDueOn": "को",
+      "noGuarantors": "कोई गारंटर नहीं।"
+    },
+    "transaction": {
+      "typeLabel": "प्रकार:",
+      "amountLabel": "राशि:",
+      "outstandingLabel": "बकाया ऋण शेष:",
+      "backToLoan": "ऋण पर वापस जाएँ"
+    },
+    "charge": {
+      "confirmPrompt": "{{name}} पर बकाया {{amount}} का भुगतान करें?"
+    },
+    "apply": {
+      "title": "ऋण के लिए आवेदन करें",
+      "productLabel": "उत्पाद",
+      "principalLabel": "मूलधन",
+      "numberOfRepaymentsLabel": "पुनर्भुगतान की संख्या",
+      "repaymentEveryLabel": "हर बार पुनर्भुगतान",
+      "loanTermFrequencyLabel": "ऋण अवधि आवृत्ति",
+      "interestRateLabel": "प्रति अवधि ब्याज दर",
+      "expectedDisbursementDateLabel": "अपेक्षित वितरण तारीख़",
+      "submittedOnDateLabel": "जमा करने की तारीख़",
+      "previewCta": "अनुसूची पूर्वावलोकन",
+      "submitCta": "आवेदन जमा करें",
+      "scheduleTitle": "पुनर्भुगतान अनुसूची",
+      "totalRepaymentExpected": "अपेक्षित कुल पुनर्भुगतान: {{amount}} {{currency}}",
+      "draftTitle": "मसौदा आवेदन #{{id}}",
+      "draftHint": "ऊपर दी गई शर्तें संपादित करें, फिर इस मसौदे को संशोधित करें या वापस लें।",
+      "modifyCta": "मसौदा संशोधित करें",
+      "withdrawCta": "मसौदा वापस लें",
+      "schedule": {
+        "period": "#",
+        "dueDate": "देय तारीख़",
+        "totalDue": "कुल देय"
+      }
+    }
+  },
+  "transfers": {
+    "title": "पैसे भेजें",
+    "form": {
+      "fromAccountLabel": "किस खाते से",
+      "toAccountLabel": "किस खाते में",
+      "toAccountTypeLabel": "गंतव्य खाता प्रकार",
+      "amountLabel": "राशि",
+      "submitCta": "ट्रांसफ़र भेजें"
+    },
+    "accountType": {
+      "savings": "बचत",
+      "loan": "ऋण"
+    },
+    "done": {
+      "complete": "ट्रांसफ़र पूरा हुआ।",
+      "reference": "संदर्भ",
+      "amount": "राशि"
+    }
+  },
+  "summary": {
+    "title": "खाता सारांश",
+    "section": {
+      "savings": "बचत",
+      "loans": "ऋण"
+    },
+    "savings": {
+      "availableLabel": "उपलब्ध:",
+      "empty": "कोई बचत खाता नहीं।"
+    },
+    "loan": {
+      "outstandingLabel": "बकाया:",
+      "empty": "कोई ऋण खाता नहीं।"
+    }
+  },
+  "layout": {
+    "shell": {
+      "brand": "Fineract Consumer",
+      "logout": "लॉग आउट",
+      "toggleNav": "नेविगेशन टॉगल करें"
+    },
+    "nav": {
+      "summary": "सारांश",
+      "savings": "बचत",
+      "loans": "ऋण",
+      "transfers": "ट्रांसफ़र"
+    }
+  },
+  "error.msg.consumer.auth.invalid.credentials": "ईमेल या पासवर्ड ग़लत है।",
+  "error.msg.consumer.auth.refresh.token.invalid": "आपका सत्र समाप्त हो गया है। कृपया फिर से साइन इन करें।",
+  "error.msg.consumer.auth.two.factor.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है।",
+  "error.msg.consumer.internal.error": "हमारी ओर से कुछ ग़लत हो गया। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.request.body.malformed": "हम आपका अनुरोध नहीं पढ़ सके। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.request.validation.failed": "कृपया फ़ॉर्म में त्रुटियों की जाँच करें और पुनः प्रयास करें।",
+  "error.msg.consumer.request.header.missing": "आपके अनुरोध में आवश्यक जानकारी नहीं है। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.loans.command.access.denied": "आपके पास इस ऋण तक पहुँच नहीं है।",
+  "error.msg.consumer.loans.command.application.invalid": "हम इस ऋण आवेदन को संसाधित नहीं कर सके। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
+  "error.msg.consumer.loans.command.charge.payment.invalid": "यह शुल्क भुगतान संसाधित नहीं हो सका। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
+  "error.msg.consumer.loans.command.charge.payment.not.found": "हमें वह ऋण शुल्क नहीं मिला।",
+  "error.msg.consumer.loans.command.charge.payment.stepup.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.loans.command.charge.payment.upstream.unavailable": "ऋण शुल्क भुगतान अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
+  "error.msg.consumer.loans.command.not.found": "हमें वह ऋण नहीं मिला।",
+  "error.msg.consumer.loans.command.upstream.unavailable": "ऋण अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
+  "error.msg.consumer.loans.access.denied": "आपके पास इस ऋण तक पहुँच नहीं है।",
+  "error.msg.consumer.loans.not.found": "हमें वह ऋण नहीं मिला।",
+  "error.msg.consumer.loans.product.not.found": "हमें वह ऋण उत्पाद नहीं मिला।",
+  "error.msg.consumer.loans.query.schedule.invalid": "हम पुनर्भुगतान अनुसूची तैयार नहीं कर सके। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
+  "error.msg.consumer.loans.upstream.unavailable": "ऋण अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
+  "error.msg.consumer.otp.delivery.failed": "हम आपका सत्यापन कोड नहीं भेज सके। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.otp.delivery.method.invalid": "वह डिलीवरी गंतव्य अमान्य है। कृपया इसे जाँचें और पुनः प्रयास करें।",
+  "error.msg.consumer.otp.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है।",
+  "error.msg.consumer.registration.identity.not.verified": "दिए गए विवरण से हम आपकी पहचान सत्यापित नहीं कर सके।",
+  "error.msg.consumer.identity.verification.unavailable": "पहचान सत्यापन अस्थायी रूप से अनुपलब्ध है। कृपया बाद में पुनः प्रयास करें।",
+  "error.msg.consumer.savings.command.access.denied": "आपके पास इस बचत खाते तक पहुँच नहीं है।",
+  "error.msg.consumer.savings.command.charge.payment.invalid": "यह शुल्क भुगतान संसाधित नहीं हो सका। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
+  "error.msg.consumer.savings.command.charge.payment.not.found": "हमें वह बचत शुल्क नहीं मिला।",
+  "error.msg.consumer.savings.command.charge.payment.stepup.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.savings.command.charge.payment.upstream.unavailable": "बचत शुल्क भुगतान अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
+  "error.msg.consumer.savings.account.access.denied": "आपके पास इस बचत खाते तक पहुँच नहीं है।",
+  "error.msg.consumer.savings.account.not.found": "हमें वह बचत खाता नहीं मिला।",
+  "error.msg.consumer.savings.product.not.found": "हमें वह बचत उत्पाद नहीं मिला।",
+  "error.msg.consumer.savings.request.invalid": "कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
+  "error.msg.consumer.savings.upstream.unavailable": "बचत अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
+  "error.msg.consumer.transfers.command.access.denied": "आपके पास इनमें से किसी एक खाते तक पहुँच नहीं है।",
+  "error.msg.consumer.transfers.command.invalid": "यह ट्रांसफ़र संसाधित नहीं हो सका। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
+  "error.msg.consumer.transfers.command.not.found": "हमें वह ट्रांसफ़र नहीं मिला।",
+  "error.msg.consumer.transfers.command.stepup.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.transfers.command.upstream.unavailable": "ट्रांसफ़र अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
+  "error.msg.consumer.user.binding.state.invalid": "इस क्रिया के लिए आपका खाता सही स्थिति में नहीं है।",
+  "error.msg.consumer.user.already.exists": "इन विवरणों वाला खाता पहले से मौजूद है।",
+  "error.msg.consumer.user.not.found": "हमें आपका खाता नहीं मिला।"
+}

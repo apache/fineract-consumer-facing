@@ -24,6 +24,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { TranslatePipe } from '@ngx-translate/core';
 import { SavingsChargeQueryData } from '@bff/client';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { SavingsStore } from './savings.store';
@@ -38,6 +39,7 @@ import { SavingsStore } from './savings.store';
     MatInputModule,
     MatProgressBarModule,
     OtpComponent,
+    TranslatePipe,
   ],
   template: `
     <div class="charge-payment">
@@ -49,12 +51,12 @@ import { SavingsStore } from './savings.store';
         @case ('amount') {
           <form [formGroup]="amountForm" (ngSubmit)="initiate()">
             <mat-form-field appearance="fill">
-              <mat-label>Amount to pay</mat-label>
+              <mat-label>{{ 'savings.charge.amountLabel' | translate }}</mat-label>
               <input matInput type="number" step="0.01" formControlName="amount" />
             </mat-form-field>
             <div class="actions">
               <button mat-button type="button" [disabled]="loading()" (click)="cancelled.emit()">
-                Cancel
+                {{ 'common.action.cancel' | translate }}
               </button>
               <button
                 mat-flat-button
@@ -62,7 +64,7 @@ import { SavingsStore } from './savings.store';
                 type="submit"
                 [disabled]="loading() || amountForm.invalid"
               >
-                Pay {{ charge().name }}
+                {{ 'common.charge.payCta' | translate: { name: charge().name } }}
               </button>
             </div>
           </form>
@@ -76,7 +78,7 @@ import { SavingsStore } from './savings.store';
           />
         }
         @case ('done') {
-          <p class="done">Payment confirmed.</p>
+          <p class="done">{{ 'common.charge.confirmed' | translate }}</p>
         }
       }
     </div>
