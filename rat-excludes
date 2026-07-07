@@ -8,5 +8,6 @@ consumer/gradle/wrapper/**
 **/*.log
 rat-excludes
 LICENSE
+SECURITY.md
 *.jar
 **/.nvmrc
