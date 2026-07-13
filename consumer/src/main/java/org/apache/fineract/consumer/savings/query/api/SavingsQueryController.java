@@ -23,7 +23,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsApplicationTemplateQueryData;
@@ -47,27 +46,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class SavingsQueryController {
 
     private final SavingsQueryService savingsQueryService;
-    private final UserClientResolver userClientResolver;
 
     @Operation(operationId = "listSavingsAccounts")
     @GetMapping
     public List<SavingsAccountListItemQueryData> listAccounts(@AuthenticationPrincipal Jwt jwt) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return savingsQueryService.listAccounts(clientId);
+        return savingsQueryService.listAccounts(jwt);
     }
 
     @Operation(operationId = "getSavingsAccount")
     @GetMapping("/{savingsId}")
     public SavingsAccountQueryData getAccount(@AuthenticationPrincipal Jwt jwt, @PathVariable Long savingsId) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return savingsQueryService.getAccount(clientId, savingsId);
+        return savingsQueryService.getAccount(jwt, savingsId);
     }
 
     @Operation(operationId = "getSavingsCharges")
     @GetMapping("/{savingsId}/charges")
     public List<SavingsChargeQueryData> getCharges(@AuthenticationPrincipal Jwt jwt, @PathVariable Long savingsId) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return savingsQueryService.getCharges(clientId, savingsId);
+        return savingsQueryService.getCharges(jwt, savingsId);
     }
 
     @Operation(operationId = "searchSavingsTransactions")
@@ -79,7 +74,6 @@ public class SavingsQueryController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(required = false) Integer limit,
             @RequestParam(required = false) Integer offset) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
         SavingsTransactionSearchQuery query = SavingsTransactionSearchQuery.builder()
                 .savingsId(savingsId)
                 .fromDate(fromDate)
@@ -87,7 +81,7 @@ public class SavingsQueryController {
                 .limit(limit)
                 .offset(offset)
                 .build();
-        return savingsQueryService.searchTransactions(clientId, query);
+        return savingsQueryService.searchTransactions(jwt, query);
     }
 
     @Operation(operationId = "getSavingsTransaction")
@@ -96,13 +90,14 @@ public class SavingsQueryController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long savingsId,
             @PathVariable Long transactionId) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return savingsQueryService.getTransaction(clientId, savingsId, transactionId);
+        return savingsQueryService.getTransaction(jwt, savingsId, transactionId);
     }
 
     @Operation(operationId = "getSavingsApplicationTemplate")
     @GetMapping("/template")
-    public SavingsApplicationTemplateQueryData getApplicationTemplate(@RequestParam(required = false) Long productId) {
-        return savingsQueryService.getApplicationTemplate(productId);
+    public SavingsApplicationTemplateQueryData getApplicationTemplate(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) Long productId) {
+        return savingsQueryService.getApplicationTemplate(jwt, productId);
     }
 }

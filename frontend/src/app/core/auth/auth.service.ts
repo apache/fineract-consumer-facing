@@ -18,7 +18,7 @@
  */
 
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, tap } from 'rxjs';
+import { Observable, finalize, shareReplay, tap } from 'rxjs';
 import {
   AuthenticationCommandControllerService,
   LoginChallengeCommandData,
@@ -32,9 +32,10 @@ import { deviceFingerprint } from './device-fingerprint';
 export class AuthService {
   private readonly api = inject(AuthenticationCommandControllerService);
 
-  private readonly accessToken = signal<string | null>(null);
-  readonly token = this.accessToken.asReadonly();
-  readonly isAuthenticated = computed(() => this.accessToken() !== null);
+  private readonly sessionExpiresAt = signal<string | null>(null);
+  readonly isAuthenticated = computed(() => this.sessionExpiresAt() !== null);
+
+  private refreshInFlight: Observable<SessionCommandData> | null = null;
 
   login(request: LoginCommandRequest): Observable<LoginChallengeCommandData> {
     return this.api.login(deviceFingerprint(), request);
@@ -47,16 +48,25 @@ export class AuthService {
   }
 
   refresh(): Observable<SessionCommandData> {
-    return this.api
-      .refreshSession(deviceFingerprint())
-      .pipe(tap(session => this.adoptSession(session)));
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.api.refreshSession(deviceFingerprint()).pipe(
+        tap(session => this.adoptSession(session)),
+        finalize(() => (this.refreshInFlight = null)),
+        shareReplay(1),
+      );
+    }
+    return this.refreshInFlight;
   }
 
   logout(): Observable<unknown> {
-    return this.api.logout().pipe(tap(() => this.accessToken.set(null)));
+    return this.api.logout().pipe(tap(() => this.clearSession()));
+  }
+
+  clearSession(): void {
+    this.sessionExpiresAt.set(null);
   }
 
   private adoptSession(session: SessionCommandData): void {
-    this.accessToken.set(session.accessToken ?? null);
+    this.sessionExpiresAt.set(session.expiresAt ?? null);
   }
 }

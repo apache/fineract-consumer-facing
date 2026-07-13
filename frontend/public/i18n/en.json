@@ -180,6 +180,42 @@
       "amount": "Amount"
     }
   },
+  "beneficiaries": {
+    "title": "Beneficiaries",
+    "list": {
+      "nameColumn": "Name",
+      "accountTypeColumn": "Account type",
+      "transferLimitColumn": "Transfer limit",
+      "actionsColumn": "Actions",
+      "empty": "No beneficiaries yet.",
+      "addCta": "Add beneficiary"
+    },
+    "form": {
+      "nameLabel": "Name",
+      "officeNameLabel": "Office name",
+      "accountNumberLabel": "Account number",
+      "accountTypeLabel": "Account type",
+      "transferLimitLabel": "Transfer limit (optional)",
+      "submitCta": "Continue",
+      "cancelCta": "Cancel"
+    },
+    "edit": {
+      "title": "Edit beneficiary"
+    },
+    "delete": {
+      "confirm": "Confirm delete",
+      "cancel": "Cancel"
+    },
+    "snackbar": {
+      "added": "Beneficiary added.",
+      "updated": "Beneficiary updated.",
+      "deleted": "Beneficiary deleted."
+    },
+    "accountType": {
+      "savings": "Savings",
+      "loan": "Loan"
+    }
+  },
   "summary": {
     "title": "Account summary",
     "section": {
@@ -205,12 +241,23 @@
       "summary": "Summary",
       "savings": "Savings",
       "loans": "Loans",
-      "transfers": "Transfers"
+      "transfers": "Transfers",
+      "beneficiaries": "Beneficiaries"
     }
   },
   "error.msg.consumer.auth.invalid.credentials": "Incorrect email or password.",
   "error.msg.consumer.auth.refresh.token.invalid": "Your session has expired. Please sign in again.",
   "error.msg.consumer.auth.two.factor.invalid": "That verification code is invalid or has expired.",
+  "error.msg.consumer.auth.device.fingerprint.mismatch": "This session is tied to a different device. Please log in again.",
+  "error.msg.consumer.access.denied": "You are not allowed to perform this action.",
+  "error.msg.consumer.access.scope.insufficient": "Your access level does not permit this action.",
+  "error.msg.consumer.access.kyc.required": "Identity verification is required before you can do this.",
+  "error.msg.consumer.beneficiaries.command.not.found": "We couldn't find that beneficiary.",
+  "error.msg.consumer.beneficiaries.command.name.duplicate": "You already have a beneficiary with that name.",
+  "error.msg.consumer.beneficiaries.command.account.invalid": "We couldn't find an account matching that office and account number.",
+  "error.msg.consumer.beneficiaries.command.upstream.unavailable": "Beneficiaries are temporarily unavailable. Please try again later.",
+  "error.msg.consumer.beneficiaries.command.invalid": "This request couldn't be processed. Please review the details and try again.",
+  "error.msg.consumer.beneficiaries.command.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
   "error.msg.consumer.internal.error": "Something went wrong on our end. Please try again.",
   "error.msg.consumer.request.body.malformed": "We couldn't read your request. Please try again.",
   "error.msg.consumer.request.validation.failed": "Please check the form for errors and try again.",
@@ -244,6 +291,7 @@
   "error.msg.consumer.savings.request.invalid": "Please review the details and try again.",
   "error.msg.consumer.savings.upstream.unavailable": "Savings are temporarily unavailable. Please try again later.",
   "error.msg.consumer.transfers.command.access.denied": "You don't have access to one of these accounts.",
+  "error.msg.consumer.transfers.command.beneficiary.limit.exceeded": "You have reached the maximum number of beneficiaries.",
   "error.msg.consumer.transfers.command.invalid": "This transfer couldn't be processed. Please review the details and try again.",
   "error.msg.consumer.transfers.command.not.found": "We couldn't find that transfer.",
   "error.msg.consumer.transfers.command.stepup.invalid": "That verification code is invalid or has expired. Please try again.",

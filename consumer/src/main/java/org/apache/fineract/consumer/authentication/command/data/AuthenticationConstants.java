@@ -24,7 +24,8 @@ public final class AuthenticationConstants {
     private AuthenticationConstants() {
     }
 
+    public static final String ACCESS_TOKEN_COOKIE_NAME = "access_token";
     public static final String REFRESH_TOKEN_COOKIE_NAME = "refresh_token";
     public static final String CHALLENGE_PURPOSE_VALUE = "2fa_challenge";
-    public static final String BEARER_TOKEN_TYPE = "Bearer";
+    public static final String SCOPE_CONSUMER_FULL = "consumer:full";
 }

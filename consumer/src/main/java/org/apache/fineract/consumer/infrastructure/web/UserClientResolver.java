@@ -35,4 +35,9 @@ public class UserClientResolver {
         UUID publicId = UUID.fromString(jwt.getSubject());
         return userQueryService.findByPublicId(publicId).getFineractClientId();
     }
+
+    public Long resolveUserId(Jwt jwt) {
+        UUID publicId = UUID.fromString(jwt.getSubject());
+        return userQueryService.findByPublicId(publicId).getId();
+    }
 }

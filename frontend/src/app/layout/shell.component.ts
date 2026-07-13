@@ -100,6 +100,9 @@ import { LanguageSwitcherComponent } from '../shared/language-switcher.component
           <a mat-list-item routerLink="/transfers" routerLinkActive="active-link">
             <mat-icon matListItemIcon>swap_horiz</mat-icon>{{ 'layout.nav.transfers' | translate }}
           </a>
+          <a mat-list-item routerLink="/beneficiaries" routerLinkActive="active-link">
+            <mat-icon matListItemIcon>group</mat-icon>{{ 'layout.nav.beneficiaries' | translate }}
+          </a>
         </mat-nav-list>
       </mat-sidenav>
       <mat-sidenav-content>

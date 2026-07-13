@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,11 +47,12 @@ import org.apache.fineract.consumer.authentication.command.exception.InvalidCred
 import org.apache.fineract.consumer.authentication.command.exception.RefreshTokenInvalidException;
 import org.apache.fineract.consumer.authentication.command.exception.TwoFactorInvalidException;
 import org.apache.fineract.consumer.authentication.command.repository.RefreshTokenCommandRepository;
+import org.apache.fineract.consumer.infrastructure.access.service.JwtDenylist;
 import org.apache.fineract.consumer.infrastructure.configs.AuthenticationProperties;
 import org.apache.fineract.consumer.infrastructure.fineractclient.configs.FineractClientProperties;
-import org.apache.fineract.consumer.infrastructure.jwt.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.jwt.JwtClaims;
-import org.apache.fineract.consumer.infrastructure.jwt.JwtIssuer;
+import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
+import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
+import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
@@ -91,7 +93,7 @@ class AuthenticationCommandServiceImplTest {
     private static final Long SUCCESSOR_ID = 43L;
 
     private static final AuthenticationProperties PROPERTIES = new AuthenticationProperties(
-            Duration.ofMinutes(15), Duration.ofMinutes(5), Duration.ofDays(1), false);
+            Duration.ofMinutes(15), Duration.ofMinutes(5), Duration.ofDays(1), Duration.ofSeconds(30), false);
     private static final FineractClientProperties FINERACT_PROPERTIES = new FineractClientProperties(
             null, null, null, TENANT_ID);
 
@@ -106,6 +108,8 @@ class AuthenticationCommandServiceImplTest {
     @Mock
     private JwtDecoder jwtDecoder;
     @Mock
+    private JwtDenylist jwtDenylist;
+    @Mock
     private RefreshTokenCommandRepository refreshTokenCommandRepository;
 
     private AuthenticationCommandServiceImpl service;
@@ -113,7 +117,7 @@ class AuthenticationCommandServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AuthenticationCommandServiceImpl(userQueryService, otpCommandService, passwordEncoder,
-                jwtIssuer, jwtDecoder, refreshTokenCommandRepository, PROPERTIES, FINERACT_PROPERTIES);
+                jwtIssuer, jwtDecoder, jwtDenylist, refreshTokenCommandRepository, PROPERTIES, FINERACT_PROPERTIES);
     }
 
     private static UserCredentialsQueryData credentials(UserStatus status) {
@@ -237,6 +241,16 @@ class AuthenticationCommandServiceImplTest {
             assertThat(session.getAccessToken()).isEqualTo("access-token");
             assertThat(session.getRefreshToken()).isNotBlank();
 
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Map<String, Object>> accessClaims = ArgumentCaptor.forClass(Map.class);
+            verify(jwtIssuer).issue(eq(PUBLIC_ID.toString()), accessClaims.capture(),
+                    eq(PROPERTIES.getAccessTokenTtl()));
+            assertThat(accessClaims.getValue())
+                    .containsEntry(JwtClaims.TENANT, TENANT_ID)
+                    .containsEntry(JwtClaims.KYC_VERIFIED, true)
+                    .containsEntry(JwtClaims.SCOPE, AuthenticationConstants.SCOPE_CONSUMER_FULL)
+                    .containsEntry(JwtClaims.DEVICE_FINGERPRINT, DEVICE_FINGERPRINT);
+
             ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
             verify(refreshTokenCommandRepository).save(saved.capture());
             assertThat(saved.getValue().getUserId()).isEqualTo(USER_ID);
@@ -328,20 +342,54 @@ class AuthenticationCommandServiceImplTest {
             assertThat(session.getRefreshToken()).isNotEqualTo(PRESENTED_REFRESH_TOKEN);
             assertThat(predecessor.getRotatedTo()).isEqualTo(NEW_TOKEN_ID);
             assertThat(predecessor.getRevokedAt()).isNotNull();
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Map<String, Object>> accessClaims = ArgumentCaptor.forClass(Map.class);
+            verify(jwtIssuer).issue(eq(PUBLIC_ID.toString()), accessClaims.capture(),
+                    eq(PROPERTIES.getAccessTokenTtl()));
+            assertThat(accessClaims.getValue())
+                    .containsEntry(JwtClaims.TENANT, TENANT_ID)
+                    .containsEntry(JwtClaims.KYC_VERIFIED, true)
+                    .containsEntry(JwtClaims.SCOPE, AuthenticationConstants.SCOPE_CONSUMER_FULL)
+                    .containsEntry(JwtClaims.DEVICE_FINGERPRINT, DEVICE_FINGERPRINT);
         }
 
         @Test
-        void replayedTokenRevokesSuccessorChain() {
+        void replayedTokenWithinGraceEstablishesForkedSession() {
             RefreshToken replayed = activeToken();
             replayed.rotateTo(SUCCESSOR_ID);
-            RefreshToken successor = activeToken();
             when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(replayed));
-            when(refreshTokenCommandRepository.findById(SUCCESSOR_ID)).thenReturn(Optional.of(successor));
+            when(userQueryService.findById(USER_ID)).thenReturn(UserQueryData.builder()
+                    .id(USER_ID)
+                    .publicId(PUBLIC_ID)
+                    .email(EMAIL)
+                    .status(UserStatus.BOUND)
+                    .build());
+            when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
+                    .thenReturn(issuedJwt("forked-access-token", PROPERTIES.getAccessTokenTtl()));
+            when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            EstablishedSessionCommandData session = service.refresh(command(DEVICE_FINGERPRINT));
+
+            assertThat(session.getAccessToken()).isEqualTo("forked-access-token");
+            assertThat(session.getRefreshToken()).isNotEqualTo(PRESENTED_REFRESH_TOKEN);
+            assertThat(replayed.getRotatedTo()).isEqualTo(SUCCESSOR_ID);
+        }
+
+        @Test
+        void replayedTokenAfterGraceRevokesAllUserTokens() {
+            RefreshToken replayed = activeToken();
+            replayed.rotateTo(SUCCESSOR_ID);
+            ReflectionTestUtils.setField(replayed, "revokedAt",
+                    Instant.now().minus(PROPERTIES.getRotationGraceTtl()).minusSeconds(1));
+            RefreshToken otherActive = activeToken();
+            when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(replayed));
+            when(refreshTokenCommandRepository.findByUserId(USER_ID)).thenReturn(List.of(replayed, otherActive));
             when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
             assertThatThrownBy(() -> service.refresh(command(DEVICE_FINGERPRINT)))
                     .isInstanceOf(RefreshTokenInvalidException.class);
-            assertThat(successor.getRevokedAt()).isNotNull();
+            assertThat(otherActive.getRevokedAt()).isNotNull();
             verify(jwtIssuer, never()).issue(anyString(), anyMap(), any());
         }
 
@@ -385,6 +433,9 @@ class AuthenticationCommandServiceImplTest {
     @Nested
     class Logout {
 
+        private static final String ACCESS_TOKEN_ID = "access-token-jti";
+        private static final Instant ACCESS_TOKEN_EXPIRES_AT = Instant.now().plusSeconds(900);
+
         @Test
         void knownTokenIsRevoked() {
             RefreshToken token = RefreshToken.issue(USER_ID, PRESENTED_TOKEN_HASH, DEVICE_FINGERPRINT,
@@ -405,6 +456,42 @@ class AuthenticationCommandServiceImplTest {
             service.logout(LogoutCommand.builder().refreshToken(PRESENTED_REFRESH_TOKEN).build());
 
             verify(refreshTokenCommandRepository, never()).save(any());
+        }
+
+        @Test
+        void accessTokenIsDenylistedUntilItsExpiry() {
+            when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
+
+            service.logout(LogoutCommand.builder()
+                    .refreshToken(PRESENTED_REFRESH_TOKEN)
+                    .accessTokenId(ACCESS_TOKEN_ID)
+                    .accessTokenExpiresAt(ACCESS_TOKEN_EXPIRES_AT)
+                    .build());
+
+            verify(jwtDenylist).deny(ACCESS_TOKEN_ID, ACCESS_TOKEN_EXPIRES_AT);
+        }
+
+        @Test
+        void accessTokenWithoutIdSkipsDenylist() {
+            when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
+
+            service.logout(LogoutCommand.builder()
+                    .refreshToken(PRESENTED_REFRESH_TOKEN)
+                    .accessTokenExpiresAt(ACCESS_TOKEN_EXPIRES_AT)
+                    .build());
+
+            verify(jwtDenylist, never()).deny(anyString(), any());
+        }
+
+        @Test
+        void missingRefreshTokenStillDenylistsAccessToken() {
+            service.logout(LogoutCommand.builder()
+                    .accessTokenId(ACCESS_TOKEN_ID)
+                    .accessTokenExpiresAt(ACCESS_TOKEN_EXPIRES_AT)
+                    .build());
+
+            verify(jwtDenylist).deny(ACCESS_TOKEN_ID, ACCESS_TOKEN_EXPIRES_AT);
+            verify(refreshTokenCommandRepository, never()).findByTokenHash(anyString());
         }
     }
 }

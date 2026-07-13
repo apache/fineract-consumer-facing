@@ -20,7 +20,6 @@
 package org.apache.fineract.consumer.loans.query.service;
 
 import feign.FeignException;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -46,8 +45,10 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansRepaymentSchedulePeriods;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansResponse;
+import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.query.Query;
-import org.apache.fineract.consumer.infrastructure.web.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
 import org.apache.fineract.consumer.loans.query.data.CalculateLoanScheduleQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanAccountListItemQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanAccountQueryData;
@@ -58,11 +59,11 @@ import org.apache.fineract.consumer.loans.query.data.LoanProductOptionQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanScheduleQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
-import org.apache.fineract.consumer.loans.query.exception.LoanAccessDeniedException;
-import org.apache.fineract.consumer.loans.query.exception.LoanNotFoundException;
 import org.apache.fineract.consumer.loans.query.exception.LoanProductNotFoundException;
+import org.apache.fineract.consumer.loans.query.exception.LoanQueryNotFoundException;
+import org.apache.fineract.consumer.loans.query.exception.LoanQueryUpstreamUnavailableException;
 import org.apache.fineract.consumer.loans.query.exception.LoanSchedulePreviewInvalidException;
-import org.apache.fineract.consumer.loans.query.exception.LoanUpstreamUnavailableException;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -81,10 +82,13 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     private final LoanProductsApi loanProductsApi;
     private final ClientApi clientApi;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
+    private final UserClientResolver userClientResolver;
 
     @Override
     @Query
-    public List<LoanAccountListItemQueryData> listAccounts(Long clientId) {
+    public List<LoanAccountListItemQueryData> listAccounts(Jwt jwt) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_LIST);
+        Long clientId = userClientResolver.resolveClientId(jwt);
         GetClientsClientIdAccountsResponse accounts = fetch(() -> clientApi.retrieveAllClientAccounts(clientId));
         if (accounts == null || accounts.getLoanAccounts() == null) {
             return List.of();
@@ -94,7 +98,9 @@ public class LoansQueryServiceImpl implements LoansQueryService {
 
     @Override
     @Query
-    public LoanScheduleQueryData calculateSchedule(Long clientId, CalculateLoanScheduleQuery query) {
+    public LoanScheduleQueryData calculateSchedule(Jwt jwt, CalculateLoanScheduleQuery query) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_SCHEDULE_CALCULATE);
+        Long clientId = userClientResolver.resolveClientId(jwt);
         PostLoansRequest request = buildScheduleRequest(query, clientId);
         PostLoansResponse response = previewCall(
                 () -> loansApi.calculateLoanScheduleOrSubmitLoanApplication(request, CALCULATE_SCHEDULE_COMMAND));
@@ -103,16 +109,16 @@ public class LoansQueryServiceImpl implements LoansQueryService {
 
     @Override
     @Query
-    public LoanAccountQueryData getLoan(Long clientId, Long loanId) {
-        requireAccess(clientId, loanId);
+    public LoanAccountQueryData getLoan(Jwt jwt, Long loanId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
         GetLoansLoanIdResponse loan = fetch(() -> loansApi.retrieveLoan(loanId, false, ASSOCIATIONS, null, null));
         return toAccountData(loan);
     }
 
     @Override
     @Query
-    public List<LoanTransactionQueryData> listTransactions(Long clientId, LoanTransactionListQuery query) {
-        requireAccess(clientId, query.getLoanId());
+    public List<LoanTransactionQueryData> listTransactions(Jwt jwt, LoanTransactionListQuery query) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, query.getLoanId());
         GetLoansLoanIdTransactionsResponse response = fetch(() -> loanTransactionsApi.retrieveTransactionsByLoanId(
                 query.getLoanId(), null, query.getPage(), query.getSize(), query.getSort()));
         if (response == null || response.getContent() == null) {
@@ -123,8 +129,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
 
     @Override
     @Query
-    public LoanTransactionQueryData getTransaction(Long clientId, Long loanId, Long transactionId) {
-        requireAccess(clientId, loanId);
+    public LoanTransactionQueryData getTransaction(Jwt jwt, Long loanId, Long transactionId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
         GetLoansLoanIdTransactionsTransactionIdResponse transaction =
                 fetch(() -> loanTransactionsApi.retrieveTransaction(loanId, transactionId, null));
         return toTransactionData(transaction);
@@ -132,8 +138,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
 
     @Override
     @Query
-    public List<LoanChargeQueryData> getCharges(Long clientId, Long loanId) {
-        requireAccess(clientId, loanId);
+    public List<LoanChargeQueryData> getCharges(Jwt jwt, Long loanId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
         List<GetLoansLoanIdChargesChargeIdResponse> charges =
                 fetch(() -> loanChargesApi.retrieveAllLoanCharges(loanId));
         if (charges == null) {
@@ -144,8 +150,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
 
     @Override
     @Query
-    public LoanChargeQueryData getCharge(Long clientId, Long loanId, Long chargeId) {
-        requireAccess(clientId, loanId);
+    public LoanChargeQueryData getCharge(Jwt jwt, Long loanId, Long chargeId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
         GetLoansLoanIdChargesChargeIdResponse charge =
                 fetch(() -> loanChargesApi.retrieveLoanCharge(loanId, chargeId));
         return toChargeData(charge);
@@ -153,8 +159,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
 
     @Override
     @Query
-    public List<LoanGuarantorQueryData> getGuarantors(Long clientId, Long loanId) {
-        requireAccess(clientId, loanId);
+    public List<LoanGuarantorQueryData> getGuarantors(Jwt jwt, Long loanId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
         List<GuarantorData> guarantors = fetch(() -> guarantorsApi.retrieveGuarantorDetails(loanId));
         if (guarantors == null) {
             return List.of();
@@ -164,7 +170,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
 
     @Override
     @Query
-    public LoanApplicationTemplateQueryData getApplicationTemplate(Long productId) {
+    public LoanApplicationTemplateQueryData getApplicationTemplate(Jwt jwt, Long productId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_TEMPLATE_VIEW);
         if (productId == null) {
             List<GetLoanProductsResponse> products = fetch(loanProductsApi::retrieveAllLoanProducts);
             return toBrowseTemplate(products);
@@ -173,19 +180,13 @@ public class LoansQueryServiceImpl implements LoansQueryService {
         return toDetailTemplate(product);
     }
 
-    private void requireAccess(Long clientId, Long loanId) {
-        if (!accessPolicyEvaluator.canAccessLoans(clientId, loanId)) {
-            throw new LoanAccessDeniedException();
-        }
-    }
-
     private <T> T fetch(Supplier<T> call) {
         try {
             return call.get();
         } catch (FeignException.NotFound e) {
-            throw new LoanNotFoundException();
+            throw new LoanQueryNotFoundException();
         } catch (FeignException e) {
-            throw new LoanUpstreamUnavailableException(e);
+            throw new LoanQueryUpstreamUnavailableException(e);
         }
     }
 
@@ -195,7 +196,7 @@ public class LoansQueryServiceImpl implements LoansQueryService {
         } catch (FeignException.BadRequest e) {
             throw new LoanSchedulePreviewInvalidException(e);
         } catch (FeignException e) {
-            throw new LoanUpstreamUnavailableException(e);
+            throw new LoanQueryUpstreamUnavailableException(e);
         }
     }
 
@@ -251,7 +252,7 @@ public class LoansQueryServiceImpl implements LoansQueryService {
         } catch (FeignException.NotFound e) {
             throw new LoanProductNotFoundException();
         } catch (FeignException e) {
-            throw new LoanUpstreamUnavailableException(e);
+            throw new LoanQueryUpstreamUnavailableException(e);
         }
     }
 
@@ -299,9 +300,9 @@ public class LoansQueryServiceImpl implements LoansQueryService {
                 .id(transaction.getId())
                 .type(transaction.getType() == null ? null : transaction.getType().getCode())
                 .date(transaction.getDate())
-                .amount(toBigDecimal(transaction.getAmount()))
+                .amount(transaction.getAmount())
                 .currency(transaction.getCurrency() == null ? null : transaction.getCurrency().getCode())
-                .outstandingLoanBalance(toBigDecimal(transaction.getOutstandingLoanBalance()))
+                .outstandingLoanBalance(transaction.getOutstandingLoanBalance())
                 .build();
     }
 
@@ -309,8 +310,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
         return LoanChargeQueryData.builder()
                 .id(charge.getId())
                 .name(charge.getName())
-                .amount(toBigDecimal(charge.getAmount()))
-                .amountOutstanding(toBigDecimal(charge.getAmountOutstanding()))
+                .amount(charge.getAmount())
+                .amountOutstanding(charge.getAmountOutstanding())
                 .chargeTimeType(charge.getChargeTimeType() == null ? null : charge.getChargeTimeType().getCode())
                 .chargeCalculationType(
                         charge.getChargeCalculationType() == null ? null : charge.getChargeCalculationType().getCode())
@@ -348,9 +349,9 @@ public class LoansQueryServiceImpl implements LoansQueryService {
                 .productId(product.getId())
                 .productName(product.getName())
                 .currencyCode(product.getCurrency() == null ? null : product.getCurrency().getCode())
-                .principal(toBigDecimal(product.getPrincipal()))
-                .minPrincipal(toBigDecimal(product.getMinPrincipal()))
-                .maxPrincipal(toBigDecimal(product.getMaxPrincipal()))
+                .principal(product.getPrincipal())
+                .minPrincipal(product.getMinPrincipal())
+                .maxPrincipal(product.getMaxPrincipal())
                 .numberOfRepayments(product.getNumberOfRepayments())
                 .minNumberOfRepayments(product.getMinNumberOfRepayments())
                 .maxNumberOfRepayments(product.getMaxNumberOfRepayments())
@@ -359,10 +360,10 @@ public class LoansQueryServiceImpl implements LoansQueryService {
                         product.getRepaymentFrequencyType() == null ? null : product.getRepaymentFrequencyType().getId())
                 .repaymentFrequencyTypeCode(
                         product.getRepaymentFrequencyType() == null ? null : product.getRepaymentFrequencyType().getCode())
-                .interestRatePerPeriod(toBigDecimal(product.getInterestRatePerPeriod()))
-                .minInterestRatePerPeriod(toBigDecimal(product.getMinInterestRatePerPeriod()))
-                .maxInterestRatePerPeriod(toBigDecimal(product.getMaxInterestRatePerPeriod()))
-                .annualInterestRate(toBigDecimal(product.getAnnualInterestRate()))
+                .interestRatePerPeriod(product.getInterestRatePerPeriod())
+                .minInterestRatePerPeriod(product.getMinInterestRatePerPeriod())
+                .maxInterestRatePerPeriod(product.getMaxInterestRatePerPeriod())
+                .annualInterestRate(product.getAnnualInterestRate())
                 .interestRateFrequencyTypeId(
                         product.getInterestRateFrequencyType() == null ? null : product.getInterestRateFrequencyType().getId())
                 .interestRateFrequencyTypeCode(
@@ -390,9 +391,5 @@ public class LoansQueryServiceImpl implements LoansQueryService {
         String last = lastname == null ? "" : lastname.trim();
         String name = (first + " " + last).trim();
         return name.isEmpty() ? null : name;
-    }
-
-    private static BigDecimal toBigDecimal(Double value) {
-        return value == null ? null : new BigDecimal(value.toString());
     }
 }

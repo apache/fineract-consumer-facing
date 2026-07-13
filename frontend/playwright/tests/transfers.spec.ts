@@ -26,7 +26,7 @@ async function mockResumedSession(page: Page): Promise<void> {
     route.fulfill({
       status: 200,
       contentType: JSON_CONTENT_TYPE,
-      body: JSON.stringify({ accessToken: 'fake-jwt' }),
+      body: JSON.stringify({ expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() }),
     }),
   );
 }
@@ -41,7 +41,6 @@ async function fillTransferForm(page: Page): Promise<void> {
 }
 
 test('transfers route is guarded: redirects to /login when unauthenticated', async ({ page }) => {
-  // No session resume: the refresh fails, so the app stays logged out and the guard redirects.
   await page.route('**/api/v1/authentication/refresh', route => route.fulfill({ status: 401 }));
 
   await page.goto('/transfers');

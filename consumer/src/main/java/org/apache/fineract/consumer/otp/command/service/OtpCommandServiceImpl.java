@@ -36,7 +36,6 @@ import org.springframework.stereotype.Service;
 public class OtpCommandServiceImpl implements OtpCommandService {
 
     private static final int OTP_LENGTH = 6;
-    private static final int OTP_TTL_SECONDS = 300;
     private static final String ALLOWED_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -67,7 +66,7 @@ public class OtpCommandServiceImpl implements OtpCommandService {
 
     private PendingOtp generateNewToken(OtpDestination destination) {
         String token = generateToken(OTP_LENGTH);
-        return PendingOtp.create(token, OTP_TTL_SECONDS, destination);
+        return PendingOtp.create(token, OtpConstants.OTP_TTL_SECONDS, destination);
     }
 
     private static String generateToken(int length) {

@@ -26,18 +26,19 @@ import org.apache.fineract.consumer.savings.query.data.SavingsApplicationTemplat
 import org.apache.fineract.consumer.savings.query.data.SavingsChargeQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionSearchQuery;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface SavingsQueryService {
 
-    List<SavingsAccountListItemQueryData> listAccounts(Long clientId);
+    List<SavingsAccountListItemQueryData> listAccounts(Jwt jwt);
 
-    SavingsAccountQueryData getAccount(Long clientId, Long savingsId);
+    SavingsAccountQueryData getAccount(Jwt jwt, Long savingsId);
 
-    List<SavingsChargeQueryData> getCharges(Long clientId, Long savingsId);
+    List<SavingsChargeQueryData> getCharges(Jwt jwt, Long savingsId);
 
-    List<SavingsTransactionQueryData> searchTransactions(Long clientId, SavingsTransactionSearchQuery query);
+    List<SavingsTransactionQueryData> searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query);
 
-    SavingsTransactionQueryData getTransaction(Long clientId, Long savingsId, Long transactionId);
+    SavingsTransactionQueryData getTransaction(Jwt jwt, Long savingsId, Long transactionId);
 
-    SavingsApplicationTemplateQueryData getApplicationTemplate(Long productId);
+    SavingsApplicationTemplateQueryData getApplicationTemplate(Jwt jwt, Long productId);
 }

@@ -34,10 +34,8 @@ import lombok.ToString;
 @ToString
 public final class SavingsApplicationTemplateQueryData {
 
-    // Browse mode (productId == null): just the dropdown.
     private final List<SavingsProductOptionQueryData> productOptions;
 
-    // Detail mode (productId != null): the selected product's defaults.
     private final Long productId;
     private final String productName;
     private final String shortName;

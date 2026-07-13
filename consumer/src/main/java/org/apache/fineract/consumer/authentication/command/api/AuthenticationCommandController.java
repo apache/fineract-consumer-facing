@@ -42,6 +42,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -54,6 +56,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthenticationCommandController {
 
+    private static final String ACCESS_COOKIE_PATH = "/api/v1";
     private static final String REFRESH_COOKIE_PATH = "/api/v1/authentication";
     private static final String SAME_SITE_STRICT = "Strict";
 
@@ -104,36 +107,50 @@ public class AuthenticationCommandController {
     @Operation(operationId = "logout")
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
-            @CookieValue(value = AuthenticationConstants.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshToken) {
-        if (refreshToken != null) {
-            authenticationCommandService.logout(LogoutCommand.builder()
-                    .refreshToken(refreshToken)
-                    .build());
-        }
+            @CookieValue(value = AuthenticationConstants.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshToken,
+            @AuthenticationPrincipal Jwt accessToken) {
+        authenticationCommandService.logout(LogoutCommand.builder()
+                .refreshToken(refreshToken)
+                .accessTokenId(accessToken.getId())
+                .accessTokenExpiresAt(accessToken.getExpiresAt())
+                .build());
         return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, accessCookie("", Duration.ZERO).toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie("", Duration.ZERO).toString())
                 .build();
     }
 
     private ResponseEntity<SessionCommandData> sessionResponse(EstablishedSessionCommandData session) {
-        ResponseCookie cookie = refreshCookie(
+        Instant now = Instant.now();
+        ResponseCookie accessCookie = accessCookie(
+                session.getAccessToken(),
+                Duration.between(now, session.getAccessTokenExpiresAt()));
+        ResponseCookie refreshCookie = refreshCookie(
                 session.getRefreshToken(),
-                Duration.between(Instant.now(), session.getRefreshTokenExpiresAt()));
+                Duration.between(now, session.getRefreshTokenExpiresAt()));
         SessionCommandData body = SessionCommandData.builder()
-                .accessToken(session.getAccessToken())
                 .expiresAt(session.getAccessTokenExpiresAt())
                 .build();
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
                 .body(body);
     }
 
+    private ResponseCookie accessCookie(String value, Duration maxAge) {
+        return cookie(AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME, value, ACCESS_COOKIE_PATH, maxAge);
+    }
+
     private ResponseCookie refreshCookie(String value, Duration maxAge) {
-        return ResponseCookie.from(AuthenticationConstants.REFRESH_TOKEN_COOKIE_NAME, value)
+        return cookie(AuthenticationConstants.REFRESH_TOKEN_COOKIE_NAME, value, REFRESH_COOKIE_PATH, maxAge);
+    }
+
+    private ResponseCookie cookie(String name, String value, String path, Duration maxAge) {
+        return ResponseCookie.from(name, value)
                 .httpOnly(true)
-                .secure(authenticationProperties.isRefreshCookieSecure())
+                .secure(authenticationProperties.isCookieSecure())
                 .sameSite(SAME_SITE_STRICT)
-                .path(REFRESH_COOKIE_PATH)
+                .path(path)
                 .maxAge(maxAge)
                 .build();
     }
