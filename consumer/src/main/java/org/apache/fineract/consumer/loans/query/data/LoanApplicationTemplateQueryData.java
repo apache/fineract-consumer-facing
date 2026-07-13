@@ -34,10 +34,8 @@ import lombok.ToString;
 @ToString
 public final class LoanApplicationTemplateQueryData {
 
-    // Browse mode (productId == null): just the dropdown.
     private final List<LoanProductOptionQueryData> productOptions;
 
-    // Detail mode (productId != null): the selected product's defaults.
     private final Long productId;
     private final String productName;
     private final String currencyCode;

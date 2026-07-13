@@ -28,8 +28,11 @@ import feign.RequestLine;
 import feign.Response;
 import feign.jackson.JacksonEncoder;
 import feign.okhttp.OkHttpClient;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
 import org.springframework.http.MediaType;
@@ -37,7 +40,9 @@ import org.springframework.http.MediaType;
 public final class AuthenticationClient {
 
     private static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
+    private static final String ACCESS_COOKIE_PREFIX = AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME + "=";
     private static final String REFRESH_COOKIE_PREFIX = AuthenticationConstants.REFRESH_TOKEN_COOKIE_NAME + "=";
+    private static final String COOKIE_SEPARATOR = "; ";
     private static final long CONNECT_TIMEOUT_SECONDS = 5;
     private static final long READ_TIMEOUT_SECONDS = 10;
 
@@ -64,11 +69,18 @@ public final class AuthenticationClient {
         return throwIfError(API.refresh(cookie, deviceFingerprint));
     }
 
-    public Response logout(String bearerToken, String refreshCookieValue) {
-        String authorization = bearerToken == null ?
-                null : AuthenticationConstants.BEARER_TOKEN_TYPE + " " + bearerToken;
-        String cookie = refreshCookieValue == null ? null : REFRESH_COOKIE_PREFIX + refreshCookieValue;
-        return throwIfError(API.logout(authorization, cookie));
+    public Response logout(String accessToken, String refreshCookieValue, String deviceFingerprint) {
+        String cookie = joinCookies(
+                accessToken == null ? null : ACCESS_COOKIE_PREFIX + accessToken,
+                refreshCookieValue == null ? null : REFRESH_COOKIE_PREFIX + refreshCookieValue);
+        return throwIfError(API.logout(cookie, deviceFingerprint));
+    }
+
+    private static String joinCookies(String... cookies) {
+        String joined = Arrays.stream(cookies)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining(COOKIE_SEPARATOR));
+        return joined.isEmpty() ? null : joined;
     }
 
     private static Response throwIfError(Response response) {
@@ -93,7 +105,7 @@ public final class AuthenticationClient {
         Response refresh(@Param("refreshCookie") String refreshCookie, @Param("fingerprint") String fingerprint);
 
         @RequestLine("POST /api/v1/authentication/logout")
-        @Headers({ "Authorization: {authorization}", "Cookie: {refreshCookie}" })
-        Response logout(@Param("authorization") String authorization, @Param("refreshCookie") String refreshCookie);
+        @Headers({ "Cookie: {cookie}", ConsumerHeaders.DEVICE_FINGERPRINT + ": {fingerprint}" })
+        Response logout(@Param("cookie") String cookie, @Param("fingerprint") String fingerprint);
     }
 }

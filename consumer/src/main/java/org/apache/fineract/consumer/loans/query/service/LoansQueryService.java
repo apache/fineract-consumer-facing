@@ -29,26 +29,27 @@ import org.apache.fineract.consumer.loans.query.data.LoanGuarantorQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanScheduleQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface LoansQueryService {
 
     String CALCULATE_SCHEDULE_COMMAND = "calculateLoanSchedule";
 
-    List<LoanAccountListItemQueryData> listAccounts(Long clientId);
+    List<LoanAccountListItemQueryData> listAccounts(Jwt jwt);
 
-    LoanScheduleQueryData calculateSchedule(Long clientId, CalculateLoanScheduleQuery query);
+    LoanScheduleQueryData calculateSchedule(Jwt jwt, CalculateLoanScheduleQuery query);
 
-    LoanAccountQueryData getLoan(Long clientId, Long loanId);
+    LoanAccountQueryData getLoan(Jwt jwt, Long loanId);
 
-    List<LoanTransactionQueryData> listTransactions(Long clientId, LoanTransactionListQuery query);
+    List<LoanTransactionQueryData> listTransactions(Jwt jwt, LoanTransactionListQuery query);
 
-    LoanTransactionQueryData getTransaction(Long clientId, Long loanId, Long transactionId);
+    LoanTransactionQueryData getTransaction(Jwt jwt, Long loanId, Long transactionId);
 
-    List<LoanChargeQueryData> getCharges(Long clientId, Long loanId);
+    List<LoanChargeQueryData> getCharges(Jwt jwt, Long loanId);
 
-    LoanChargeQueryData getCharge(Long clientId, Long loanId, Long chargeId);
+    LoanChargeQueryData getCharge(Jwt jwt, Long loanId, Long chargeId);
 
-    List<LoanGuarantorQueryData> getGuarantors(Long clientId, Long loanId);
+    List<LoanGuarantorQueryData> getGuarantors(Jwt jwt, Long loanId);
 
-    LoanApplicationTemplateQueryData getApplicationTemplate(Long productId);
+    LoanApplicationTemplateQueryData getApplicationTemplate(Jwt jwt, Long productId);
 }

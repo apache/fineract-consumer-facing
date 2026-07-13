@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.authentication.command.data;
 
+import java.time.Instant;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -31,4 +32,6 @@ import lombok.ToString;
 public final class LogoutCommand {
 
     private final String refreshToken;
+    private final String accessTokenId;
+    private final Instant accessTokenExpiresAt;
 }

@@ -46,6 +46,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         return auth.refresh().pipe(
           switchMap(() => next(req)),
           catchError(() => {
+            auth.clearSession();
             router.navigate(['/login']);
             return throwError(() => error);
           }),

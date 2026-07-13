@@ -18,13 +18,17 @@
  */
 
 import { HttpInterceptorFn } from '@angular/common/http';
-import { inject } from '@angular/core';
-import { AuthService } from '../auth/auth.service';
+import { deviceFingerprint } from '../auth/device-fingerprint';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const token = inject(AuthService).token();
-  if (!token || !req.url.startsWith('/api')) {
+  if (!req.url.startsWith('/api')) {
     return next(req);
   }
-  return next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }));
+  return next(
+    req.clone({
+      setHeaders: {
+        'X-Device-Fingerprint': deviceFingerprint(),
+      },
+    }),
+  );
 };

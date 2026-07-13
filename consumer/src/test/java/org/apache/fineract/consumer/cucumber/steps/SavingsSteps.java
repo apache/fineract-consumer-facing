@@ -28,21 +28,19 @@ import io.cucumber.java.en.When;
 import java.util.List;
 import java.util.Objects;
 import java.math.BigDecimal;
-import org.apache.fineract.consumer.client.ApiClient;
 import org.apache.fineract.consumer.client.api.SavingsCommandControllerApi;
 import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
 import org.apache.fineract.consumer.client.model.InitiateSavingsChargePaymentCommandRequest;
 import org.apache.fineract.consumer.client.model.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.client.model.SavingsAccountQueryData;
+import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
 import org.apache.fineract.consumer.cucumber.helpers.RegistrationHelper;
 
 public class SavingsSteps {
 
-    private static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
     private static final String DEVICE_FINGERPRINT = "cucumber-savings-device";
-    private static final String BEARER_AUTH = "bearerAuth";
     private static final int UNAUTHORIZED = 401;
     private static final int FORBIDDEN = 403;
     private static final long ARBITRARY_CHARGE_ID = 1L;
@@ -142,28 +140,18 @@ public class SavingsSteps {
     }
 
     private static SavingsQueryControllerApi authenticatedClient(String bearerToken) {
-        ApiClient apiClient = new ApiClient(BEARER_AUTH);
-        apiClient.setBasePath(BFF_BASE_URL);
-        apiClient.setBearerToken(bearerToken);
-        return apiClient.buildClient(SavingsQueryControllerApi.class);
+        return ConsumerApiClientFactory.authenticated(SavingsQueryControllerApi.class, bearerToken, DEVICE_FINGERPRINT);
     }
 
     private static SavingsQueryControllerApi unauthenticatedClient() {
-        ApiClient apiClient = new ApiClient();
-        apiClient.setBasePath(BFF_BASE_URL);
-        return apiClient.buildClient(SavingsQueryControllerApi.class);
+        return ConsumerApiClientFactory.unauthenticated(SavingsQueryControllerApi.class);
     }
 
     private static SavingsCommandControllerApi authenticatedCommandClient(String bearerToken) {
-        ApiClient apiClient = new ApiClient(BEARER_AUTH);
-        apiClient.setBasePath(BFF_BASE_URL);
-        apiClient.setBearerToken(bearerToken);
-        return apiClient.buildClient(SavingsCommandControllerApi.class);
+        return ConsumerApiClientFactory.authenticated(SavingsCommandControllerApi.class, bearerToken, DEVICE_FINGERPRINT);
     }
 
     private static SavingsCommandControllerApi unauthenticatedCommandClient() {
-        ApiClient apiClient = new ApiClient();
-        apiClient.setBasePath(BFF_BASE_URL);
-        return apiClient.buildClient(SavingsCommandControllerApi.class);
+        return ConsumerApiClientFactory.unauthenticated(SavingsCommandControllerApi.class);
     }
 }

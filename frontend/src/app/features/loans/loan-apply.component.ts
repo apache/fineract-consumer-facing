@@ -217,7 +217,6 @@ export class LoanApplyComponent {
 
   constructor() {
     this.store.loadTemplate();
-    // When a product's template arrives, prefill the term defaults the BFF returned.
     effect(() => {
       const template = this.store.template();
       if (!template) {

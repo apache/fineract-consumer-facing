@@ -32,5 +32,6 @@ public class AuthenticationProperties {
     private final Duration accessTokenTtl;
     private final Duration challengeTokenTtl;
     private final Duration refreshTokenTtl;
-    private final boolean refreshCookieSecure;
+    private final Duration rotationGraceTtl;
+    private final boolean cookieSecure;
 }

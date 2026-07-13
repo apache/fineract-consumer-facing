@@ -1,0 +1,103 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-beneficiaries
+      author: fineract-consumer-facing
+      changes:
+        - sql:
+            sql: "CREATE TYPE beneficiary_account_type AS ENUM ('SAVINGS', 'LOAN')"
+        - createTable:
+            tableName: beneficiaries
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: public_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_beneficiaries_user_id
+                    references: users(id)
+              - column:
+                  name: name
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fineract_office_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fineract_client_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fineract_account_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_type
+                  type: beneficiary_account_type
+                  constraints:
+                    nullable: false
+              - column:
+                  name: transfer_limit
+                  type: NUMERIC(19,6)
+              - column:
+                  name: is_active
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: beneficiaries
+            indexName: idx_beneficiaries_user_id
+            columns:
+              - column:
+                  name: user_id
+        - sql:
+            sql: "CREATE UNIQUE INDEX uq_beneficiaries_user_name ON beneficiaries (user_id, lower(name)) WHERE is_active"
+      rollback:
+        - dropTable:
+            tableName: beneficiaries
+        - sql:
+            sql: "DROP TYPE beneficiary_account_type"

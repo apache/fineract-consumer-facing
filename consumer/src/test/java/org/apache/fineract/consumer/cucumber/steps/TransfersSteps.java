@@ -26,13 +26,13 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.math.BigDecimal;
-import org.apache.fineract.consumer.client.ApiClient;
 import org.apache.fineract.consumer.client.api.TransfersCommandControllerApi;
 import org.apache.fineract.consumer.client.model.ConfirmTransferCommandRequest;
 import org.apache.fineract.consumer.client.model.InitiateTransferCommandRequest;
 import org.apache.fineract.consumer.client.model.TransferChallengeCommandData;
 import org.apache.fineract.consumer.client.model.TransferCommandData;
 import org.apache.fineract.consumer.cucumber.clients.MailpitClient;
+import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
 import org.apache.fineract.consumer.cucumber.helpers.RegistrationHelper;
@@ -40,9 +40,7 @@ import org.apache.fineract.consumer.transfers.command.data.TransferConstants;
 
 public class TransfersSteps {
 
-    private static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
     private static final String DEVICE_FINGERPRINT = "cucumber-transfers-device";
-    private static final String BEARER_AUTH = "bearerAuth";
     private static final int UNAUTHORIZED = 401;
     private static final int FORBIDDEN = 403;
     private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("1000.00");
@@ -141,15 +139,10 @@ public class TransfersSteps {
     }
 
     private static TransfersCommandControllerApi authenticatedClient(String bearerToken) {
-        ApiClient apiClient = new ApiClient(BEARER_AUTH);
-        apiClient.setBasePath(BFF_BASE_URL);
-        apiClient.setBearerToken(bearerToken);
-        return apiClient.buildClient(TransfersCommandControllerApi.class);
+        return ConsumerApiClientFactory.authenticated(TransfersCommandControllerApi.class, bearerToken, DEVICE_FINGERPRINT);
     }
 
     private static TransfersCommandControllerApi unauthenticatedClient() {
-        ApiClient apiClient = new ApiClient();
-        apiClient.setBasePath(BFF_BASE_URL);
-        return apiClient.buildClient(TransfersCommandControllerApi.class);
+        return ConsumerApiClientFactory.unauthenticated(TransfersCommandControllerApi.class);
     }
 }

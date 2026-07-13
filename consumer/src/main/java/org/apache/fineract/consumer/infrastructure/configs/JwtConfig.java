@@ -25,6 +25,7 @@ import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
@@ -36,7 +37,8 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.fineract.consumer.infrastructure.jwt.JwtClaims;
+import org.apache.fineract.consumer.infrastructure.access.service.JwtDenylist;
+import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -64,8 +66,10 @@ public class JwtConfig {
     @Bean
     public ECKey jwtSigningKey(JwtProperties jwtProperties) {
         try {
-            String pem = new String(jwtProperties.getKeyLocation().getInputStream().readAllBytes(),
-                    StandardCharsets.UTF_8);
+            String pem;
+            try (InputStream keyStream = jwtProperties.getKeyLocation().getInputStream()) {
+                pem = new String(keyStream.readAllBytes(), StandardCharsets.UTF_8);
+            }
             KeyFactory keyFactory = KeyFactory.getInstance(EC_ALGORITHM);
             ECPrivateKey privateKey = (ECPrivateKey) keyFactory
                     .generatePrivate(new PKCS8EncodedKeySpec(extractPemBlock(pem, PRIVATE_KEY_PEM_TYPE)));
@@ -97,11 +101,13 @@ public class JwtConfig {
     }
 
     @Bean
-    public JwtDecoder accessTokenJwtDecoder(ECKey jwtSigningKey, JwtProperties jwtProperties) {
+    public JwtDecoder accessTokenJwtDecoder(ECKey jwtSigningKey, JwtProperties jwtProperties,
+            JwtDenylist jwtDenylist) {
         NimbusJwtDecoder decoder = buildDecoder(jwtSigningKey);
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(jwtProperties.getIssuer()),
-                JwtConfig::rejectSinglePurposeTokens));
+                JwtConfig::rejectSinglePurposeTokens,
+                jwt -> rejectDeniedTokens(jwt, jwtDenylist)));
         return decoder;
     }
 
@@ -110,6 +116,14 @@ public class JwtConfig {
                 .withJwkSource(new ImmutableJWKSet<>(new JWKSet(jwtSigningKey.toPublicJWK())))
                 .jwsAlgorithm(SignatureAlgorithm.ES256)
                 .build();
+    }
+
+    private static OAuth2TokenValidatorResult rejectDeniedTokens(Jwt jwt, JwtDenylist jwtDenylist) {
+        if (jwtDenylist.isDenied(jwt.getId())) {
+            return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                    OAuth2ErrorCodes.INVALID_TOKEN, "token has been revoked", null));
+        }
+        return OAuth2TokenValidatorResult.success();
     }
 
     private static OAuth2TokenValidatorResult rejectSinglePurposeTokens(Jwt jwt) {

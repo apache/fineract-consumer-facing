@@ -19,8 +19,11 @@
 
 package org.apache.fineract.consumer.otp.command.repository;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.PendingOtp;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.Assert;
@@ -31,11 +34,13 @@ public class OtpCommandRepository {
     private static final String PUBLIC_ID_NULL = "publicId must not be null";
     private static final String REQUEST_NULL = "request must not be null";
 
-    private final ConcurrentHashMap<UUID, PendingOtp> store = new ConcurrentHashMap<>();
+    private final Cache<UUID, PendingOtp> store = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofSeconds(OtpConstants.OTP_TTL_SECONDS))
+            .build();
 
     public PendingOtp getPendingOtpForUser(UUID publicId) {
         Assert.notNull(publicId, PUBLIC_ID_NULL);
-        return store.get(publicId);
+        return store.getIfPresent(publicId);
     }
 
     public void addPendingOtp(UUID publicId, PendingOtp request) {
@@ -46,6 +51,6 @@ public class OtpCommandRepository {
 
     public void deletePendingOtpForUser(UUID publicId) {
         Assert.notNull(publicId, PUBLIC_ID_NULL);
-        store.remove(publicId);
+        store.invalidate(publicId);
     }
 }

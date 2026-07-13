@@ -26,11 +26,9 @@ public final class TransferConstants {
 
     public static final String ENDPOINT = "/api/v1/transfers";
 
-    // Fineract account-type wire codes (fixed): savings = 2, loan = 1.
     public static final String SAVINGS_TYPE_CODE = "2";
     public static final String LOAN_TYPE_CODE = "1";
 
-    // BFF-facing toAccountType names (the BFF's own contract — never Fineract's numeric codes).
     public static final String SAVINGS_TYPE_NAME = "savings";
     public static final String LOAN_TYPE_NAME = "loan";
 
