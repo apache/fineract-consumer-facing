@@ -24,7 +24,7 @@ github:
     issues: true
     wiki: true
     projects: true
-    discussions: true
+    discussions: false
   copilot_code_review:
     enabled: true
     review_drafts: true
