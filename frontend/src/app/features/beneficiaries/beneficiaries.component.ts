@@ -31,7 +31,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { BeneficiaryQueryData } from '@bff/client';
+import { BeneficiaryQueryData, InitiateAddBeneficiaryCommandRequest } from '@bff/client';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { BeneficiariesStore } from './beneficiaries.store';
@@ -434,7 +434,7 @@ export class BeneficiariesComponent {
       name,
       officeName,
       accountNumber,
-      accountType,
+      accountType: accountType as InitiateAddBeneficiaryCommandRequest.AccountTypeEnum,
       ...(transferLimit != null ? { transferLimit } : {}),
     };
   }

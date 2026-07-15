@@ -22,8 +22,8 @@ Feature: ABAC device-fingerprint denial
 
   Scenario: Replaying a token from a different device is rejected
     When I call a protected endpoint with a different device fingerprint
-    Then the request is rejected with the device mismatch code
+    Then the request is forbidden with the device mismatch code
 
   Scenario: Calling without a device fingerprint header is rejected
     When I call a protected endpoint with no device fingerprint header
-    Then the request is rejected with the device mismatch code
+    Then the request is rejected with the missing device proof code

@@ -19,12 +19,12 @@
 
 package org.apache.fineract.consumer.savings.command.service;
 
-import feign.FeignException;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsChargesApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdResponse;
@@ -33,6 +33,7 @@ import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
@@ -86,7 +87,7 @@ public class SavingsCommandServiceImpl implements SavingsCommandService {
         return SavingsChargePaymentChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(maskEmail(user.getEmail()))
+                .sentTo(EmailMasking.mask(user.getEmail()))
                 .build();
     }
 
@@ -140,22 +141,10 @@ public class SavingsCommandServiceImpl implements SavingsCommandService {
     }
 
     private <T> T call(Supplier<T> upstream) {
-        try {
-            return upstream.get();
-        } catch (FeignException.NotFound e) {
-            throw new SavingsChargePaymentNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new SavingsChargePaymentInvalidException(e);
-        } catch (FeignException e) {
-            throw new SavingsChargePaymentUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(upstream,
+                e -> new SavingsChargePaymentNotFoundException(),
+                SavingsChargePaymentInvalidException::new,
+                SavingsChargePaymentUpstreamUnavailableException::new);
     }
 
-    private String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at <= 1) {
-            return "***" + email.substring(Math.max(at, 0));
-        }
-        return email.charAt(0) + "***" + email.substring(at);
-    }
 }

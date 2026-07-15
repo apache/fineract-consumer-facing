@@ -17,21 +17,9 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.beneficiaries.query.service;
+package org.apache.fineract.consumer.beneficiaries.query.domain;
 
-import java.util.List;
-import java.util.Optional;
-import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
-import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
-import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryTemplateQueryData;
-import org.springframework.security.oauth2.jwt.Jwt;
-
-public interface BeneficiariesQueryService {
-
-    List<BeneficiaryQueryData> listBeneficiaries(Jwt jwt);
-
-    BeneficiaryTemplateQueryData getTemplate(Jwt jwt);
-
-    Optional<BeneficiaryQueryData> findActiveByAccount(
-            Long userId, Long fineractAccountId, BeneficiaryAccountType accountType);
+public enum BeneficiaryAccountType {
+    SAVINGS,
+    LOAN
 }

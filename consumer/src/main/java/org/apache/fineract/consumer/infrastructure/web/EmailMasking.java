@@ -16,16 +16,27 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.consumer.beneficiaries.command.exception;
 
-import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
-import org.springframework.http.HttpStatus;
+package org.apache.fineract.consumer.infrastructure.web;
 
-public class BeneficiaryInvalidException extends AbstractConsumerException {
+public final class EmailMasking {
 
-    public static final String CODE = "error.msg.consumer.beneficiaries.command.invalid";
+    private static final String MASK = "***";
 
-    public BeneficiaryInvalidException() {
-        super(HttpStatus.BAD_REQUEST, CODE, "invalid beneficiary request");
+    private EmailMasking() {
+    }
+
+    public static String mask(String email) {
+        if (email == null) {
+            return MASK;
+        }
+        int at = email.indexOf('@');
+        if (at < 0) {
+            return MASK;
+        }
+        if (at <= 1) {
+            return MASK + email.substring(at);
+        }
+        return email.charAt(0) + MASK + email.substring(at);
     }
 }

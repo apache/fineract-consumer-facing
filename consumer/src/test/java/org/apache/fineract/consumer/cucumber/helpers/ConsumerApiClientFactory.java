@@ -26,7 +26,7 @@ import org.springframework.http.HttpHeaders;
 
 public final class ConsumerApiClientFactory {
 
-    private static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
+    public static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
 
     private ConsumerApiClientFactory() {
     }

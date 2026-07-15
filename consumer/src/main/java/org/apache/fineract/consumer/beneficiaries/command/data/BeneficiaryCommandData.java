@@ -31,11 +31,15 @@ import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAcco
 @RequiredArgsConstructor
 @Builder
 @EqualsAndHashCode
-@ToString
+@ToString(onlyExplicitlyIncluded = true)
 public final class BeneficiaryCommandData {
 
+    @ToString.Include
     private final UUID publicId;
+
     private final String name;
+
     private final BeneficiaryAccountType accountType;
+
     private final BigDecimal transferLimit;
 }

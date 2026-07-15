@@ -19,10 +19,10 @@
 
 package org.apache.fineract.consumer.loans.query.service;
 
-import feign.FeignException;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.GuarantorsApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoanChargesApi;
@@ -181,23 +181,17 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     private <T> T fetch(Supplier<T> call) {
-        try {
-            return call.get();
-        } catch (FeignException.NotFound e) {
-            throw new LoanQueryNotFoundException();
-        } catch (FeignException e) {
-            throw new LoanQueryUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(call,
+                e -> new LoanQueryNotFoundException(),
+                LoanQueryUpstreamUnavailableException::new,
+                LoanQueryUpstreamUnavailableException::new);
     }
 
     private <T> T previewCall(Supplier<T> call) {
-        try {
-            return call.get();
-        } catch (FeignException.BadRequest e) {
-            throw new LoanSchedulePreviewInvalidException(e);
-        } catch (FeignException e) {
-            throw new LoanQueryUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(call,
+                LoanQueryUpstreamUnavailableException::new,
+                LoanSchedulePreviewInvalidException::new,
+                LoanQueryUpstreamUnavailableException::new);
     }
 
     private PostLoansRequest buildScheduleRequest(CalculateLoanScheduleQuery q, Long clientId) {
@@ -247,13 +241,10 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     private GetLoanProductsProductIdResponse fetchProduct(Long productId) {
-        try {
-            return loanProductsApi.retrieveLoanProductDetails(productId);
-        } catch (FeignException.NotFound e) {
-            throw new LoanProductNotFoundException();
-        } catch (FeignException e) {
-            throw new LoanQueryUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(() -> loanProductsApi.retrieveLoanProductDetails(productId),
+                e -> new LoanProductNotFoundException(),
+                LoanQueryUpstreamUnavailableException::new,
+                LoanQueryUpstreamUnavailableException::new);
     }
 
     private LoanAccountListItemQueryData toListItem(GetClientsLoanAccounts account) {

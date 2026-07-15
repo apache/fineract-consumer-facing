@@ -49,7 +49,6 @@ import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
-import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryStepUpInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryUpstreamUnavailableException;
@@ -74,7 +73,7 @@ import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;
@@ -102,7 +101,6 @@ class BeneficiariesCommandServiceImplTest {
     private static final String MASKED_EMAIL = "u***@test.com";
     private static final String OFFICE_NAME = "Head Office";
     private static final String OTHER_OFFICE_NAME = "Other Office";
-    private static final String UNKNOWN_ACCOUNT_TYPE = "crypto";
     private static final String ACCOUNT_NUMBER = "000000123";
     private static final String OTHER_ACCOUNT_NUMBER = "999999999";
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
@@ -166,7 +164,7 @@ class BeneficiariesCommandServiceImplTest {
                 .name(NAME)
                 .officeName(OFFICE_NAME)
                 .accountNumber(ACCOUNT_NUMBER)
-                .accountType(BeneficiaryAccountType.LOAN.name())
+                .accountType(BeneficiaryAccountType.LOAN)
                 .transferLimit(TRANSFER_LIMIT)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
@@ -179,7 +177,7 @@ class BeneficiariesCommandServiceImplTest {
                 .name(NAME)
                 .officeName(OFFICE_NAME)
                 .accountNumber(ACCOUNT_NUMBER)
-                .accountType(BeneficiaryAccountType.SAVINGS.name())
+                .accountType(BeneficiaryAccountType.SAVINGS)
                 .transferLimit(TRANSFER_LIMIT)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
@@ -230,13 +228,13 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     private void stubAddFingerprint(BeneficiaryAccountType accountType) {
-        when(stepUpTokenService.actionFingerprint(BeneficiaryConstants.ADD_ENDPOINT,
+        when(stepUpTokenService.actionFingerprint(BeneficiaryConstants.ADD_ACTION_ID,
                 NAME, OFFICE_NAME, ACCOUNT_NUMBER, accountType.name(), TRANSFER_LIMIT_FINGERPRINT_PART))
                 .thenReturn(ACTION_FINGERPRINT);
     }
 
     private void stubUpdateFingerprint(String name) {
-        when(stepUpTokenService.actionFingerprint(BeneficiaryConstants.UPDATE_ENDPOINT,
+        when(stepUpTokenService.actionFingerprint(BeneficiaryConstants.UPDATE_ACTION_ID,
                 BENEFICIARY_PUBLIC_ID.toString(), name, TRANSFER_LIMIT_FINGERPRINT_PART))
                 .thenReturn(ACTION_FINGERPRINT);
     }
@@ -290,24 +288,6 @@ class BeneficiariesCommandServiceImplTest {
         verify(otpCommandService).createOtp(eq(PUBLIC_ID), destination.capture());
         assertThat(destination.getValue().getDeliveryMethod()).isEqualTo(OtpConstants.EMAIL_DELIVERY_METHOD_NAME);
         assertThat(destination.getValue().getTarget()).isEqualTo(EMAIL);
-    }
-
-    @Test
-    void initiateAddRejectsUnknownAccountType() {
-        InitiateAddBeneficiaryCommand command = InitiateAddBeneficiaryCommand.builder()
-                .name(NAME)
-                .officeName(OFFICE_NAME)
-                .accountNumber(ACCOUNT_NUMBER)
-                .accountType(UNKNOWN_ACCOUNT_TYPE)
-                .transferLimit(TRANSFER_LIMIT)
-                .deviceFingerprint(DEVICE_FINGERPRINT)
-                .build();
-
-        assertThatThrownBy(() -> service.initiateAdd(jwt(), command))
-                .isInstanceOf(BeneficiaryInvalidException.class)
-                .hasFieldOrPropertyWithValue("code", BeneficiaryInvalidException.CODE);
-
-        verify(otpCommandService, never()).createOtp(any(), any());
     }
 
     @Test

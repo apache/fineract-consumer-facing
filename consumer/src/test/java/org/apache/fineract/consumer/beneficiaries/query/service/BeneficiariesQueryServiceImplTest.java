@@ -33,8 +33,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
-import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryQueryEntity;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryTemplateQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.repository.BeneficiaryQueryRepository;
@@ -80,16 +80,16 @@ class BeneficiariesQueryServiceImplTest {
                 .build();
     }
 
-    private static Beneficiary beneficiary(String name, BeneficiaryAccountType accountType,
+    private static BeneficiaryQueryEntity beneficiary(String name, BeneficiaryAccountType accountType,
             BigDecimal transferLimit) {
-        return Beneficiary.register(PUBLIC_ID, USER_ID, name, OFFICE_ID, CLIENT_ID, ACCOUNT_ID,
+        return BeneficiaryQueryEntity.of(PUBLIC_ID, USER_ID, name, OFFICE_ID, CLIENT_ID, ACCOUNT_ID,
                 accountType, transferLimit);
     }
 
     @Test
     void listBeneficiariesMapsEntitiesToQueryData() {
-        Beneficiary savings = beneficiary(ALICE_NAME, BeneficiaryAccountType.SAVINGS, TRANSFER_LIMIT);
-        Beneficiary loan = beneficiary(BOB_NAME, BeneficiaryAccountType.LOAN, null);
+        BeneficiaryQueryEntity savings = beneficiary(ALICE_NAME, BeneficiaryAccountType.SAVINGS, TRANSFER_LIMIT);
+        BeneficiaryQueryEntity loan = beneficiary(BOB_NAME, BeneficiaryAccountType.LOAN, null);
         when(userClientResolver.resolveUserId(any(Jwt.class))).thenReturn(USER_ID);
         when(repository.findAllByUserIdAndActiveTrueOrderByNameAsc(USER_ID)).thenReturn(List.of(savings, loan));
 
@@ -152,7 +152,7 @@ class BeneficiariesQueryServiceImplTest {
 
     @Test
     void findActiveByAccountMapsMatchWithoutAuthorize() {
-        Beneficiary match = beneficiary(ALICE_NAME, BeneficiaryAccountType.SAVINGS, TRANSFER_LIMIT);
+        BeneficiaryQueryEntity match = beneficiary(ALICE_NAME, BeneficiaryAccountType.SAVINGS, TRANSFER_LIMIT);
         when(repository.findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
                 USER_ID, ACCOUNT_ID, BeneficiaryAccountType.SAVINGS)).thenReturn(Optional.of(match));
 

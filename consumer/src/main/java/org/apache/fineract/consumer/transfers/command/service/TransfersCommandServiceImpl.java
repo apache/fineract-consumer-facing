@@ -19,18 +19,18 @@
 
 package org.apache.fineract.consumer.transfers.command.service;
 
-import feign.FeignException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.AccountTransfersApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
@@ -40,6 +40,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
@@ -102,7 +103,7 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         return TransferChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(maskEmail(user.getEmail()))
+                .sentTo(EmailMasking.mask(user.getEmail()))
                 .build();
     }
 
@@ -204,22 +205,10 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
     }
 
     private <T> T call(Supplier<T> upstream) {
-        try {
-            return upstream.get();
-        } catch (FeignException.NotFound e) {
-            throw new TransferNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new TransferInvalidException(e);
-        } catch (FeignException e) {
-            throw new TransferUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(upstream,
+                e -> new TransferNotFoundException(),
+                TransferInvalidException::new,
+                TransferUpstreamUnavailableException::new);
     }
 
-    private String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at <= 1) {
-            return "***" + email.substring(Math.max(at, 0));
-        }
-        return email.charAt(0) + "***" + email.substring(at);
-    }
 }

@@ -18,10 +18,8 @@
  */
 package org.apache.fineract.consumer.beneficiaries.command.service;
 
-import feign.FeignException;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -38,7 +36,6 @@ import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
-import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryStepUpInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryUpstreamUnavailableException;
@@ -46,6 +43,7 @@ import org.apache.fineract.consumer.beneficiaries.command.repository.Beneficiary
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
@@ -58,6 +56,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
@@ -73,6 +72,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandService {
 
+    // Upstream SavingsAccountStatusType/LoanStatus (identical values):
+    // 100=SUBMITTED_AND_PENDING_APPROVAL,
+    // 200=APPROVED,
+    // 300=ACTIVE,
+    // 303=TRANSFER_IN_PROGRESS,
+    // 304=TRANSFER_ON_HOLD
     private static final Set<Long> NON_CLOSED_STATUS_IDS = Set.of(100L, 200L, 300L, 303L, 304L);
 
     private final AccessPolicyEvaluator accessPolicyEvaluator;
@@ -87,9 +92,10 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
 
     @Override
     @Command
+    @Transactional(readOnly = true)
     public BeneficiaryChallengeCommandData initiateAdd(Jwt jwt, InitiateAddBeneficiaryCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_ADD);
-        BeneficiaryAccountType accountType = parseAccountType(command.getAccountType());
+        BeneficiaryAccountType accountType = command.getAccountType();
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
         requireNameAvailable(user.getId(), command.getName());
@@ -109,7 +115,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     @Transactional
     public BeneficiaryCommandData confirmAdd(Jwt jwt, ConfirmAddBeneficiaryCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_ADD);
-        BeneficiaryAccountType accountType = parseAccountType(command.getAccountType());
+        BeneficiaryAccountType accountType = command.getAccountType();
         UUID publicId = publicId(jwt);
         String actionFingerprint = addActionFingerprint(command.getName(), command.getOfficeName(),
                 command.getAccountNumber(), accountType, command.getTransferLimit());
@@ -133,6 +139,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
 
     @Override
     @Command
+    @Transactional(readOnly = true)
     public BeneficiaryChallengeCommandData initiateUpdate(Jwt jwt, InitiateUpdateBeneficiaryCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_MODIFY);
         UUID publicId = publicId(jwt);
@@ -281,12 +288,12 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
 
     private String addActionFingerprint(String name, String officeName, String accountNumber,
             BeneficiaryAccountType accountType, BigDecimal transferLimit) {
-        return stepUpTokenService.actionFingerprint(BeneficiaryConstants.ADD_ENDPOINT,
+        return stepUpTokenService.actionFingerprint(BeneficiaryConstants.ADD_ACTION_ID,
                 name, officeName, accountNumber, accountType.name(), fingerprintPart(transferLimit));
     }
 
     private String updateActionFingerprint(UUID beneficiaryPublicId, String name, BigDecimal transferLimit) {
-        return stepUpTokenService.actionFingerprint(BeneficiaryConstants.UPDATE_ENDPOINT,
+        return stepUpTokenService.actionFingerprint(BeneficiaryConstants.UPDATE_ACTION_ID,
                 beneficiaryPublicId.toString(), name, fingerprintPart(transferLimit));
     }
 
@@ -298,7 +305,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         return BeneficiaryChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(maskEmail(email))
+                .sentTo(EmailMasking.mask(email))
                 .build();
     }
 
@@ -311,33 +318,15 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
                 .build();
     }
 
-    private static BeneficiaryAccountType parseAccountType(String accountType) {
-        try {
-            return BeneficiaryAccountType.valueOf(accountType.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new BeneficiaryInvalidException();
-        }
-    }
-
     private static UUID publicId(Jwt jwt) {
         return UUID.fromString(jwt.getSubject());
     }
 
     private <T> T call(Supplier<T> upstream) {
-        try {
-            return upstream.get();
-        } catch (FeignException.NotFound | FeignException.BadRequest e) {
-            throw new BeneficiaryAccountInvalidException();
-        } catch (FeignException e) {
-            throw new BeneficiaryUpstreamUnavailableException();
-        }
+        return FineractCaller.call(upstream,
+                e -> new BeneficiaryAccountInvalidException(),
+                e -> new BeneficiaryAccountInvalidException(),
+                e -> new BeneficiaryUpstreamUnavailableException());
     }
 
-    private static String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at <= 1) {
-            return "***" + email.substring(Math.max(at, 0));
-        }
-        return email.charAt(0) + "***" + email.substring(at);
-    }
 }

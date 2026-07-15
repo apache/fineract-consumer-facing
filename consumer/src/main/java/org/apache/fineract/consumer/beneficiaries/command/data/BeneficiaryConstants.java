@@ -22,7 +22,7 @@ public final class BeneficiaryConstants {
 
     private BeneficiaryConstants() {}
 
-    public static final String ADD_ENDPOINT = "/api/v1/beneficiaries";
-    public static final String UPDATE_ENDPOINT = "/api/v1/beneficiaries/update";
+    public static final String ADD_ACTION_ID = "beneficiaries:add";
+    public static final String UPDATE_ACTION_ID = "beneficiaries:update";
     public static final String SAVINGS_SEARCH_RESOURCE = "savings";
 }

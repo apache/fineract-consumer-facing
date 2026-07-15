@@ -42,6 +42,7 @@ public class AbacDenialSteps {
     private static final String DEVICE_FINGERPRINT = "cucumber-abac-device-a";
     private static final String OTHER_DEVICE_FINGERPRINT = "cucumber-abac-device-b";
     private static final int UNAUTHORIZED = 401;
+    private static final int FORBIDDEN = 403;
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
@@ -68,8 +69,14 @@ public class AbacDenialSteps {
         lastError = captureError(() -> noFingerprintClient().listSavingsAccounts());
     }
 
-    @Then("the request is rejected with the device mismatch code")
-    public void rejectedWithDeviceMismatchCode() {
+    @Then("the request is forbidden with the device mismatch code")
+    public void forbiddenWithDeviceMismatchCode() {
+        assertThat(lastError.status()).isEqualTo(FORBIDDEN);
+        assertThat(readCode(lastError.contentUTF8())).isEqualTo(DeviceFingerprintFilter.MISMATCH_CODE);
+    }
+
+    @Then("the request is rejected with the missing device proof code")
+    public void rejectedWithMissingDeviceProofCode() {
         assertThat(lastError.status()).isEqualTo(UNAUTHORIZED);
         assertThat(readCode(lastError.contentUTF8())).isEqualTo(DeviceFingerprintFilter.CODE);
     }

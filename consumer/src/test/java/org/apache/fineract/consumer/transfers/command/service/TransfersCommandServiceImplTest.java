@@ -32,7 +32,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
@@ -60,7 +60,7 @@ import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDe
 import org.apache.fineract.consumer.transfers.command.exception.TransferBeneficiaryLimitExceededException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferInvalidException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferStepUpInvalidException;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;

@@ -32,6 +32,10 @@ Feature: Consumer beneficiaries
     When I initiate a transfer above the limit to the target account
     Then the transfer is rejected for exceeding the beneficiary limit
 
+  Scenario: Adding a beneficiary with an unknown account type is rejected
+    When I initiate adding a beneficiary with account type "CRYPTO"
+    Then the beneficiary request is rejected as malformed
+
   Scenario: Transfers to unregistered destinations are denied
     When I initiate a transfer to the target account
     Then the transfer is rejected as a forbidden destination

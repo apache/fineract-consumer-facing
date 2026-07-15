@@ -24,6 +24,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
+import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
 
 @Getter
 @RequiredArgsConstructor
@@ -37,7 +38,7 @@ public final class ConfirmAddBeneficiaryCommand {
     private final String name;
     private final String officeName;
     private final String accountNumber;
-    private final String accountType;
+    private final BeneficiaryAccountType accountType;
     private final BigDecimal transferLimit;
     private final String deviceFingerprint;
 }

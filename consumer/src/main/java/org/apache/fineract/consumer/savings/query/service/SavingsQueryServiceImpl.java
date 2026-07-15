@@ -19,11 +19,11 @@
 
 package org.apache.fineract.consumer.savings.query.service;
 
-import feign.FeignException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountTransactionsApi;
@@ -150,25 +150,17 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     }
 
     private <T> T fetch(Supplier<T> call) {
-        try {
-            return call.get();
-        } catch (FeignException.NotFound e) {
-            throw new SavingsAccountNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new SavingsRequestInvalidException(e);
-        } catch (FeignException e) {
-            throw new SavingsUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(call,
+                e -> new SavingsAccountNotFoundException(),
+                SavingsRequestInvalidException::new,
+                SavingsUpstreamUnavailableException::new);
     }
 
     private GetSavingsProductsProductIdResponse fetchProduct(Long productId) {
-        try {
-            return savingsProductApi.retrieveOneSavingsProduct(productId);
-        } catch (FeignException.NotFound e) {
-            throw new SavingsProductNotFoundException();
-        } catch (FeignException e) {
-            throw new SavingsUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(() -> savingsProductApi.retrieveOneSavingsProduct(productId),
+                e -> new SavingsProductNotFoundException(),
+                SavingsUpstreamUnavailableException::new,
+                SavingsUpstreamUnavailableException::new);
     }
 
     private SavingsAccountTransactionData deserialize(String json) {

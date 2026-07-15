@@ -49,7 +49,7 @@ import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentCom
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentConstants;
 import org.apache.fineract.consumer.savings.command.exception.SavingsCommandAccessDeniedException;
 import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentStepUpInvalidException;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;

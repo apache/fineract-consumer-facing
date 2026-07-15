@@ -26,8 +26,13 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.List;
-import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
+import java.util.Map;
+import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
 import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
 import org.apache.fineract.consumer.client.api.BeneficiariesQueryControllerApi;
 import org.apache.fineract.consumer.client.api.TransfersCommandControllerApi;
@@ -45,22 +50,30 @@ import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
 import org.apache.fineract.consumer.cucumber.helpers.RegistrationHelper;
+import org.apache.fineract.consumer.infrastructure.exception.HttpMessageNotReadableExceptionHandler;
+import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
 import org.apache.fineract.consumer.transfers.command.data.TransferConstants;
 import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferBeneficiaryLimitExceededException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 public class BeneficiariesSteps {
 
     private static final String DEVICE_FINGERPRINT = "cucumber-beneficiaries-device";
+    private static final int BAD_REQUEST = 400;
     private static final int FORBIDDEN = 403;
+    private static final String INITIATE_ADD_PATH = "/api/v1/beneficiaries/initiate";
     private static final String BENEFICIARY_NAME = "Cuke Beneficiary";
     private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("1000.00");
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
     private static final BigDecimal WITHIN_LIMIT_AMOUNT = new BigDecimal("100.00");
     private static final BigDecimal ABOVE_LIMIT_AMOUNT = new BigDecimal("600.00");
     private static final ObjectMapper JSON = JsonMapper.builder().build();
+    // Raw HTTP client for requests the typed generated client cannot represent (e.g. a bogus enum value).
+    private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final FineractSeeder fineractSeeder = new FineractSeeder();
@@ -75,12 +88,14 @@ public class BeneficiariesSteps {
     private BeneficiaryCommandData addedBeneficiary;
     private TransferCommandData transferResult;
     private FeignException lastError;
+    private String accessToken;
+    private HttpResponse<String> rawResponse;
 
     @Given("a logged-in customer with a funded savings account")
     public void loggedInCustomerWithFundedSavings() {
         user = registrationHelper.registerBoundUserWithAccounts();
         fineractSeeder.depositToSavings(user.savingsAccountId(), DEPOSIT_AMOUNT);
-        String accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
+        accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
         beneficiariesCommandApi = authenticatedCommandClient(accessToken);
         beneficiariesQueryApi = authenticatedQueryClient(accessToken);
         transfersApi = authenticatedTransfersClient(accessToken);
@@ -100,7 +115,7 @@ public class BeneficiariesSteps {
                         .name(BENEFICIARY_NAME)
                         .officeName(target.officeName())
                         .accountNumber(target.savingsAccountNumber())
-                        .accountType(BeneficiaryAccountType.SAVINGS.name())
+                        .accountType(InitiateAddBeneficiaryCommandRequest.AccountTypeEnum.SAVINGS)
                         .transferLimit(TRANSFER_LIMIT));
         String otp = mailpit.waitForOtp(user.email());
         addedBeneficiary = beneficiariesCommandApi.confirmAddBeneficiary(
@@ -111,7 +126,7 @@ public class BeneficiariesSteps {
                         .name(BENEFICIARY_NAME)
                         .officeName(target.officeName())
                         .accountNumber(target.savingsAccountNumber())
-                        .accountType(BeneficiaryAccountType.SAVINGS.name())
+                        .accountType(ConfirmAddBeneficiaryCommandRequest.AccountTypeEnum.SAVINGS)
                         .transferLimit(TRANSFER_LIMIT));
         assertThat(addedBeneficiary.getPublicId()).isNotNull();
     }
@@ -124,6 +139,31 @@ public class BeneficiariesSteps {
             assertThat(beneficiary.getName()).isEqualTo(BENEFICIARY_NAME);
             assertThat(beneficiary.getTransferLimit()).isEqualByComparingTo(TRANSFER_LIMIT);
         });
+    }
+
+    @When("I initiate adding a beneficiary with account type {string}")
+    public void initiateAddBeneficiaryWithAccountType(String accountType) throws Exception {
+        String body = JSON.writeValueAsString(Map.of(
+                "name", BENEFICIARY_NAME,
+                "officeName", target.officeName(),
+                "accountNumber", target.savingsAccountNumber(),
+                "accountType", accountType,
+                "transferLimit", TRANSFER_LIMIT));
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create(ConsumerApiClientFactory.BFF_BASE_URL + INITIATE_ADD_PATH))
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .header(HttpHeaders.COOKIE,
+                        AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME + "=" + accessToken)
+                .header(ConsumerHeaders.DEVICE_FINGERPRINT, DEVICE_FINGERPRINT)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        rawResponse = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Then("the beneficiary request is rejected as malformed")
+    public void beneficiaryRequestRejectedAsMalformed() {
+        assertThat(rawResponse.statusCode()).isEqualTo(BAD_REQUEST);
+        assertThat(readCode(rawResponse.body())).isEqualTo(HttpMessageNotReadableExceptionHandler.CODE);
     }
 
     @When("I transfer an amount within the limit to the target account")

@@ -29,6 +29,7 @@ import { AuthService } from '../auth/auth.service';
 const REFRESH_URL = '/api/v1/authentication/refresh';
 const GENERIC_ERROR_KEY = 'common.error.generic';
 const DISMISS_KEY = 'common.action.dismiss';
+const DEVICE_MISMATCH_CODE = 'error.msg.consumer.auth.device.fingerprint.forbidden';
 
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const snackBar = inject(MatSnackBar);
@@ -39,6 +40,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
       if (req.url.includes(REFRESH_URL)) {
+        return throwError(() => error);
+      }
+
+      if (error.status === 403 && (error.error as ConsumerApiError | null)?.code === DEVICE_MISMATCH_CODE) {
+        auth.clearSession();
+        router.navigate(['/login']);
         return throwError(() => error);
       }
 

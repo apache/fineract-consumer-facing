@@ -23,8 +23,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
-import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryQueryEntity;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryTemplateQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.repository.BeneficiaryQueryRepository;
@@ -76,7 +76,7 @@ public class BeneficiariesQueryServiceImpl implements BeneficiariesQueryService 
                 .map(BeneficiariesQueryServiceImpl::toQueryData);
     }
 
-    private static BeneficiaryQueryData toQueryData(Beneficiary beneficiary) {
+    private static BeneficiaryQueryData toQueryData(BeneficiaryQueryEntity beneficiary) {
         return BeneficiaryQueryData.builder()
                 .publicId(beneficiary.getPublicId())
                 .name(beneficiary.getName())

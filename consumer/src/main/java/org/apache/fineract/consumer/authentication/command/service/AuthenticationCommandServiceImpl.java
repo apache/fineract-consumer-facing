@@ -48,11 +48,12 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.configs.Finera
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
+import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
@@ -105,7 +106,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         return LoginChallengeCommandData.builder()
                 .challengeToken(challenge.getTokenValue())
                 .expiresAt(challenge.getExpiresAt())
-                .sentTo(maskEmail(command.getEmail()))
+                .sentTo(EmailMasking.mask(command.getEmail()))
                 .build();
     }
 
@@ -243,11 +244,4 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         }
     }
 
-    private static String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at < 1) {
-            return "***";
-        }
-        return email.charAt(0) + "***" + email.substring(at);
-    }
 }

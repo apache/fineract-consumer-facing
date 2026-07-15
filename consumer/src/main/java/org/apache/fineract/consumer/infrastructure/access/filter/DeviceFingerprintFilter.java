@@ -42,9 +42,17 @@ import tools.jackson.databind.ObjectMapper;
 public class DeviceFingerprintFilter extends OncePerRequestFilter {
 
     public static final String CODE = "error.msg.consumer.auth.device.fingerprint.mismatch";
+    public static final String MISMATCH_CODE = "error.msg.consumer.auth.device.fingerprint.forbidden";
     private static final String DEFAULT_MESSAGE = "device fingerprint does not match the session";
+    private static final String MISMATCH_MESSAGE = "device fingerprint is not accepted for this session";
 
     private final ObjectMapper objectMapper;
+
+    private enum BindingFailure {
+        NONE,
+        MISSING_PROOF,
+        FORBIDDEN
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -54,26 +62,41 @@ public class DeviceFingerprintFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        if (!satisfiesDeviceBinding(jwtAuthentication.getToken(), request)) {
-            reject(response);
+        BindingFailure failure = evaluateDeviceBinding(jwtAuthentication.getToken(), request);
+        if (failure == BindingFailure.MISSING_PROOF) {
+            reject(response, HttpStatus.UNAUTHORIZED, CODE, DEFAULT_MESSAGE);
+            return;
+        }
+        if (failure == BindingFailure.FORBIDDEN) {
+            reject(response, HttpStatus.FORBIDDEN, MISMATCH_CODE, MISMATCH_MESSAGE);
             return;
         }
         filterChain.doFilter(request, response);
     }
 
-    private static boolean satisfiesDeviceBinding(Jwt jwt, HttpServletRequest request) {
-        if (!AuthenticationConstants.SCOPE_CONSUMER_FULL.equals(jwt.getClaimAsString(JwtClaims.SCOPE))) {
-            return false;
+    private static BindingFailure evaluateDeviceBinding(Jwt jwt, HttpServletRequest request) {
+        String headerFingerprint = request.getHeader(ConsumerHeaders.DEVICE_FINGERPRINT);
+        if (headerFingerprint == null || headerFingerprint.isBlank()) {
+            return BindingFailure.MISSING_PROOF;
         }
         String claimFingerprint = jwt.getClaimAsString(JwtClaims.DEVICE_FINGERPRINT);
-        return claimFingerprint != null && !claimFingerprint.isBlank()
-                && claimFingerprint.equals(request.getHeader(ConsumerHeaders.DEVICE_FINGERPRINT));
+        if (claimFingerprint == null || claimFingerprint.isBlank()) {
+            return BindingFailure.MISSING_PROOF;
+        }
+        if (!AuthenticationConstants.SCOPE_CONSUMER_FULL.equals(jwt.getClaimAsString(JwtClaims.SCOPE))) {
+            return BindingFailure.FORBIDDEN;
+        }
+        if (!claimFingerprint.equals(headerFingerprint)) {
+            return BindingFailure.FORBIDDEN;
+        }
+        return BindingFailure.NONE;
     }
 
-    private void reject(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+    private void reject(HttpServletResponse response, HttpStatus status, String code, String message)
+            throws IOException {
+        response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(),
-                ConsumerApiError.builder().code(CODE).defaultMessage(DEFAULT_MESSAGE).build());
+                ConsumerApiError.builder().code(code).defaultMessage(message).build());
     }
 }

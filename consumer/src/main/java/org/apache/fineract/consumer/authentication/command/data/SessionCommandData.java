@@ -30,8 +30,9 @@ import lombok.ToString;
 @RequiredArgsConstructor
 @Builder
 @EqualsAndHashCode
-@ToString
+@ToString(onlyExplicitlyIncluded = true)
 public final class SessionCommandData {
 
+    @ToString.Include
     private final Instant expiresAt;
 }

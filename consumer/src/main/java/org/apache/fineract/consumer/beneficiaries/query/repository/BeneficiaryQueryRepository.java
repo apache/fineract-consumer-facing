@@ -21,14 +21,14 @@ package org.apache.fineract.consumer.beneficiaries.query.repository;
 
 import java.util.List;
 import java.util.Optional;
-import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
-import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryQueryEntity;
+import org.springframework.data.repository.Repository;
 
-public interface BeneficiaryQueryRepository extends JpaRepository<Beneficiary, Long> {
+public interface BeneficiaryQueryRepository extends Repository<BeneficiaryQueryEntity, Long> {
 
-    List<Beneficiary> findAllByUserIdAndActiveTrueOrderByNameAsc(Long userId);
+    List<BeneficiaryQueryEntity> findAllByUserIdAndActiveTrueOrderByNameAsc(Long userId);
 
-    Optional<Beneficiary> findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
+    Optional<BeneficiaryQueryEntity> findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
             Long userId, Long fineractAccountId, BeneficiaryAccountType accountType);
 }

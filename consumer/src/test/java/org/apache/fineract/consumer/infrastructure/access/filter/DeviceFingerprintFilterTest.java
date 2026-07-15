@@ -81,7 +81,7 @@ class DeviceFingerprintFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        assertRejected();
+        assertRejected(HttpStatus.UNAUTHORIZED, DeviceFingerprintFilter.CODE);
     }
 
     @Test
@@ -91,7 +91,7 @@ class DeviceFingerprintFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        assertRejected();
+        assertRejected(HttpStatus.FORBIDDEN, DeviceFingerprintFilter.MISMATCH_CODE);
     }
 
     @Test
@@ -101,7 +101,7 @@ class DeviceFingerprintFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        assertRejected();
+        assertRejected(HttpStatus.UNAUTHORIZED, DeviceFingerprintFilter.CODE);
     }
 
     @Test
@@ -111,7 +111,7 @@ class DeviceFingerprintFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        assertRejected();
+        assertRejected(HttpStatus.FORBIDDEN, DeviceFingerprintFilter.MISMATCH_CODE);
     }
 
     @Test
@@ -121,15 +121,15 @@ class DeviceFingerprintFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        assertRejected();
+        assertRejected(HttpStatus.FORBIDDEN, DeviceFingerprintFilter.MISMATCH_CODE);
     }
 
-    private void assertRejected() throws Exception {
+    private void assertRejected(HttpStatus status, String code) throws Exception {
         verifyNoInteractions(chain);
-        assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+        assertThat(response.getStatus()).isEqualTo(status.value());
         assertThat(response.getContentType()).isEqualTo(MediaType.APPLICATION_JSON_VALUE);
         String body = response.getContentAsString();
-        assertThat(JSON.readTree(body).path("code").asString()).isEqualTo(DeviceFingerprintFilter.CODE);
+        assertThat(JSON.readTree(body).path("code").asString()).isEqualTo(code);
         assertThat(body)
                 .doesNotContain(SESSION_FINGERPRINT)
                 .doesNotContain(OTHER_FINGERPRINT);

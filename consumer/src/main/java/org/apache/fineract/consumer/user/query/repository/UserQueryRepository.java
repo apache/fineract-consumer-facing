@@ -21,31 +21,31 @@ package org.apache.fineract.consumer.user.query.repository;
 
 import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.user.command.domain.User;
+import org.apache.fineract.consumer.user.query.domain.UserQueryEntity;
 import org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 
-public interface UserQueryRepository extends Repository<User, Long> {
+public interface UserQueryRepository extends Repository<UserQueryEntity, Long> {
 
     @Query("""
             SELECT new org.apache.fineract.consumer.user.query.data.UserQueryData(u.id, u.publicId, u.fineractClientId, u.email, u.status)
-            FROM User u
+            FROM UserQueryEntity u
             WHERE u.publicId = :publicId
             """)
     Optional<UserQueryData> findByPublicId(UUID publicId);
 
     @Query("""
             SELECT new org.apache.fineract.consumer.user.query.data.UserQueryData(u.id, u.publicId, u.fineractClientId, u.email, u.status)
-            FROM User u
+            FROM UserQueryEntity u
             WHERE u.id = :id
             """)
     Optional<UserQueryData> findById(Long id);
 
     @Query("""
             SELECT new org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData(u.id, u.publicId, u.status, u.passwordHash)
-            FROM User u
+            FROM UserQueryEntity u
             WHERE u.email = :email
             """)
     Optional<UserCredentialsQueryData> findCredentialsByEmail(String email);

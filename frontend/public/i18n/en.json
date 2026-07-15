@@ -249,6 +249,7 @@
   "error.msg.consumer.auth.refresh.token.invalid": "Your session has expired. Please sign in again.",
   "error.msg.consumer.auth.two.factor.invalid": "That verification code is invalid or has expired.",
   "error.msg.consumer.auth.device.fingerprint.mismatch": "This session is tied to a different device. Please log in again.",
+  "error.msg.consumer.auth.device.fingerprint.forbidden": "This session is tied to a different device. Please log in again.",
   "error.msg.consumer.access.denied": "You are not allowed to perform this action.",
   "error.msg.consumer.access.scope.insufficient": "Your access level does not permit this action.",
   "error.msg.consumer.access.kyc.required": "Identity verification is required before you can do this.",

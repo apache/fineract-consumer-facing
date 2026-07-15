@@ -19,12 +19,12 @@
 
 package org.apache.fineract.consumer.loans.command.service;
 
-import feign.FeignException;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoanChargesApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdChargesChargeIdRequest;
@@ -38,6 +38,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommand;
@@ -150,7 +151,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
         return LoanChargePaymentChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(maskEmail(user.getEmail()))
+                .sentTo(EmailMasking.mask(user.getEmail()))
                 .build();
     }
 
@@ -196,23 +197,10 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     }
 
     private <T> T callChargePayment(Supplier<T> upstream) {
-        try {
-            return upstream.get();
-        } catch (FeignException.NotFound e) {
-            throw new LoanChargePaymentNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new LoanChargePaymentInvalidException(e);
-        } catch (FeignException e) {
-            throw new LoanChargePaymentUpstreamUnavailableException(e);
-        }
-    }
-
-    private String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at <= 1) {
-            return "***" + email.substring(Math.max(at, 0));
-        }
-        return email.charAt(0) + "***" + email.substring(at);
+        return FineractCaller.call(upstream,
+                e -> new LoanChargePaymentNotFoundException(),
+                LoanChargePaymentInvalidException::new,
+                LoanChargePaymentUpstreamUnavailableException::new);
     }
 
     private Long resolveClientId(Jwt jwt) {
@@ -222,15 +210,10 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     }
 
     private <T> T call(Supplier<T> upstream) {
-        try {
-            return upstream.get();
-        } catch (FeignException.NotFound e) {
-            throw new LoanCommandNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new LoanApplicationInvalidException(e);
-        } catch (FeignException e) {
-            throw new LoanCommandUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(upstream,
+                e -> new LoanCommandNotFoundException(),
+                LoanApplicationInvalidException::new,
+                LoanCommandUpstreamUnavailableException::new);
     }
 
     private PostLoansRequest buildSubmitRequest(SubmitLoanApplicationCommand c, Long clientId) {
