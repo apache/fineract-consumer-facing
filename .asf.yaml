@@ -18,7 +18,13 @@
 notifications:
   commits: commits@fineract.apache.org
   pullrequests: issues@fineract.apache.org
+  discussions: issues@fineract.apache.org
 github:
+  features:
+    issues: true
+    wiki: true
+    projects: true
+    discussions: true
   enabled_merge_buttons:
     merge: true
     squash: false
@@ -34,5 +40,3 @@ github:
       required_signatures: true
       required_linear_history: false
       required_conversation_resolution: true
-      required_pull_request_reviews:
-        required_approving_review_count: 1
