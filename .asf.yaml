@@ -25,6 +25,10 @@ github:
     wiki: true
     projects: true
     discussions: true
+  copilot_code_review:
+    enabled: true
+    review_drafts: false
+    review_on_push: true
   enabled_merge_buttons:
     merge: true
     squash: false
@@ -40,3 +44,5 @@ github:
       required_signatures: true
       required_linear_history: false
       required_conversation_resolution: true
+      required_pull_request_reviews:
+        required_approving_review_count: 0
