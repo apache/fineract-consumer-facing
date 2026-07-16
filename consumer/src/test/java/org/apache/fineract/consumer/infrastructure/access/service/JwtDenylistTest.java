@@ -20,77 +20,89 @@
 package org.apache.fineract.consumer.infrastructure.access.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
-import com.github.benmanes.caffeine.cache.Ticker;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
+@ExtendWith(MockitoExtension.class)
 class JwtDenylistTest {
 
     private static final String TOKEN_ID = "3f2c8a1e-0000-4000-8000-000000000001";
-    private static final String OTHER_TOKEN_ID = "3f2c8a1e-0000-4000-8000-000000000002";
+    private static final String EXPECTED_KEY = "jwt:denylist:" + TOKEN_ID;
     private static final Duration TOKEN_LIFETIME = Duration.ofSeconds(900);
+    private static final Duration CLOCK_SKEW_PAD = Duration.ofSeconds(60);
 
-    private FakeTicker ticker;
+    @Mock
+    private StringRedisTemplate redisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> valueOperations;
+
     private JwtDenylist denylist;
 
     @BeforeEach
     void setUp() {
-        ticker = new FakeTicker();
-        denylist = new JwtDenylist(ticker);
+        denylist = new JwtDenylist(redisTemplate);
+    }
+
+    @Test
+    void denyWritesNamespacedKeyWithRemainingLifetimePlusSkewPad() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        denylist.deny(TOKEN_ID, Instant.now().plus(TOKEN_LIFETIME));
+
+        ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.forClass(Duration.class);
+        verify(valueOperations).set(eq(EXPECTED_KEY), eq("denied"), ttlCaptor.capture());
+        assertThat(ttlCaptor.getValue())
+                .isGreaterThan(TOKEN_LIFETIME)
+                .isLessThanOrEqualTo(TOKEN_LIFETIME.plus(CLOCK_SKEW_PAD));
+    }
+
+    @Test
+    void denySkipsWriteForAlreadyExpiredToken() {
+        denylist.deny(TOKEN_ID, Instant.now().minus(TOKEN_LIFETIME));
+
+        verifyNoInteractions(redisTemplate);
     }
 
     @Test
     void deniedTokenIdIsDenied() {
-        denylist.deny(TOKEN_ID, Instant.now().plus(TOKEN_LIFETIME));
+        when(redisTemplate.hasKey(EXPECTED_KEY)).thenReturn(true);
 
         assertThat(denylist.isDenied(TOKEN_ID)).isTrue();
     }
 
     @Test
     void unknownTokenIdIsNotDenied() {
+        when(redisTemplate.hasKey(EXPECTED_KEY)).thenReturn(false);
+
         assertThat(denylist.isDenied(TOKEN_ID)).isFalse();
     }
 
     @Test
     void nullTokenIdIsNotDenied() {
         assertThat(denylist.isDenied(null)).isFalse();
+
+        verifyNoInteractions(redisTemplate);
     }
 
     @Test
-    void deniedTokenIdStaysDeniedThroughClockSkewWindow() {
-        denylist.deny(TOKEN_ID, Instant.now().plus(TOKEN_LIFETIME));
-
-        ticker.advance(TOKEN_LIFETIME.plusSeconds(30));
+    void unreachableStoreFailsClosed() {
+        when(redisTemplate.hasKey(EXPECTED_KEY)).thenThrow(new RedisConnectionFailureException("store down"));
 
         assertThat(denylist.isDenied(TOKEN_ID)).isTrue();
-    }
-
-    @Test
-    void deniedTokenIdExpiresAfterClockSkewPad() {
-        denylist.deny(TOKEN_ID, Instant.now().plus(TOKEN_LIFETIME));
-        denylist.deny(OTHER_TOKEN_ID, Instant.now().plus(TOKEN_LIFETIME.multipliedBy(2)));
-
-        ticker.advance(TOKEN_LIFETIME.plusSeconds(90));
-
-        assertThat(denylist.isDenied(TOKEN_ID)).isFalse();
-        assertThat(denylist.isDenied(OTHER_TOKEN_ID)).isTrue();
-    }
-
-    private static final class FakeTicker implements Ticker {
-
-        private final AtomicLong nanos = new AtomicLong();
-
-        @Override
-        public long read() {
-            return nanos.get();
-        }
-
-        void advance(Duration duration) {
-            nanos.addAndGet(duration.toNanos());
-        }
     }
 }

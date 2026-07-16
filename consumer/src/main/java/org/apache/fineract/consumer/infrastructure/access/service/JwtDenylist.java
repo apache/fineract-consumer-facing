@@ -19,59 +19,46 @@
 
 package org.apache.fineract.consumer.infrastructure.access.service;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.Expiry;
-import com.github.benmanes.caffeine.cache.Ticker;
 import java.time.Duration;
 import java.time.Instant;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class JwtDenylist {
 
     private static final Duration CLOCK_SKEW_PAD = Duration.ofSeconds(60);
+    private static final String KEY_PREFIX = "jwt:denylist:";
+    private static final String DENIED_MARKER = "denied";
 
-    private final Cache<String, Instant> deniedTokenIds;
-
-    public JwtDenylist() {
-        this(Ticker.systemTicker());
-    }
-
-    JwtDenylist(Ticker ticker) {
-        this.deniedTokenIds = Caffeine.newBuilder()
-                .ticker(ticker)
-                .expireAfter(new Expiry<String, Instant>() {
-
-                    @Override
-                    public long expireAfterCreate(String tokenId, Instant tokenExpiresAt, long currentTime) {
-                        return remainingLifetimeNanos(tokenExpiresAt);
-                    }
-
-                    @Override
-                    public long expireAfterUpdate(String tokenId, Instant tokenExpiresAt, long currentTime,
-                            long currentDuration) {
-                        return remainingLifetimeNanos(tokenExpiresAt);
-                    }
-
-                    @Override
-                    public long expireAfterRead(String tokenId, Instant tokenExpiresAt, long currentTime,
-                            long currentDuration) {
-                        return currentDuration;
-                    }
-                })
-                .build();
-    }
+    private final StringRedisTemplate redisTemplate;
 
     public void deny(String tokenId, Instant tokenExpiresAt) {
-        deniedTokenIds.put(tokenId, tokenExpiresAt);
+        Duration remainingLifetime = Duration.between(Instant.now(), tokenExpiresAt.plus(CLOCK_SKEW_PAD));
+        if (remainingLifetime.isNegative() || remainingLifetime.isZero()) {
+            return;
+        }
+        redisTemplate.opsForValue().set(key(tokenId), DENIED_MARKER, remainingLifetime);
     }
 
     public boolean isDenied(String tokenId) {
-        return tokenId != null && deniedTokenIds.getIfPresent(tokenId) != null;
+        if (tokenId == null) {
+            return false;
+        }
+        try {
+            return Boolean.TRUE.equals(redisTemplate.hasKey(key(tokenId)));
+        } catch (DataAccessException e) {
+            log.error("JWT denylist store unreachable; failing closed and treating token as denied", e);
+            return true;
+        }
     }
 
-    private static long remainingLifetimeNanos(Instant tokenExpiresAt) {
-        return Math.max(0, Duration.between(Instant.now(), tokenExpiresAt.plus(CLOCK_SKEW_PAD)).toNanos());
+    private static String key(String tokenId) {
+        return KEY_PREFIX + tokenId;
     }
 }
