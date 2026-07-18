@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,14 +42,17 @@ import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.access.service.OwnedAccountsCache;
 import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.InitiateLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentChallengeCommandData;
 import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentCommandData;
 import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentConstants;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
+import feign.FeignException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
 import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentStepUpInvalidException;
+import org.apache.fineract.consumer.loans.command.exception.LoanCommandUpstreamUnavailableException;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
@@ -82,6 +86,9 @@ class LoansCommandServiceImplTest {
 
     @Mock
     private AccessPolicyEvaluator accessPolicyEvaluator;
+
+    @Mock
+    private OwnedAccountsCache ownedAccountsCache;
 
     @Mock
     private LoansApi loansApi;
@@ -184,6 +191,24 @@ class LoansCommandServiceImplTest {
                 .build());
 
         verify(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOAN_APPLICATION_SUBMIT);
+        verify(ownedAccountsCache).evict(CLIENT_ID);
+    }
+
+    @Test
+    void submitDoesNotEvictOwnershipCacheWhenUpstreamFails() {
+        Jwt jwt = jwt();
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(loansApi.calculateLoanScheduleOrSubmitLoanApplication(any(), isNull()))
+                .thenThrow(mock(FeignException.class));
+
+        assertThatThrownBy(() -> service.submitApplication(jwt, SubmitLoanApplicationCommand.builder()
+                .productId(1L)
+                .expectedDisbursementDate(LocalDate.of(2026, 7, 1))
+                .submittedOnDate(LocalDate.of(2026, 7, 1))
+                .build()))
+                .isInstanceOf(LoanCommandUpstreamUnavailableException.class);
+
+        verify(ownedAccountsCache, never()).evict(any());
     }
 
     @Test

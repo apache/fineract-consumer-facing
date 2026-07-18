@@ -19,8 +19,6 @@
 
 package org.apache.fineract.consumer.infrastructure.access.service;
 
-import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.ActionPolicies;
 import org.apache.fineract.consumer.infrastructure.access.data.ActionPolicy;
@@ -29,10 +27,6 @@ import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessKycRequiredException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessPolicyMissingException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccounts;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -42,7 +36,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AccessPolicyEvaluator {
 
-    private final ClientApi clientApi;
+    private final OwnedAccountsCache ownedAccountsCache;
     private final UserClientResolver userClientResolver;
 
     public void authorize(Jwt jwt, ConsumerAction action) {
@@ -76,27 +70,13 @@ public class AccessPolicyEvaluator {
         if (savingsId == null) {
             return false;
         }
-        GetClientsClientIdAccountsResponse accounts = clientApi.retrieveAllClientAccounts(clientId);
-        if (accounts == null || accounts.getSavingsAccounts() == null) {
-            return false;
-        }
-        Set<Long> ids = accounts.getSavingsAccounts().stream()
-                .map(GetClientsSavingsAccounts::getId)
-                .collect(Collectors.toSet());
-        return ids.contains(savingsId);
+        return ownedAccountsCache.ownedAccounts(clientId).getSavingsIds().contains(savingsId);
     }
 
     private boolean canAccessLoans(Long clientId, Long loanId) {
         if (loanId == null) {
             return false;
         }
-        GetClientsClientIdAccountsResponse accounts = clientApi.retrieveAllClientAccounts(clientId);
-        if (accounts == null || accounts.getLoanAccounts() == null) {
-            return false;
-        }
-        Set<Long> ids = accounts.getLoanAccounts().stream()
-                .map(GetClientsLoanAccounts::getId)
-                .collect(Collectors.toSet());
-        return ids.contains(loanId);
+        return ownedAccountsCache.ownedAccounts(clientId).getLoanIds().contains(loanId);
     }
 }

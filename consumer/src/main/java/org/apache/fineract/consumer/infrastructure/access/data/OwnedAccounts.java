@@ -17,9 +17,10 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.otp.command.data;
+package org.apache.fineract.consumer.infrastructure.access.data;
 
-import java.time.ZonedDateTime;
+import java.util.Set;
+import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -27,19 +28,10 @@ import lombok.ToString;
 
 @Getter
 @RequiredArgsConstructor
+@Builder
 @EqualsAndHashCode
 @ToString
-public final class PendingOtp {
-
-    private final String token;
-    private final OtpMetadata metadata;
-
-    public static PendingOtp create(String token, int tokenLiveTimeInSec, OtpDestination destination) {
-        OtpMetadata metadata = OtpMetadata.builder()
-                .requestTime(ZonedDateTime.now())
-                .tokenLiveTimeInSec(tokenLiveTimeInSec)
-                .destination(destination)
-                .build();
-        return new PendingOtp(token, metadata);
-    }
+public final class OwnedAccounts {
+    private final Set<Long> savingsIds;
+    private final Set<Long> loanIds;
 }

@@ -41,6 +41,7 @@ import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
 import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.access.service.OwnedAccountsCache;
 import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.InitiateLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.LoanApplicationCommandData;
@@ -76,6 +77,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
 
     private final UserQueryService userQueryService;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
+    private final OwnedAccountsCache ownedAccountsCache;
     private final LoansApi loansApi;
     private final OtpCommandService otpCommandService;
     private final StepUpTokenService stepUpTokenService;
@@ -88,6 +90,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
         Long clientId = resolveClientId(jwt);
         PostLoansRequest request = buildSubmitRequest(command, clientId);
         PostLoansResponse response = call(() -> loansApi.calculateLoanScheduleOrSubmitLoanApplication(request, null));
+        ownedAccountsCache.evict(clientId);
         return LoanApplicationCommandData.builder()
                 .loanId(response.getLoanId())
                 .resourceId(response.getResourceId())

@@ -32,13 +32,10 @@ import java.util.UUID;
 import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.access.data.ActionPolicies;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.data.OwnedAccounts;
 import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessKycRequiredException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccounts;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
@@ -63,7 +60,7 @@ class AccessPolicyEvaluatorTest {
     private static final Long FOREIGN_ACCOUNT_ID = 999L;
 
     @Mock
-    private ClientApi clientApi;
+    private OwnedAccountsCache ownedAccountsCache;
 
     @Mock
     private UserClientResolver userClientResolver;
@@ -95,7 +92,7 @@ class AccessPolicyEvaluatorTest {
         assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, OWNED_SAVINGS_ID))
                 .isInstanceOf(AccessScopeInsufficientException.class)
                 .hasFieldOrPropertyWithValue("code", AccessScopeInsufficientException.CODE);
-        verify(clientApi, never()).retrieveAllClientAccounts(anyLong());
+        verify(ownedAccountsCache, never()).ownedAccounts(anyLong());
     }
 
     @Test
@@ -113,7 +110,7 @@ class AccessPolicyEvaluatorTest {
         assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.TRANSFER_EXECUTE, OWNED_SAVINGS_ID))
                 .isInstanceOf(AccessKycRequiredException.class)
                 .hasFieldOrPropertyWithValue("code", AccessKycRequiredException.CODE);
-        verify(clientApi, never()).retrieveAllClientAccounts(anyLong());
+        verify(ownedAccountsCache, never()).ownedAccounts(anyLong());
     }
 
     @Test
@@ -173,7 +170,7 @@ class AccessPolicyEvaluatorTest {
     void authorizePassesUnownedActionWithoutOwnershipLookup() {
         assertThatCode(() -> evaluator.authorize(validJwt(), ConsumerAction.BENEFICIARY_ADD))
                 .doesNotThrowAnyException();
-        verify(clientApi, never()).retrieveAllClientAccounts(anyLong());
+        verify(ownedAccountsCache, never()).ownedAccounts(anyLong());
     }
 
     @Test
@@ -198,7 +195,7 @@ class AccessPolicyEvaluatorTest {
 
         assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_VIEW))
                 .isInstanceOf(SavingsQueryAccessDeniedException.class);
-        verify(clientApi, never()).retrieveAllClientAccounts(anyLong());
+        verify(ownedAccountsCache, never()).ownedAccounts(anyLong());
     }
 
     @Test
@@ -219,9 +216,10 @@ class AccessPolicyEvaluatorTest {
 
     private void stubOwnedAccounts() {
         when(userClientResolver.resolveClientId(validJwt())).thenReturn(CLIENT_ID);
-        when(clientApi.retrieveAllClientAccounts(CLIENT_ID)).thenReturn(new GetClientsClientIdAccountsResponse()
-                .savingsAccounts(Set.of(new GetClientsSavingsAccounts().id(OWNED_SAVINGS_ID)))
-                .loanAccounts(Set.of(new GetClientsLoanAccounts().id(OWNED_LOAN_ID))));
+        when(ownedAccountsCache.ownedAccounts(CLIENT_ID)).thenReturn(OwnedAccounts.builder()
+                .savingsIds(Set.of(OWNED_SAVINGS_ID))
+                .loanIds(Set.of(OWNED_LOAN_ID))
+                .build());
     }
 
     private static Jwt validJwt() {
