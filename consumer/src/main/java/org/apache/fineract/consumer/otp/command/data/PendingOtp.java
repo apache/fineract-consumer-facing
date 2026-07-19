@@ -42,9 +42,4 @@ public final class PendingOtp {
                 .build();
         return new PendingOtp(token, metadata);
     }
-
-    public boolean isValid() {
-        ZonedDateTime expireTime = metadata.getRequestTime().plusSeconds(metadata.getTokenLiveTimeInSec());
-        return ZonedDateTime.now().isBefore(expireTime);
-    }
 }

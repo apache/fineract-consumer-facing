@@ -180,6 +180,42 @@
       "amount": "राशि"
     }
   },
+  "beneficiaries": {
+    "title": "लाभार्थी",
+    "list": {
+      "nameColumn": "नाम",
+      "accountTypeColumn": "खाता प्रकार",
+      "transferLimitColumn": "ट्रांसफ़र सीमा",
+      "actionsColumn": "क्रियाएँ",
+      "empty": "अभी तक कोई लाभार्थी नहीं।",
+      "addCta": "लाभार्थी जोड़ें"
+    },
+    "form": {
+      "nameLabel": "नाम",
+      "officeNameLabel": "कार्यालय का नाम",
+      "accountNumberLabel": "खाता संख्या",
+      "accountTypeLabel": "खाता प्रकार",
+      "transferLimitLabel": "ट्रांसफ़र सीमा (वैकल्पिक)",
+      "submitCta": "जारी रखें",
+      "cancelCta": "रद्द करें"
+    },
+    "edit": {
+      "title": "लाभार्थी संपादित करें"
+    },
+    "delete": {
+      "confirm": "हटाने की पुष्टि करें",
+      "cancel": "रद्द करें"
+    },
+    "snackbar": {
+      "added": "लाभार्थी जोड़ा गया।",
+      "updated": "लाभार्थी अपडेट किया गया।",
+      "deleted": "लाभार्थी हटाया गया।"
+    },
+    "accountType": {
+      "savings": "बचत",
+      "loan": "ऋण"
+    }
+  },
   "summary": {
     "title": "खाता सारांश",
     "section": {
@@ -205,12 +241,24 @@
       "summary": "सारांश",
       "savings": "बचत",
       "loans": "ऋण",
-      "transfers": "ट्रांसफ़र"
+      "transfers": "ट्रांसफ़र",
+      "beneficiaries": "लाभार्थी"
     }
   },
   "error.msg.consumer.auth.invalid.credentials": "ईमेल या पासवर्ड ग़लत है।",
   "error.msg.consumer.auth.refresh.token.invalid": "आपका सत्र समाप्त हो गया है। कृपया फिर से साइन इन करें।",
   "error.msg.consumer.auth.two.factor.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है।",
+  "error.msg.consumer.auth.device.fingerprint.mismatch": "यह सत्र किसी अन्य डिवाइस से जुड़ा है। कृपया फिर से लॉगिन करें।",
+  "error.msg.consumer.auth.device.fingerprint.forbidden": "यह सत्र किसी अन्य डिवाइस से जुड़ा है। कृपया फिर से लॉगिन करें।",
+  "error.msg.consumer.access.denied": "आपको यह कार्रवाई करने की अनुमति नहीं है।",
+  "error.msg.consumer.access.scope.insufficient": "आपके पास इस कार्रवाई के लिए पर्याप्त अनुमतियाँ नहीं हैं।",
+  "error.msg.consumer.access.kyc.required": "यह कार्रवाई करने से पहले पहचान सत्यापन आवश्यक है।",
+  "error.msg.consumer.beneficiaries.command.not.found": "हमें वह लाभार्थी नहीं मिला।",
+  "error.msg.consumer.beneficiaries.command.name.duplicate": "इस नाम का लाभार्थी पहले से मौजूद है।",
+  "error.msg.consumer.beneficiaries.command.account.invalid": "उस कार्यालय और खाता संख्या से मेल खाता कोई खाता नहीं मिला।",
+  "error.msg.consumer.beneficiaries.command.upstream.unavailable": "लाभार्थी अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
+  "error.msg.consumer.beneficiaries.command.invalid": "यह अनुरोध संसाधित नहीं हो सका। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
+  "error.msg.consumer.beneficiaries.command.stepup.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है। कृपया पुनः प्रयास करें।",
   "error.msg.consumer.internal.error": "हमारी ओर से कुछ ग़लत हो गया। कृपया पुनः प्रयास करें।",
   "error.msg.consumer.request.body.malformed": "हम आपका अनुरोध नहीं पढ़ सके। कृपया पुनः प्रयास करें।",
   "error.msg.consumer.request.validation.failed": "कृपया फ़ॉर्म में त्रुटियों की जाँच करें और पुनः प्रयास करें।",
@@ -244,6 +292,7 @@
   "error.msg.consumer.savings.request.invalid": "कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
   "error.msg.consumer.savings.upstream.unavailable": "बचत अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
   "error.msg.consumer.transfers.command.access.denied": "आपके पास इनमें से किसी एक खाते तक पहुँच नहीं है।",
+  "error.msg.consumer.transfers.command.beneficiary.limit.exceeded": "आप लाभार्थियों की अधिकतम सीमा तक पहुँच चुके हैं।",
   "error.msg.consumer.transfers.command.invalid": "यह ट्रांसफ़र संसाधित नहीं हो सका। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
   "error.msg.consumer.transfers.command.not.found": "हमें वह ट्रांसफ़र नहीं मिला।",
   "error.msg.consumer.transfers.command.stepup.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है। कृपया पुनः प्रयास करें।",

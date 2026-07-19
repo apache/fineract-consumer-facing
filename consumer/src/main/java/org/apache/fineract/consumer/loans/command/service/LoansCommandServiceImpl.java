@@ -19,12 +19,12 @@
 
 package org.apache.fineract.consumer.loans.command.service;
 
-import feign.FeignException;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoanChargesApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdChargesChargeIdRequest;
@@ -35,10 +35,13 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PutLoansLoanIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PutLoansLoanIdResponse;
-import org.apache.fineract.consumer.infrastructure.jwt.IssuedJwt;
+import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
+import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.access.service.OwnedAccountsCache;
 import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.InitiateLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.LoanApplicationCommandData;
@@ -48,14 +51,13 @@ import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentConstant
 import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.WithdrawLoanApplicationCommand;
-import org.apache.fineract.consumer.loans.command.exception.LoanAccessDeniedException;
 import org.apache.fineract.consumer.loans.command.exception.LoanApplicationInvalidException;
 import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentInvalidException;
 import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentNotFoundException;
 import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentStepUpInvalidException;
 import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentUpstreamUnavailableException;
-import org.apache.fineract.consumer.loans.command.exception.LoanNotFoundException;
-import org.apache.fineract.consumer.loans.command.exception.LoanUpstreamUnavailableException;
+import org.apache.fineract.consumer.loans.command.exception.LoanCommandNotFoundException;
+import org.apache.fineract.consumer.loans.command.exception.LoanCommandUpstreamUnavailableException;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
@@ -75,6 +77,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
 
     private final UserQueryService userQueryService;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
+    private final OwnedAccountsCache ownedAccountsCache;
     private final LoansApi loansApi;
     private final OtpCommandService otpCommandService;
     private final StepUpTokenService stepUpTokenService;
@@ -83,9 +86,11 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     @Override
     @Command
     public LoanApplicationCommandData submitApplication(Jwt jwt, SubmitLoanApplicationCommand command) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_SUBMIT);
         Long clientId = resolveClientId(jwt);
         PostLoansRequest request = buildSubmitRequest(command, clientId);
         PostLoansResponse response = call(() -> loansApi.calculateLoanScheduleOrSubmitLoanApplication(request, null));
+        ownedAccountsCache.evict(clientId);
         return LoanApplicationCommandData.builder()
                 .loanId(response.getLoanId())
                 .resourceId(response.getResourceId())
@@ -96,8 +101,8 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     @Override
     @Command
     public LoanApplicationCommandData modifyApplication(Jwt jwt, ModifyLoanApplicationCommand command) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_MODIFY, command.getLoanId());
         Long clientId = resolveClientId(jwt);
-        requireAccess(clientId, command.getLoanId());
         PutLoansLoanIdRequest request = buildModifyRequest(command);
         PutLoansLoanIdResponse response = call(() -> loansApi.modifyLoanApplication(command.getLoanId(), request, null));
         return LoanApplicationCommandData.builder()
@@ -110,8 +115,8 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     @Override
     @Command
     public LoanApplicationCommandData withdrawApplication(Jwt jwt, WithdrawLoanApplicationCommand command) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_WITHDRAW, command.getLoanId());
         Long clientId = resolveClientId(jwt);
-        requireAccess(clientId, command.getLoanId());
         PostLoansLoanIdRequest request = new PostLoansLoanIdRequest()
                 .withdrawnOnDate(command.getWithdrawnOnDate().toString())
                 .dateFormat(DATE_FORMAT)
@@ -132,7 +137,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
         UUID publicId = UUID.fromString(jwt.getSubject());
         UserQueryData user = userQueryService.findByPublicId(publicId);
 
-        requireChargeAccess(user.getFineractClientId(), command.getLoanId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_CHARGE_PAY, command.getLoanId());
 
         otpCommandService.createOtp(publicId, OtpDestination.builder()
                 .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
@@ -149,7 +154,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
         return LoanChargePaymentChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(maskEmail(user.getEmail()))
+                .sentTo(EmailMasking.mask(user.getEmail()))
                 .build();
     }
 
@@ -173,7 +178,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
             throw new LoanChargePaymentStepUpInvalidException();
         }
 
-        requireChargeAccess(user.getFineractClientId(), command.getLoanId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_CHARGE_PAY, command.getLoanId());
 
         PostLoansLoanIdChargesChargeIdRequest request = new PostLoansLoanIdChargesChargeIdRequest()
                 .transactionDate(LocalDate.now().toString())
@@ -194,30 +199,11 @@ public class LoansCommandServiceImpl implements LoansCommandService {
                 .build();
     }
 
-    private void requireChargeAccess(Long clientId, Long loanId) {
-        if (!accessPolicyEvaluator.canAccessLoans(clientId, loanId)) {
-            throw new LoanAccessDeniedException();
-        }
-    }
-
     private <T> T callChargePayment(Supplier<T> upstream) {
-        try {
-            return upstream.get();
-        } catch (FeignException.NotFound e) {
-            throw new LoanChargePaymentNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new LoanChargePaymentInvalidException(e);
-        } catch (FeignException e) {
-            throw new LoanChargePaymentUpstreamUnavailableException(e);
-        }
-    }
-
-    private String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at <= 1) {
-            return "***" + email.substring(Math.max(at, 0));
-        }
-        return email.charAt(0) + "***" + email.substring(at);
+        return FineractCaller.call(upstream,
+                e -> new LoanChargePaymentNotFoundException(),
+                LoanChargePaymentInvalidException::new,
+                LoanChargePaymentUpstreamUnavailableException::new);
     }
 
     private Long resolveClientId(Jwt jwt) {
@@ -226,22 +212,11 @@ public class LoansCommandServiceImpl implements LoansCommandService {
         return user.getFineractClientId();
     }
 
-    private void requireAccess(Long clientId, Long loanId) {
-        if (!accessPolicyEvaluator.canAccessLoans(clientId, loanId)) {
-            throw new LoanAccessDeniedException();
-        }
-    }
-
     private <T> T call(Supplier<T> upstream) {
-        try {
-            return upstream.get();
-        } catch (FeignException.NotFound e) {
-            throw new LoanNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new LoanApplicationInvalidException(e);
-        } catch (FeignException e) {
-            throw new LoanUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(upstream,
+                e -> new LoanCommandNotFoundException(),
+                LoanApplicationInvalidException::new,
+                LoanCommandUpstreamUnavailableException::new);
     }
 
     private PostLoansRequest buildSubmitRequest(SubmitLoanApplicationCommand c, Long clientId) {
@@ -270,7 +245,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
         return new PutLoansLoanIdRequest()
                 .loanType(LOAN_TYPE)
                 .productId(c.getProductId())
-                .principal(c.getPrincipal().longValueExact())
+                .principal(c.getPrincipal())
                 .loanTermFrequency(c.getLoanTermFrequency())
                 .loanTermFrequencyType(c.getLoanTermFrequencyType())
                 .numberOfRepayments(c.getNumberOfRepayments())

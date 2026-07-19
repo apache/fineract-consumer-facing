@@ -19,7 +19,12 @@
 
 package org.apache.fineract.consumer.otp.command.service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.HexFormat;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.command.Command;
@@ -36,8 +41,8 @@ import org.springframework.stereotype.Service;
 public class OtpCommandServiceImpl implements OtpCommandService {
 
     private static final int OTP_LENGTH = 6;
-    private static final int OTP_TTL_SECONDS = 300;
     private static final String ALLOWED_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static final String HASH_ALGORITHM = "SHA-256";
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final OtpCommandRepository otpCommandRepository;
@@ -49,7 +54,7 @@ public class OtpCommandServiceImpl implements OtpCommandService {
         if (OtpConstants.EMAIL_DELIVERY_METHOD_NAME.equalsIgnoreCase(destination.getDeliveryMethod())) {
             PendingOtp request = generateNewToken(destination);
             otpEmailDeliveryService.deliver(destination.getTarget(), request.getToken());
-            otpCommandRepository.addPendingOtp(publicId, request);
+            otpCommandRepository.savePendingOtp(publicId, hashToken(request.getToken()));
             return request;
         }
         throw new OtpDestinationInvalidException();
@@ -58,16 +63,16 @@ public class OtpCommandServiceImpl implements OtpCommandService {
     @Override
     @Command
     public void validateOtp(UUID publicId, String token) {
-        PendingOtp otpRequest = otpCommandRepository.getPendingOtpForUser(publicId);
-        if (otpRequest == null || !otpRequest.isValid() || !otpRequest.getToken().equalsIgnoreCase(token)) {
+        String storedHash = otpCommandRepository.getPendingTokenHash(publicId);
+        if (token == null || storedHash == null || !storedHash.equals(hashToken(token))) {
             throw new OtpTokenInvalidException();
         }
-        otpCommandRepository.deletePendingOtpForUser(publicId);
+        otpCommandRepository.deletePendingOtp(publicId);
     }
 
     private PendingOtp generateNewToken(OtpDestination destination) {
         String token = generateToken(OTP_LENGTH);
-        return PendingOtp.create(token, OTP_TTL_SECONDS, destination);
+        return PendingOtp.create(token, OtpConstants.OTP_TTL_SECONDS, destination);
     }
 
     private static String generateToken(int length) {
@@ -76,5 +81,15 @@ public class OtpCommandServiceImpl implements OtpCommandService {
             builder.append(ALLOWED_CHARS.charAt(RANDOM.nextInt(ALLOWED_CHARS.length())));
         }
         return builder.toString();
+    }
+
+    private static String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance(HASH_ALGORITHM);
+            byte[] hashed = digest.digest(token.toUpperCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashed);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(HASH_ALGORITHM + " unavailable", e);
+        }
     }
 }

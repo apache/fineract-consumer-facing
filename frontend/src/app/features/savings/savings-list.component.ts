@@ -79,11 +79,6 @@ import { SavingsStore } from './savings.store';
         </table>
 
         <div class="actions">
-          <!--
-            A6 (ABAC denial): deep-link to an account this client does not own. The BFF is the policy
-            enforcement point and rejects it with a 403-class ConsumerApiError, which errorInterceptor
-            surfaces as a snackbar — never a raw 403 page. 999999 is a deliberately non-owned id.
-          -->
           <button mat-stroked-button color="warn" (click)="tryForbiddenAccount()">
             {{ 'savings.list.tryForbidden' | translate }}
           </button>

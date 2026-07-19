@@ -17,19 +17,23 @@
  * under the License.
  */
 
-export function deviceFingerprint(): string {
-  const parts = [
-    navigator.userAgent,
-    navigator.language,
-    screen.colorDepth,
-    `${screen.width}x${screen.height}`,
-    new Date().getTimezoneOffset(),
-  ];
+const DEVICE_ID_STORAGE_KEY = 'bff.device-id';
 
-  let hash = 5381;
-  const raw = parts.join('|');
-  for (let i = 0; i < raw.length; i++) {
-    hash = ((hash << 5) + hash + raw.charCodeAt(i)) | 0;
+let deviceId: string | null = null;
+
+export function deviceFingerprint(): string {
+  if (deviceId) {
+    return deviceId;
   }
-  return (hash >>> 0).toString(16).padStart(8, '0');
+  try {
+    let stored = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    if (!stored) {
+      stored = crypto.randomUUID();
+      localStorage.setItem(DEVICE_ID_STORAGE_KEY, stored);
+    }
+    deviceId = stored;
+  } catch {
+    deviceId = crypto.randomUUID();
+  }
+  return deviceId;
 }

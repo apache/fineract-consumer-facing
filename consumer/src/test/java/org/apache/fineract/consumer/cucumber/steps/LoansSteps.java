@@ -27,20 +27,18 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.util.List;
 import java.util.Objects;
-import org.apache.fineract.consumer.client.ApiClient;
 import org.apache.fineract.consumer.client.api.LoansCommandControllerApi;
 import org.apache.fineract.consumer.client.api.LoansQueryControllerApi;
 import org.apache.fineract.consumer.client.model.LoanAccountListItemQueryData;
 import org.apache.fineract.consumer.client.model.LoanAccountQueryData;
+import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
 import org.apache.fineract.consumer.cucumber.helpers.RegistrationHelper;
 
 public class LoansSteps {
 
-    private static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
     private static final String DEVICE_FINGERPRINT = "cucumber-loans-device";
-    private static final String BEARER_AUTH = "bearerAuth";
     private static final int UNAUTHORIZED = 401;
     private static final int FORBIDDEN = 403;
     private static final long ARBITRARY_CHARGE_ID = 1L;
@@ -135,28 +133,18 @@ public class LoansSteps {
     }
 
     private static LoansQueryControllerApi authenticatedClient(String bearerToken) {
-        ApiClient apiClient = new ApiClient(BEARER_AUTH);
-        apiClient.setBasePath(BFF_BASE_URL);
-        apiClient.setBearerToken(bearerToken);
-        return apiClient.buildClient(LoansQueryControllerApi.class);
+        return ConsumerApiClientFactory.authenticated(LoansQueryControllerApi.class, bearerToken, DEVICE_FINGERPRINT);
     }
 
     private static LoansQueryControllerApi unauthenticatedClient() {
-        ApiClient apiClient = new ApiClient();
-        apiClient.setBasePath(BFF_BASE_URL);
-        return apiClient.buildClient(LoansQueryControllerApi.class);
+        return ConsumerApiClientFactory.unauthenticated(LoansQueryControllerApi.class);
     }
 
     private static LoansCommandControllerApi authenticatedCommandClient(String bearerToken) {
-        ApiClient apiClient = new ApiClient(BEARER_AUTH);
-        apiClient.setBasePath(BFF_BASE_URL);
-        apiClient.setBearerToken(bearerToken);
-        return apiClient.buildClient(LoansCommandControllerApi.class);
+        return ConsumerApiClientFactory.authenticated(LoansCommandControllerApi.class, bearerToken, DEVICE_FINGERPRINT);
     }
 
     private static LoansCommandControllerApi unauthenticatedCommandClient() {
-        ApiClient apiClient = new ApiClient();
-        apiClient.setBasePath(BFF_BASE_URL);
-        return apiClient.buildClient(LoansCommandControllerApi.class);
+        return ConsumerApiClientFactory.unauthenticated(LoansCommandControllerApi.class);
     }
 }

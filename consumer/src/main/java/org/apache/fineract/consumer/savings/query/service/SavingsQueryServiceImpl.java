@@ -19,12 +19,11 @@
 
 package org.apache.fineract.consumer.savings.query.service;
 
-import feign.FeignException;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountTransactionsApi;
@@ -40,8 +39,10 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountSummaryData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionsSearchResponse;
+import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.query.Query;
-import org.apache.fineract.consumer.infrastructure.web.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsApplicationTemplateQueryData;
@@ -49,11 +50,11 @@ import org.apache.fineract.consumer.savings.query.data.SavingsChargeQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsProductOptionQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionSearchQuery;
-import org.apache.fineract.consumer.savings.query.exception.SavingsAccountAccessDeniedException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsProductNotFoundException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsRequestInvalidException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsUpstreamUnavailableException;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -71,11 +72,14 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     private final SavingsProductApi savingsProductApi;
     private final ClientApi clientApi;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
+    private final UserClientResolver userClientResolver;
     private final ObjectMapper objectMapper;
 
     @Override
     @Query
-    public List<SavingsAccountListItemQueryData> listAccounts(Long clientId) {
+    public List<SavingsAccountListItemQueryData> listAccounts(Jwt jwt) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_LIST);
+        Long clientId = userClientResolver.resolveClientId(jwt);
         GetClientsClientIdAccountsResponse accounts = fetch(() -> clientApi.retrieveAllClientAccounts(clientId));
         if (accounts == null || accounts.getSavingsAccounts() == null) {
             return List.of();
@@ -85,16 +89,16 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
 
     @Override
     @Query
-    public SavingsAccountQueryData getAccount(Long clientId, Long savingsId) {
-        requireAccess(clientId, savingsId);
+    public SavingsAccountQueryData getAccount(Jwt jwt, Long savingsId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId);
         SavingsAccountData account = fetch(() -> savingsAccountApi.retrieveSavingsAccount(savingsId, null, null, null));
         return toAccountData(account);
     }
 
     @Override
     @Query
-    public List<SavingsChargeQueryData> getCharges(Long clientId, Long savingsId) {
-        requireAccess(clientId, savingsId);
+    public List<SavingsChargeQueryData> getCharges(Jwt jwt, Long savingsId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId);
         List<GetSavingsAccountsSavingsAccountIdChargesResponse> charges =
                 fetch(() -> savingsChargesApi.retrieveAllSavingsAccountCharges(savingsId, null));
         if (charges == null) {
@@ -105,8 +109,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
 
     @Override
     @Query
-    public List<SavingsTransactionQueryData> searchTransactions(Long clientId, SavingsTransactionSearchQuery query) {
-        requireAccess(clientId, query.getSavingsId());
+    public List<SavingsTransactionQueryData> searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, query.getSavingsId());
         // TODO: Fix Fineract's GET /savingsaccounts/{id}/transactions/{txnId} endpoint to return an object, not a string, then refactor
         SavingsAccountTransactionsSearchResponse response = fetch(() ->
                 savingsAccountTransactionsApi.searchTransactions(
@@ -126,8 +130,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
 
     @Override
     @Query
-    public SavingsTransactionQueryData getTransaction(Long clientId, Long savingsId, Long transactionId) {
-        requireAccess(clientId, savingsId);
+    public SavingsTransactionQueryData getTransaction(Jwt jwt, Long savingsId, Long transactionId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId);
         String json = fetch(() ->
                 savingsAccountTransactionsApi.retrieveOneSavingsAccountTransaction(savingsId, transactionId));
         return toTransactionData(deserialize(json));
@@ -135,7 +139,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
 
     @Override
     @Query
-    public SavingsApplicationTemplateQueryData getApplicationTemplate(Long productId) {
+    public SavingsApplicationTemplateQueryData getApplicationTemplate(Jwt jwt, Long productId) {
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_APPLICATION_TEMPLATE_VIEW);
         if (productId == null) {
             List<GetSavingsProductsResponse> products = fetch(savingsProductApi::retrieveAllSavingsProducts);
             return toBrowseTemplate(products);
@@ -144,32 +149,18 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
         return toDetailTemplate(product);
     }
 
-    private void requireAccess(Long clientId, Long savingsId) {
-        if (!accessPolicyEvaluator.canAccessSavings(clientId, savingsId)) {
-            throw new SavingsAccountAccessDeniedException();
-        }
-    }
-
     private <T> T fetch(Supplier<T> call) {
-        try {
-            return call.get();
-        } catch (FeignException.NotFound e) {
-            throw new SavingsAccountNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new SavingsRequestInvalidException(e);
-        } catch (FeignException e) {
-            throw new SavingsUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(call,
+                e -> new SavingsAccountNotFoundException(),
+                SavingsRequestInvalidException::new,
+                SavingsUpstreamUnavailableException::new);
     }
 
     private GetSavingsProductsProductIdResponse fetchProduct(Long productId) {
-        try {
-            return savingsProductApi.retrieveOneSavingsProduct(productId);
-        } catch (FeignException.NotFound e) {
-            throw new SavingsProductNotFoundException();
-        } catch (FeignException e) {
-            throw new SavingsUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(() -> savingsProductApi.retrieveOneSavingsProduct(productId),
+                e -> new SavingsProductNotFoundException(),
+                SavingsUpstreamUnavailableException::new,
+                SavingsUpstreamUnavailableException::new);
     }
 
     private SavingsAccountTransactionData deserialize(String json) {
@@ -207,8 +198,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
         return SavingsChargeQueryData.builder()
                 .id(charge.getId())
                 .name(charge.getName())
-                .amount(toBigDecimal(charge.getAmount()))
-                .amountOutstanding(toBigDecimal(charge.getAmountOutstanding()))
+                .amount(charge.getAmount())
+                .amountOutstanding(charge.getAmountOutstanding())
                 .build();
     }
 
@@ -279,10 +270,6 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
                         ? null
                         : product.getInterestCalculationDaysInYearType().getCode())
                 .build();
-    }
-
-    private static BigDecimal toBigDecimal(Float value) {
-        return value == null ? null : new BigDecimal(value.toString());
     }
 
     private static Long toLong(Integer value) {

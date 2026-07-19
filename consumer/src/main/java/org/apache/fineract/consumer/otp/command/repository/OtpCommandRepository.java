@@ -19,33 +19,41 @@
 
 package org.apache.fineract.consumer.otp.command.repository;
 
+import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import org.apache.fineract.consumer.otp.command.data.PendingOtp;
+import lombok.RequiredArgsConstructor;
+import org.apache.fineract.consumer.otp.command.data.OtpConstants;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.Assert;
 
 @Repository
+@RequiredArgsConstructor
 public class OtpCommandRepository {
 
+    private static final String KEY_PREFIX = "otp:pending:";
     private static final String PUBLIC_ID_NULL = "publicId must not be null";
-    private static final String REQUEST_NULL = "request must not be null";
+    private static final String TOKEN_HASH_NULL = "tokenHash must not be null";
 
-    private final ConcurrentHashMap<UUID, PendingOtp> store = new ConcurrentHashMap<>();
+    private final StringRedisTemplate redisTemplate;
 
-    public PendingOtp getPendingOtpForUser(UUID publicId) {
+    public void savePendingOtp(UUID publicId, String tokenHash) {
         Assert.notNull(publicId, PUBLIC_ID_NULL);
-        return store.get(publicId);
+        Assert.notNull(tokenHash, TOKEN_HASH_NULL);
+        redisTemplate.opsForValue().set(key(publicId), tokenHash, Duration.ofSeconds(OtpConstants.OTP_TTL_SECONDS));
     }
 
-    public void addPendingOtp(UUID publicId, PendingOtp request) {
+    public String getPendingTokenHash(UUID publicId) {
         Assert.notNull(publicId, PUBLIC_ID_NULL);
-        Assert.notNull(request, REQUEST_NULL);
-        store.put(publicId, request);
+        return redisTemplate.opsForValue().get(key(publicId));
     }
 
-    public void deletePendingOtpForUser(UUID publicId) {
+    public void deletePendingOtp(UUID publicId) {
         Assert.notNull(publicId, PUBLIC_ID_NULL);
-        store.remove(publicId);
+        redisTemplate.delete(key(publicId));
+    }
+
+    private static String key(UUID publicId) {
+        return KEY_PREFIX + publicId;
     }
 }

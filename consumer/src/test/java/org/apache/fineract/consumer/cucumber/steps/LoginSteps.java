@@ -52,10 +52,15 @@ public class LoginSteps {
     private static final String WRONG_PASSWORD = "Wrong-password-123";
     private static final String WRONG_OTP = "WRONG1";
     private static final String SET_COOKIE_HEADER = "set-cookie";
+    private static final String EXPECTED_LOGIN_REJECTED = "expected login to be rejected";
+    private static final String EXPECTED_TWO_FACTOR_REJECTED = "expected two-factor verification to be rejected";
+    private static final String EXPECTED_LOGOUT_REJECTED = "expected logout to be rejected";
+    private static final String EXPECTED_REFRESH_REJECTED = "expected refresh to be rejected";
+    private static final String ACCESS_COOKIE_PREFIX = AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME + "=";
     private static final String REFRESH_COOKIE_PREFIX = AuthenticationConstants.REFRESH_TOKEN_COOKIE_NAME + "=";
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
-    public record AuthResponse(int status, JsonNode body, String refreshCookie) {}
+    public record AuthResponse(int status, JsonNode body, String accessCookie, String refreshCookie) {}
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final MailpitClient mailpit = new MailpitClient();
@@ -84,7 +89,7 @@ public class LoginSteps {
         clearLoginInbox();
         try {
             authClient.login(user.email(), WRONG_PASSWORD, DEVICE_FINGERPRINT);
-            fail("expected login to be rejected");
+            fail(EXPECTED_LOGIN_REJECTED);
         } catch (FeignException e) {
             lastResponse = toAuthResponse(e);
         }
@@ -96,7 +101,7 @@ public class LoginSteps {
         String unknownEmail = "unknown-" + UUID.randomUUID().toString().substring(0, 8) + "@test.com";
         try {
             authClient.login(unknownEmail, user.password(), DEVICE_FINGERPRINT);
-            fail("expected login to be rejected");
+            fail(EXPECTED_LOGIN_REJECTED);
         } catch (FeignException e) {
             lastResponse = toAuthResponse(e);
         }
@@ -128,7 +133,7 @@ public class LoginSteps {
     public void verifyWrongLoginOtp() {
         try {
             authClient.verifyTwoFactor(challengeToken, WRONG_OTP, DEVICE_FINGERPRINT);
-            fail("expected two-factor verification to be rejected");
+            fail(EXPECTED_TWO_FACTOR_REJECTED);
         } catch (FeignException e) {
             lastResponse = toAuthResponse(e);
         }
@@ -138,7 +143,7 @@ public class LoginSteps {
     public void verifySameLoginOtpAgain() {
         try {
             authClient.verifyTwoFactor(challengeToken, otpToken, DEVICE_FINGERPRINT);
-            fail("expected two-factor verification to be rejected");
+            fail(EXPECTED_TWO_FACTOR_REJECTED);
         } catch (FeignException e) {
             lastResponse = toAuthResponse(e);
         }
@@ -157,20 +162,19 @@ public class LoginSteps {
     public void receivedSession() {
         assertThat(accessToken).isNotBlank();
         assertThat(currentRefreshCookie).isNotBlank();
-        assertThat(lastResponse.body().path("tokenType").asString())
-                .isEqualTo(AuthenticationConstants.BEARER_TOKEN_TYPE);
+        assertThat(lastResponse.body().path("expiresAt").asString()).isNotBlank();
     }
 
     @Then("a protected endpoint accepts the access token")
     public void protectedEndpointAcceptsAccessToken() {
-        authClient.logout(accessToken, currentRefreshCookie);
+        authClient.logout(accessToken, currentRefreshCookie, DEVICE_FINGERPRINT);
     }
 
-    @Then("a protected endpoint rejects the challenge token as a bearer token")
+    @Then("a protected endpoint rejects the challenge token as an access cookie")
     public void protectedEndpointRejectsChallengeToken() {
         try {
-            authClient.logout(challengeToken, null);
-            fail("expected logout to be rejected");
+            authClient.logout(challengeToken, null, DEVICE_FINGERPRINT);
+            fail(EXPECTED_LOGOUT_REJECTED);
         } catch (FeignException e) {
             assertThat(e.status()).isEqualTo(401);
         }
@@ -196,9 +200,14 @@ public class LoginSteps {
 
     @When("I refresh using the previous refresh cookie")
     public void refreshWithPreviousCookie() {
+        refresh(previousRefreshCookie, DEVICE_FINGERPRINT);
+    }
+
+    @When("I refresh using the previous refresh cookie from a different device")
+    public void refreshWithPreviousCookieFromDifferentDevice() {
         try {
-            authClient.refresh(previousRefreshCookie, DEVICE_FINGERPRINT);
-            fail("expected refresh to be rejected");
+            authClient.refresh(previousRefreshCookie, OTHER_DEVICE_FINGERPRINT);
+            fail(EXPECTED_REFRESH_REJECTED);
         } catch (FeignException e) {
             lastResponse = toAuthResponse(e);
         }
@@ -208,7 +217,7 @@ public class LoginSteps {
     public void refreshWithLatestCookie() {
         try {
             authClient.refresh(currentRefreshCookie, DEVICE_FINGERPRINT);
-            fail("expected refresh to be rejected");
+            fail(EXPECTED_REFRESH_REJECTED);
         } catch (FeignException e) {
             lastResponse = toAuthResponse(e);
         }
@@ -218,7 +227,7 @@ public class LoginSteps {
     public void refreshFromDifferentDevice() {
         try {
             authClient.refresh(currentRefreshCookie, OTHER_DEVICE_FINGERPRINT);
-            fail("expected refresh to be rejected");
+            fail(EXPECTED_REFRESH_REJECTED);
         } catch (FeignException e) {
             lastResponse = toAuthResponse(e);
         }
@@ -238,14 +247,14 @@ public class LoginSteps {
 
     private void verifyTwoFactor(String otp, String deviceFingerprint) {
         lastResponse = toAuthResponse(authClient.verifyTwoFactor(challengeToken, otp, deviceFingerprint));
-        accessToken = lastResponse.body().path("accessToken").asString();
+        accessToken = lastResponse.accessCookie();
         previousRefreshCookie = currentRefreshCookie;
         currentRefreshCookie = lastResponse.refreshCookie();
     }
 
     private void refresh(String refreshCookie, String deviceFingerprint) {
         lastResponse = toAuthResponse(authClient.refresh(refreshCookie, deviceFingerprint));
-        accessToken = lastResponse.body().path("accessToken").asString();
+        accessToken = lastResponse.accessCookie();
         previousRefreshCookie = currentRefreshCookie;
         currentRefreshCookie = lastResponse.refreshCookie();
     }
@@ -259,14 +268,18 @@ public class LoginSteps {
             String body = response.body() == null
                     ? null
                     : Util.toString(response.body().asReader(StandardCharsets.UTF_8));
-            return new AuthResponse(response.status(), parseJson(body), extractRefreshCookie(response.headers()));
+            return new AuthResponse(response.status(), parseJson(body),
+                    extractCookie(response.headers(), ACCESS_COOKIE_PREFIX),
+                    extractCookie(response.headers(), REFRESH_COOKIE_PREFIX));
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read authentication response body", e);
         }
     }
 
     private static AuthResponse toAuthResponse(FeignException e) {
-        return new AuthResponse(e.status(), parseJson(e.contentUTF8()), extractRefreshCookie(e.responseHeaders()));
+        return new AuthResponse(e.status(), parseJson(e.contentUTF8()),
+                extractCookie(e.responseHeaders(), ACCESS_COOKIE_PREFIX),
+                extractCookie(e.responseHeaders(), REFRESH_COOKIE_PREFIX));
     }
 
     private static JsonNode parseJson(String body) {
@@ -280,12 +293,12 @@ public class LoginSteps {
         }
     }
 
-    private static String extractRefreshCookie(Map<String, Collection<String>> headers) {
+    private static String extractCookie(Map<String, Collection<String>> headers, String prefix) {
         return headers.entrySet().stream()
                 .filter(entry -> SET_COOKIE_HEADER.equalsIgnoreCase(entry.getKey()))
                 .flatMap(entry -> entry.getValue().stream())
-                .filter(value -> value.startsWith(REFRESH_COOKIE_PREFIX))
-                .map(value -> value.substring(REFRESH_COOKIE_PREFIX.length(), cookieValueEnd(value)))
+                .filter(value -> value.startsWith(prefix))
+                .map(value -> value.substring(prefix.length(), cookieValueEnd(value)))
                 .findFirst()
                 .orElse(null);
     }

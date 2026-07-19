@@ -21,12 +21,19 @@ package org.apache.fineract.consumer.loans.query.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import feign.FeignException;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
+import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoanTransactionsApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
@@ -35,21 +42,23 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoansAccountsCurrency;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdTransactionsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdTransactionsTransactionIdResponse;
-import org.apache.fineract.consumer.infrastructure.web.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
 import org.apache.fineract.consumer.loans.query.data.LoanAccountListItemQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
-import org.apache.fineract.consumer.loans.query.exception.LoanAccessDeniedException;
-import org.apache.fineract.consumer.loans.query.exception.LoanUpstreamUnavailableException;
+import org.apache.fineract.consumer.loans.query.exception.LoanQueryAccessDeniedException;
+import org.apache.fineract.consumer.loans.query.exception.LoanQueryUpstreamUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 @ExtendWith(MockitoExtension.class)
 class LoansQueryServiceImplTest {
 
+    private static final UUID PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
     private static final Long CLIENT_ID = 11L;
     private static final Long LOAN_ID = 42L;
 
@@ -62,11 +71,24 @@ class LoansQueryServiceImplTest {
     @Mock
     private AccessPolicyEvaluator accessPolicyEvaluator;
 
+    @Mock
+    private UserClientResolver userClientResolver;
+
     @InjectMocks
     private LoansQueryServiceImpl service;
 
+    private static Jwt jwt() {
+        return Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject(PUBLIC_ID.toString())
+                .claim("scope", "read")
+                .build();
+    }
+
     @Test
     void listAccountsMapsIndexFields() {
+        Jwt jwt = jwt();
+        when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
         GetClientsLoanAccounts account = new GetClientsLoanAccounts()
                 .id(77L)
                 .accountNo("000000077")
@@ -76,7 +98,7 @@ class LoansQueryServiceImplTest {
         when(clientApi.retrieveAllClientAccounts(CLIENT_ID))
                 .thenReturn(new GetClientsClientIdAccountsResponse().loanAccounts(Set.of(account)));
 
-        List<LoanAccountListItemQueryData> result = service.listAccounts(CLIENT_ID);
+        List<LoanAccountListItemQueryData> result = service.listAccounts(jwt);
 
         assertThat(result).hasSize(1);
         LoanAccountListItemQueryData item = result.get(0);
@@ -85,31 +107,36 @@ class LoansQueryServiceImplTest {
         assertThat(item.getProductName()).isEqualTo("Personal Loan");
         assertThat(item.getStatus()).isEqualTo("loanStatusType.active");
         assertThat(item.getCurrency()).isEqualTo("USD");
+        verify(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOANS_LIST);
     }
 
     @Test
     void listAccountsEmptyWhenNoLoanAccounts() {
+        Jwt jwt = jwt();
+        when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
         when(clientApi.retrieveAllClientAccounts(CLIENT_ID))
                 .thenReturn(new GetClientsClientIdAccountsResponse());
 
-        assertThat(service.listAccounts(CLIENT_ID)).isEmpty();
+        assertThat(service.listAccounts(jwt)).isEmpty();
     }
 
     @Test
     void listAccountsTranslatesUpstreamFailure() {
+        Jwt jwt = jwt();
+        when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
         when(clientApi.retrieveAllClientAccounts(CLIENT_ID)).thenThrow(mock(FeignException.class));
 
-        assertThatThrownBy(() -> service.listAccounts(CLIENT_ID))
-                .isInstanceOf(LoanUpstreamUnavailableException.class);
+        assertThatThrownBy(() -> service.listAccounts(jwt))
+                .isInstanceOf(LoanQueryUpstreamUnavailableException.class);
     }
 
     @Test
     void listTransactionsMapsPageContent() {
-        when(accessPolicyEvaluator.canAccessLoans(CLIENT_ID, LOAN_ID)).thenReturn(true);
+        Jwt jwt = jwt();
         GetLoansLoanIdTransactionsResponse response = new GetLoansLoanIdTransactionsResponse()
                 .content(List.of(
-                        new GetLoansLoanIdTransactionsTransactionIdResponse().id(1L).amount(100.0),
-                        new GetLoansLoanIdTransactionsTransactionIdResponse().id(2L).amount(50.0)));
+                        new GetLoansLoanIdTransactionsTransactionIdResponse().id(1L).amount(BigDecimal.valueOf(100.0)),
+                        new GetLoansLoanIdTransactionsTransactionIdResponse().id(2L).amount(BigDecimal.valueOf(50.0))));
         when(loanTransactionsApi.retrieveTransactionsByLoanId(LOAN_ID, null, 0, 20, "date,desc"))
                 .thenReturn(response);
 
@@ -119,31 +146,37 @@ class LoansQueryServiceImplTest {
                 .size(20)
                 .sort("date,desc")
                 .build();
-        List<LoanTransactionQueryData> result = service.listTransactions(CLIENT_ID, query);
+        List<LoanTransactionQueryData> result = service.listTransactions(jwt, query);
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getId()).isEqualTo(1L);
         assertThat(result.get(1).getId()).isEqualTo(2L);
+        verify(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOANS_VIEW, LOAN_ID);
     }
 
     @Test
     void listTransactionsEmptyWhenNoContent() {
-        when(accessPolicyEvaluator.canAccessLoans(CLIENT_ID, LOAN_ID)).thenReturn(true);
+        Jwt jwt = jwt();
         when(loanTransactionsApi.retrieveTransactionsByLoanId(LOAN_ID, null, null, null, null))
                 .thenReturn(new GetLoansLoanIdTransactionsResponse());
 
         LoanTransactionListQuery query = LoanTransactionListQuery.builder().loanId(LOAN_ID).build();
 
-        assertThat(service.listTransactions(CLIENT_ID, query)).isEmpty();
+        assertThat(service.listTransactions(jwt, query)).isEmpty();
     }
 
     @Test
     void listTransactionsDeniedWhenAccessPolicyRejects() {
-        when(accessPolicyEvaluator.canAccessLoans(CLIENT_ID, LOAN_ID)).thenReturn(false);
+        Jwt jwt = jwt();
+        doThrow(new LoanQueryAccessDeniedException())
+                .when(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOANS_VIEW, LOAN_ID);
 
         LoanTransactionListQuery query = LoanTransactionListQuery.builder().loanId(LOAN_ID).build();
 
-        assertThatThrownBy(() -> service.listTransactions(CLIENT_ID, query))
-                .isInstanceOf(LoanAccessDeniedException.class);
+        assertThatThrownBy(() -> service.listTransactions(jwt, query))
+                .isInstanceOf(LoanQueryAccessDeniedException.class)
+                .hasFieldOrPropertyWithValue("code", LoanQueryAccessDeniedException.CODE);
+
+        verify(loanTransactionsApi, never()).retrieveTransactionsByLoanId(LOAN_ID, null, null, null, null);
     }
 }

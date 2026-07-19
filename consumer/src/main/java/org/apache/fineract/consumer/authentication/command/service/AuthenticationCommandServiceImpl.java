@@ -41,17 +41,19 @@ import org.apache.fineract.consumer.authentication.command.exception.InvalidCred
 import org.apache.fineract.consumer.authentication.command.exception.RefreshTokenInvalidException;
 import org.apache.fineract.consumer.authentication.command.exception.TwoFactorInvalidException;
 import org.apache.fineract.consumer.authentication.command.repository.RefreshTokenCommandRepository;
+import org.apache.fineract.consumer.infrastructure.access.service.JwtDenylist;
 import org.apache.fineract.consumer.infrastructure.command.Command;
 import org.apache.fineract.consumer.infrastructure.configs.AuthenticationProperties;
 import org.apache.fineract.consumer.infrastructure.fineractclient.configs.FineractClientProperties;
-import org.apache.fineract.consumer.infrastructure.jwt.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.jwt.JwtClaims;
-import org.apache.fineract.consumer.infrastructure.jwt.JwtIssuer;
+import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
+import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
+import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
+import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
@@ -75,6 +77,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     private final PasswordEncoder passwordEncoder;
     private final JwtIssuer jwtIssuer;
     private final JwtDecoder jwtDecoder;
+    private final JwtDenylist jwtDenylist;
     private final RefreshTokenCommandRepository refreshTokenCommandRepository;
     private final AuthenticationProperties authenticationProperties;
     private final FineractClientProperties fineractClientProperties;
@@ -103,7 +106,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         return LoginChallengeCommandData.builder()
                 .challengeToken(challenge.getTokenValue())
                 .expiresAt(challenge.getExpiresAt())
-                .sentTo(maskEmail(command.getEmail()))
+                .sentTo(EmailMasking.mask(command.getEmail()))
                 .build();
     }
 
@@ -128,7 +131,8 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         }
 
         UserQueryData user = userQueryService.findByPublicId(publicId);
-        return establishSession(user.getId(), publicId, command.getDeviceFingerprint(), null);
+        return establishSession(user.getId(), publicId, user.getStatus() == UserStatus.BOUND,
+                command.getDeviceFingerprint(), null);
     }
 
     @Override
@@ -137,38 +141,55 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     public EstablishedSessionCommandData refresh(RefreshSessionCommand command) {
         RefreshToken current = refreshTokenCommandRepository.findByTokenHash(sha256Hex(command.getRefreshToken()))
                 .orElseThrow(RefreshTokenInvalidException::new);
-        
-        if (current.getRotatedTo() != null) {
-            revokeSuccessorChain(current);
-            throw new RefreshTokenInvalidException();
-        }
-        boolean revoked = current.getRevokedAt() != null;
+
         boolean expired = current.getExpiresAt().isBefore(Instant.now());
         boolean deviceMismatch = !current.getDeviceFingerprint().equals(command.getDeviceFingerprint());
-        if (revoked || expired || deviceMismatch) {
-            throw new RefreshTokenInvalidException();
+
+        RefreshToken predecessor;
+        if (current.getRotatedTo() != null) {
+            if (expired || deviceMismatch || !withinRotationGrace(current)) {
+                revokeAllActiveTokens(current.getUserId());
+                throw new RefreshTokenInvalidException();
+            }
+            predecessor = null;
+        } else {
+            boolean revoked = current.getRevokedAt() != null;
+            if (revoked || expired || deviceMismatch) {
+                throw new RefreshTokenInvalidException();
+            }
+            predecessor = current;
         }
 
         UserQueryData user = userQueryService.findById(current.getUserId());
-        return establishSession(user.getId(), user.getPublicId(), command.getDeviceFingerprint(), current);
+        return establishSession(user.getId(), user.getPublicId(), user.getStatus() == UserStatus.BOUND,
+                command.getDeviceFingerprint(), predecessor);
     }
 
     @Override
     @Command
     @Transactional
     public void logout(LogoutCommand command) {
-        refreshTokenCommandRepository.findByTokenHash(sha256Hex(command.getRefreshToken()))
-                .ifPresent(token -> {
-                    token.revoke();
-                    refreshTokenCommandRepository.save(token);
-                });
+        if (command.getAccessTokenId() != null && command.getAccessTokenExpiresAt() != null) {
+            jwtDenylist.deny(command.getAccessTokenId(), command.getAccessTokenExpiresAt());
+        }
+        if (command.getRefreshToken() != null) {
+            refreshTokenCommandRepository.findByTokenHash(sha256Hex(command.getRefreshToken()))
+                    .ifPresent(token -> {
+                        token.revoke();
+                        refreshTokenCommandRepository.save(token);
+                    });
+        }
     }
 
-    private EstablishedSessionCommandData establishSession(Long userId, UUID publicId, String deviceFingerprint,
-            RefreshToken predecessor) {
+    private EstablishedSessionCommandData establishSession(Long userId, UUID publicId, boolean kycVerified,
+            String deviceFingerprint, RefreshToken predecessor) {
         IssuedJwt accessToken = jwtIssuer.issue(
                 publicId.toString(),
-                Map.of(JwtClaims.TENANT, fineractClientProperties.getTenantId()),
+                Map.of(
+                        JwtClaims.TENANT, fineractClientProperties.getTenantId(),
+                        JwtClaims.KYC_VERIFIED, kycVerified,
+                        JwtClaims.SCOPE, AuthenticationConstants.SCOPE_CONSUMER_FULL,
+                        JwtClaims.DEVICE_FINGERPRINT, deviceFingerprint),
                 authenticationProperties.getAccessTokenTtl());
 
         String refreshTokenValue = generateRefreshTokenValue();
@@ -196,15 +217,16 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         }
     }
 
-    private void revokeSuccessorChain(RefreshToken start) {
-        RefreshToken current = start;
-        while (current != null) {
-            current.revoke();
-            refreshTokenCommandRepository.save(current);
-            current = current.getRotatedTo() == null
-                    ? null
-                    : refreshTokenCommandRepository.findById(current.getRotatedTo()).orElse(null);
-        }
+    private boolean withinRotationGrace(RefreshToken token) {
+        return token.getRevokedAt() != null
+                && token.getRevokedAt().plus(authenticationProperties.getRotationGraceTtl()).isAfter(Instant.now());
+    }
+
+    private void revokeAllActiveTokens(Long userId) {
+        refreshTokenCommandRepository.findByUserId(userId).forEach(token -> {
+            token.revoke();
+            refreshTokenCommandRepository.save(token);
+        });
     }
 
     private static String generateRefreshTokenValue() {
@@ -222,11 +244,4 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         }
     }
 
-    private static String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at < 1) {
-            return "***";
-        }
-        return email.charAt(0) + "***" + email.substring(at);
-    }
 }

@@ -50,6 +50,7 @@ ext {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation('org.springframework.boot:spring-boot-starter-data-jpa')
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
@@ -58,6 +59,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+	implementation 'com.github.ben-manes.caffeine:caffeine'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
@@ -155,14 +157,27 @@ def stripNullOnlyEnums(node) {
 	}
 }
 
+def retypeIntegerMoneyFields(schemas) {
+	def moneyPropertyNames = ['principal', 'amount', 'depositAmount'] as Set
+	schemas.each { schemaName, schema ->
+		(schema.properties ?: [:]).each { propName, prop ->
+			if (propName in moneyPropertyNames && prop.type == 'integer') {
+				prop.type = 'number'
+				prop.remove('format')
+			}
+		}
+	}
+}
+
 task sanitizeFineractSpec {
-	description = 'Strip null-only enums from the vendored Fineract spec before code generation.'
+	description = 'Strip null-only enums and retype integer money fields in the vendored Fineract spec before code generation.'
 	group = 'documentation'
 	inputs.file fineractRawSpec
 	outputs.file fineractSanitizedSpec
 	doLast {
 		def spec = new JsonSlurper().parse(fineractRawSpec)
 		stripNullOnlyEnums(spec)
+		retypeIntegerMoneyFields(spec.components.schemas)
 		fineractSanitizedSpec.parentFile.mkdirs()
 		fineractSanitizedSpec.text = JsonOutput.toJson(spec)
 	}
@@ -185,6 +200,10 @@ task generateFineractClient(type: GenerateTask) {
 	generateModelTests         = false
 	generateApiDocumentation   = false
 	generateModelDocumentation = false
+	typeMappings = [
+		float : 'BigDecimal',
+		double: 'BigDecimal'
+	]
 	configOptions = [
 		useJakartaEe         : 'true',
 		useTags              : 'true',

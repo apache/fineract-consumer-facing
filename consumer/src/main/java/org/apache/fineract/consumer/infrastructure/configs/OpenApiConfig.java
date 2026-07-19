@@ -24,6 +24,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -38,10 +39,10 @@ public class OpenApiConfig {
                         .description("Backend-for-frontend for consumer-facing Fineract clients.")
                         .version("0.0.1-SNAPSHOT"))
                 .components(new Components()
-                        .addSecuritySchemes("bearerAuth", new SecurityScheme()
-                                .type(SecurityScheme.Type.HTTP)
-                                .scheme("bearer")
-                                .bearerFormat("JWT")))
-                .addSecurityItem(new SecurityRequirement().addList("bearerAuth"));
+                        .addSecuritySchemes("cookieAuth", new SecurityScheme()
+                                .type(SecurityScheme.Type.APIKEY)
+                                .in(SecurityScheme.In.COOKIE)
+                                .name(AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME)))
+                .addSecurityItem(new SecurityRequirement().addList("cookieAuth"));
     }
 }

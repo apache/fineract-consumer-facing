@@ -48,13 +48,20 @@ Feature: Consumer login
 
   Scenario: A challenge token cannot be used as an access token
     When I log in with my correct password
-    Then a protected endpoint rejects the challenge token as a bearer token
+    Then a protected endpoint rejects the challenge token as an access cookie
 
-  Scenario: Refreshing rotates the refresh token and replay revokes the chain
+  Scenario: Same-device replay of a rotated refresh token within the grace window forks a session
     When I complete a login successfully
     And I refresh my session
     Then I receive a session with an access token and refresh cookie
     When I refresh using the previous refresh cookie
+    Then I receive a session with an access token and refresh cookie
+
+  Scenario: Replaying a rotated refresh token from a different device revokes the chain
+    When I complete a login successfully
+    And I refresh my session
+    Then I receive a session with an access token and refresh cookie
+    When I refresh using the previous refresh cookie from a different device
     Then the refresh is rejected
     When I refresh using the latest refresh cookie
     Then the refresh is rejected

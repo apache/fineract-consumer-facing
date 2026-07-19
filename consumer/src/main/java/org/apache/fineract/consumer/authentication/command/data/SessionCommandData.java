@@ -33,10 +33,6 @@ import lombok.ToString;
 @ToString(onlyExplicitlyIncluded = true)
 public final class SessionCommandData {
 
-    private final String accessToken;
     @ToString.Include
     private final Instant expiresAt;
-    @ToString.Include
-    @Builder.Default
-    private final String tokenType = AuthenticationConstants.BEARER_TOKEN_TYPE;
 }

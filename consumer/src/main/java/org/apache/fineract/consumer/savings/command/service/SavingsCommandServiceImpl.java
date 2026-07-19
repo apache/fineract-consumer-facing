@@ -19,19 +19,21 @@
 
 package org.apache.fineract.consumer.savings.command.service;
 
-import feign.FeignException;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsChargesApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdResponse;
-import org.apache.fineract.consumer.infrastructure.jwt.IssuedJwt;
+import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
@@ -41,7 +43,6 @@ import org.apache.fineract.consumer.savings.command.data.InitiateSavingsChargePa
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentChallengeCommandData;
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentCommandData;
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentConstants;
-import org.apache.fineract.consumer.savings.command.exception.SavingsAccountAccessDeniedException;
 import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentInvalidException;
 import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentNotFoundException;
 import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentStepUpInvalidException;
@@ -68,7 +69,7 @@ public class SavingsCommandServiceImpl implements SavingsCommandService {
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
 
-        requireAccess(user.getFineractClientId(), command.getSavingsId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_CHARGE_PAY, command.getSavingsId());
 
         otpCommandService.createOtp(publicId, OtpDestination.builder()
                 .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
@@ -86,7 +87,7 @@ public class SavingsCommandServiceImpl implements SavingsCommandService {
         return SavingsChargePaymentChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(maskEmail(user.getEmail()))
+                .sentTo(EmailMasking.mask(user.getEmail()))
                 .build();
     }
 
@@ -105,21 +106,20 @@ public class SavingsCommandServiceImpl implements SavingsCommandService {
             throw new SavingsChargePaymentStepUpInvalidException();
         }
 
-        UserQueryData user = userQueryService.findByPublicId(publicId);
         try {
             otpCommandService.validateOtp(publicId, command.getOtp());
         } catch (OtpTokenInvalidException e) {
             throw new SavingsChargePaymentStepUpInvalidException();
         }
 
-        requireAccess(user.getFineractClientId(), command.getSavingsId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_CHARGE_PAY, command.getSavingsId());
 
         PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdRequest request =
                 new PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdRequest()
                         .locale(SavingsChargePaymentConstants.LOCALE)
                         .dateFormat(SavingsChargePaymentConstants.DATE_FORMAT)
                         .dueDate(LocalDate.now().toString())
-                        .amount(command.getAmount().floatValue());
+                        .amount(command.getAmount());
 
         PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdResponse response =
                 call(() -> savingsChargesApi.payOrWaiveSavingsAccountCharge(
@@ -140,29 +140,11 @@ public class SavingsCommandServiceImpl implements SavingsCommandService {
         return UUID.fromString(jwt.getSubject());
     }
 
-    private void requireAccess(Long callerClientId, Long savingsId) {
-        if (!accessPolicyEvaluator.canAccessSavings(callerClientId, savingsId)) {
-            throw new SavingsAccountAccessDeniedException();
-        }
-    }
-
     private <T> T call(Supplier<T> upstream) {
-        try {
-            return upstream.get();
-        } catch (FeignException.NotFound e) {
-            throw new SavingsChargePaymentNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new SavingsChargePaymentInvalidException(e);
-        } catch (FeignException e) {
-            throw new SavingsChargePaymentUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(upstream,
+                e -> new SavingsChargePaymentNotFoundException(),
+                SavingsChargePaymentInvalidException::new,
+                SavingsChargePaymentUpstreamUnavailableException::new);
     }
 
-    private String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at <= 1) {
-            return "***" + email.substring(Math.max(at, 0));
-        }
-        return email.charAt(0) + "***" + email.substring(at);
-    }
 }

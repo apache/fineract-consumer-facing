@@ -83,6 +83,16 @@ services:
       start_period: 120s
     mem_limit: 2g
 
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: valkey
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 128m
+
   bff:
     build: .
     container_name: bff
@@ -93,12 +103,15 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_healthy
+      valkey:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://bff-db:5432/${POSTGRES_DB:-consumerapp}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-consumerapp}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password}
       FINERACT_BASE_URL: http://fineract:8080/fineract-provider/api
       SPRING_MAIL_HOST: mailpit
+      SPRING_DATA_REDIS_HOST: valkey
       SERVER_FORWARD_HEADERS_STRATEGY: framework
       JWT_KEY_LOCATION: file:/etc/bff/jwt-key.pem
       JAVA_TOOL_OPTIONS: "-Xmx768m -Xms256m"

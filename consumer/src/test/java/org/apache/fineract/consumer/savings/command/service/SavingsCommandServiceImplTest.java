@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,9 +34,10 @@ import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsChargesApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdResponse;
-import org.apache.fineract.consumer.infrastructure.jwt.IssuedJwt;
+import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
@@ -45,9 +47,9 @@ import org.apache.fineract.consumer.savings.command.data.InitiateSavingsChargePa
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentChallengeCommandData;
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentCommandData;
 import org.apache.fineract.consumer.savings.command.data.SavingsChargePaymentConstants;
-import org.apache.fineract.consumer.savings.command.exception.SavingsAccountAccessDeniedException;
+import org.apache.fineract.consumer.savings.command.exception.SavingsCommandAccessDeniedException;
 import org.apache.fineract.consumer.savings.command.exception.SavingsChargePaymentStepUpInvalidException;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;
@@ -132,7 +134,6 @@ class SavingsCommandServiceImplTest {
     void initiateSendsOtpIssuesTokenAndMasksDestination() {
         Instant expiresAt = Instant.now().plusSeconds(300);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.canAccessSavings(CLIENT_ID, SAVINGS_ID)).thenReturn(true);
         when(stepUpTokenService.actionFingerprint(
                 SavingsChargePaymentConstants.ENDPOINT, SAVINGS_ID, CHARGE_ID, AMOUNT))
                 .thenReturn(ACTION_FINGERPRINT);
@@ -153,13 +154,14 @@ class SavingsCommandServiceImplTest {
 
     @Test
     void initiateDeniedWhenAccessPolicyRejects() {
+        Jwt jwt = jwt();
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.canAccessSavings(CLIENT_ID, SAVINGS_ID)).thenReturn(false);
+        doThrow(new SavingsCommandAccessDeniedException())
+                .when(accessPolicyEvaluator).authorize(jwt, ConsumerAction.SAVINGS_CHARGE_PAY, SAVINGS_ID);
 
-        assertThatThrownBy(() -> service.initiateChargePayment(jwt(), initiateCommand()))
-                .isInstanceOf(SavingsAccountAccessDeniedException.class)
-                .extracting(e -> SavingsAccountAccessDeniedException.CODE)
-                .isEqualTo(SavingsAccountAccessDeniedException.CODE);
+        assertThatThrownBy(() -> service.initiateChargePayment(jwt, initiateCommand()))
+                .isInstanceOf(SavingsCommandAccessDeniedException.class)
+                .hasFieldOrPropertyWithValue("code", SavingsCommandAccessDeniedException.CODE);
 
         verify(otpCommandService, never()).createOtp(any(), any());
     }
@@ -170,8 +172,6 @@ class SavingsCommandServiceImplTest {
                 SavingsChargePaymentConstants.ENDPOINT, SAVINGS_ID, CHARGE_ID, AMOUNT))
                 .thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
-        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.canAccessSavings(CLIENT_ID, SAVINGS_ID)).thenReturn(true);
         when(savingsChargesApi.payOrWaiveSavingsAccountCharge(
                 eq(SAVINGS_ID), eq(CHARGE_ID), any(), eq(SavingsChargePaymentConstants.PAYCHARGE_COMMAND)))
                 .thenReturn(new PostSavingsAccountsSavingsAccountIdChargesSavingsAccountChargeIdResponse()
@@ -189,7 +189,7 @@ class SavingsCommandServiceImplTest {
         verify(savingsChargesApi).payOrWaiveSavingsAccountCharge(
                 eq(SAVINGS_ID), eq(CHARGE_ID), body.capture(),
                 eq(SavingsChargePaymentConstants.PAYCHARGE_COMMAND));
-        assertThat(body.getValue().getAmount()).isEqualTo(AMOUNT.floatValue());
+        assertThat(body.getValue().getAmount()).isEqualTo(AMOUNT);
         assertThat(body.getValue().getLocale()).isEqualTo(SavingsChargePaymentConstants.LOCALE);
         assertThat(body.getValue().getDateFormat()).isEqualTo(SavingsChargePaymentConstants.DATE_FORMAT);
         assertThat(body.getValue().getDueDate()).isNotBlank();
@@ -216,7 +216,6 @@ class SavingsCommandServiceImplTest {
                 SavingsChargePaymentConstants.ENDPOINT, SAVINGS_ID, CHARGE_ID, AMOUNT))
                 .thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
-        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         doThrowOtpInvalid();
 
         assertThatThrownBy(() -> service.confirmChargePayment(jwt(), confirmCommand()))

@@ -28,9 +28,9 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.jwt.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.jwt.JwtClaims;
-import org.apache.fineract.consumer.infrastructure.jwt.JwtIssuer;
+import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
+import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
+import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
@@ -60,6 +60,11 @@ public class StepUpTokenService {
 
     public String actionFingerprint(String endpoint, Long fromAccountId, Long toAccountId) {
         String canonical = endpoint + "|" + fromAccountId + "|" + toAccountId;
+        return hash(canonical);
+    }
+
+    public String actionFingerprint(String endpoint, String... parts) {
+        String canonical = endpoint + "|" + String.join("|", parts);
         return hash(canonical);
     }
 

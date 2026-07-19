@@ -19,6 +19,10 @@
 
 package org.apache.fineract.consumer.infrastructure.configs;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.filter.DeviceFingerprintFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,7 +31,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.util.WebUtils;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableWebSecurity
@@ -35,7 +42,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-            @Qualifier("accessTokenJwtDecoder") JwtDecoder accessTokenJwtDecoder) throws Exception {
+            @Qualifier("accessTokenJwtDecoder") JwtDecoder accessTokenJwtDecoder,
+            ObjectMapper objectMapper) throws Exception {
         return http
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers(
@@ -54,10 +62,19 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/savings/**").authenticated()
                         .requestMatchers("/api/v1/loans/**").authenticated()
                         .requestMatchers("/api/v1/transfers/**").authenticated()
+                        .requestMatchers("/api/v1/beneficiaries/**").authenticated()
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(accessTokenJwtDecoder)))
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(SecurityConfig::resolveAccessTokenCookie)
+                        .jwt(jwt -> jwt.decoder(accessTokenJwtDecoder)))
+                .addFilterAfter(new DeviceFingerprintFilter(objectMapper), BearerTokenAuthenticationFilter.class)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
                 .build();
+    }
+
+    private static String resolveAccessTokenCookie(HttpServletRequest request) {
+        Cookie cookie = WebUtils.getCookie(request, AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME);
+        return cookie != null ? cookie.getValue() : null;
     }
 }

@@ -25,7 +25,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.domain.UserStatus;
 
 @Getter
 @RequiredArgsConstructor

@@ -23,31 +23,41 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoanChargesApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdChargesChargeIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdChargesChargeIdResponse;
-import org.apache.fineract.consumer.infrastructure.jwt.IssuedJwt;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansResponse;
+import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.access.service.OwnedAccountsCache;
 import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.InitiateLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentChallengeCommandData;
 import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentCommandData;
 import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentConstants;
-import org.apache.fineract.consumer.loans.command.exception.LoanAccessDeniedException;
+import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
+import feign.FeignException;
+import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
 import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentStepUpInvalidException;
+import org.apache.fineract.consumer.loans.command.exception.LoanCommandUpstreamUnavailableException;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;
@@ -76,6 +86,9 @@ class LoansCommandServiceImplTest {
 
     @Mock
     private AccessPolicyEvaluator accessPolicyEvaluator;
+
+    @Mock
+    private OwnedAccountsCache ownedAccountsCache;
 
     @Mock
     private LoansApi loansApi;
@@ -132,7 +145,6 @@ class LoansCommandServiceImplTest {
     void initiateSendsOtpIssuesTokenAndMasksDestination() {
         Instant expiresAt = Instant.now().plusSeconds(300);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.canAccessLoans(CLIENT_ID, LOAN_ID)).thenReturn(true);
         when(stepUpTokenService.actionFingerprint(
                 LoanChargePaymentConstants.ENDPOINT, LOAN_ID, CHARGE_ID))
                 .thenReturn(ACTION_FINGERPRINT);
@@ -153,15 +165,50 @@ class LoansCommandServiceImplTest {
 
     @Test
     void initiateDeniedWhenAccessPolicyRejects() {
+        Jwt jwt = jwt();
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.canAccessLoans(CLIENT_ID, LOAN_ID)).thenReturn(false);
+        doThrow(new LoanCommandAccessDeniedException())
+                .when(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOAN_CHARGE_PAY, LOAN_ID);
 
-        assertThatThrownBy(() -> service.initiateChargePayment(jwt(), initiateCommand()))
-                .isInstanceOf(LoanAccessDeniedException.class)
-                .extracting(e -> LoanAccessDeniedException.CODE)
-                .isEqualTo(LoanAccessDeniedException.CODE);
+        assertThatThrownBy(() -> service.initiateChargePayment(jwt, initiateCommand()))
+                .isInstanceOf(LoanCommandAccessDeniedException.class)
+                .hasFieldOrPropertyWithValue("code", LoanCommandAccessDeniedException.CODE);
 
         verify(otpCommandService, never()).createOtp(any(), any());
+    }
+
+    @Test
+    void submitAuthorizesLoanApplicationSubmit() {
+        Jwt jwt = jwt();
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(loansApi.calculateLoanScheduleOrSubmitLoanApplication(any(), isNull()))
+                .thenReturn(new PostLoansResponse().loanId(LOAN_ID).resourceId(99L));
+
+        service.submitApplication(jwt, SubmitLoanApplicationCommand.builder()
+                .productId(1L)
+                .expectedDisbursementDate(LocalDate.of(2026, 7, 1))
+                .submittedOnDate(LocalDate.of(2026, 7, 1))
+                .build());
+
+        verify(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOAN_APPLICATION_SUBMIT);
+        verify(ownedAccountsCache).evict(CLIENT_ID);
+    }
+
+    @Test
+    void submitDoesNotEvictOwnershipCacheWhenUpstreamFails() {
+        Jwt jwt = jwt();
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(loansApi.calculateLoanScheduleOrSubmitLoanApplication(any(), isNull()))
+                .thenThrow(mock(FeignException.class));
+
+        assertThatThrownBy(() -> service.submitApplication(jwt, SubmitLoanApplicationCommand.builder()
+                .productId(1L)
+                .expectedDisbursementDate(LocalDate.of(2026, 7, 1))
+                .submittedOnDate(LocalDate.of(2026, 7, 1))
+                .build()))
+                .isInstanceOf(LoanCommandUpstreamUnavailableException.class);
+
+        verify(ownedAccountsCache, never()).evict(any());
     }
 
     @Test
@@ -171,7 +218,6 @@ class LoansCommandServiceImplTest {
                 .thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.canAccessLoans(CLIENT_ID, LOAN_ID)).thenReturn(true);
         when(loanChargesApi.executeLoanChargeOnExistingCharge(
                 eq(LOAN_ID), eq(CHARGE_ID), any(), eq(LoanChargePaymentConstants.PAY_COMMAND)))
                 .thenReturn(new PostLoansLoanIdChargesChargeIdResponse().resourceId(99L));

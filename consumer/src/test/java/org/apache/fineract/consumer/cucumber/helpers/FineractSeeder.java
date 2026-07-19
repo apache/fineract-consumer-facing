@@ -22,6 +22,7 @@ package org.apache.fineract.consumer.cucumber.helpers;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import feign.Feign;
 import feign.RequestInterceptor;
 import feign.auth.BasicAuthRequestInterceptor;
@@ -90,6 +91,7 @@ public class FineractSeeder {
     private static final String LOAN_PRODUCT_NAME_PREFIX = "CUKE-LOAN-";
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
             .setSerializationInclusion(JsonInclude.Include.NON_EMPTY)
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
@@ -118,6 +120,12 @@ public class FineractSeeder {
             long savingsAccountId,
             long loanAccountId) {}
 
+    public record SeededTransferTarget(
+            long fineractClientId,
+            long savingsAccountId,
+            String savingsAccountNumber,
+            String officeName) {}
+
     public SeededClient seedClientWithPassport() {
         long clientId = createClient();
         String documentKey = DOCUMENT_KEY_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
@@ -134,6 +142,17 @@ public class FineractSeeder {
         long loanAccountId = createDisbursedLoanAccount(clientId);
         return new SeededClientWithAccounts(
                 clientId, PASSPORT_DOCUMENT_TYPE, documentKey, savingsAccountId, loanAccountId);
+    }
+
+    public SeededTransferTarget seedTransferTarget() {
+        ensureUsdCurrency();
+        long clientId = createActiveClient();
+        long savingsAccountId = createActiveSavingsAccount(clientId);
+        String accountNumber = SAVINGS_ACCOUNTS
+                .retrieveSavingsAccount(savingsAccountId, null, null, null)
+                .getAccountNo();
+        String officeName = CLIENTS.retrieveOneClient(clientId, null).getOfficeName();
+        return new SeededTransferTarget(clientId, savingsAccountId, accountNumber, officeName);
     }
 
     public void depositToSavings(long savingsId, BigDecimal amount) {
@@ -237,7 +256,7 @@ public class FineractSeeder {
                     .shortName(suffix)
                     .currencyCode(USD)
                     .digitsAfterDecimal(4)
-                    .nominalAnnualInterestRate(5.0)
+                    .nominalAnnualInterestRate(BigDecimal.valueOf(5.0))
                     .interestCompoundingPeriodType(4)
                     .interestPostingPeriodType(4)
                     .interestCalculationType(1)
@@ -265,11 +284,11 @@ public class FineractSeeder {
                     .shortName(suffix)
                     .currencyCode(USD)
                     .digitsAfterDecimal(2)
-                    .principal(10000.0)
+                    .principal(BigDecimal.valueOf(10000.0))
                     .numberOfRepayments(5)
                     .repaymentEvery(1)
                     .repaymentFrequencyType(2L)
-                    .interestRatePerPeriod(2.0)
+                    .interestRatePerPeriod(BigDecimal.valueOf(2.0))
                     .interestRateFrequencyType(2)
                     .amortizationType(1)
                     .interestType(1)

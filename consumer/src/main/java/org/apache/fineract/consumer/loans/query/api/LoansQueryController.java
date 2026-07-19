@@ -23,7 +23,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
 import org.apache.fineract.consumer.loans.query.data.CalculateLoanScheduleQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanAccountListItemQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanAccountQueryData;
@@ -52,13 +51,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class LoansQueryController {
 
     private final LoansQueryService loansQueryService;
-    private final UserClientResolver userClientResolver;
 
     @Operation(operationId = "listLoanAccounts")
     @GetMapping
     public List<LoanAccountListItemQueryData> listAccounts(@AuthenticationPrincipal Jwt jwt) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return loansQueryService.listAccounts(clientId);
+        return loansQueryService.listAccounts(jwt);
     }
 
     @Operation(operationId = "previewLoanSchedule")
@@ -66,7 +63,6 @@ public class LoansQueryController {
     public LoanScheduleQueryData previewSchedule(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody LoanSchedulePreviewQueryRequest request) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
         CalculateLoanScheduleQuery query = CalculateLoanScheduleQuery.builder()
                 .productId(request.getProductId())
                 .principal(request.getPrincipal())
@@ -83,14 +79,13 @@ public class LoansQueryController {
                 .expectedDisbursementDate(request.getExpectedDisbursementDate())
                 .submittedOnDate(request.getSubmittedOnDate())
                 .build();
-        return loansQueryService.calculateSchedule(clientId, query);
+        return loansQueryService.calculateSchedule(jwt, query);
     }
 
     @Operation(operationId = "getLoanAccount")
     @GetMapping("/{loanId}")
     public LoanAccountQueryData getLoan(@AuthenticationPrincipal Jwt jwt, @PathVariable Long loanId) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return loansQueryService.getLoan(clientId, loanId);
+        return loansQueryService.getLoan(jwt, loanId);
     }
 
     @Operation(operationId = "listLoanTransactions")
@@ -101,14 +96,13 @@ public class LoansQueryController {
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String sort) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
         LoanTransactionListQuery query = LoanTransactionListQuery.builder()
                 .loanId(loanId)
                 .page(page)
                 .size(size)
                 .sort(sort)
                 .build();
-        return loansQueryService.listTransactions(clientId, query);
+        return loansQueryService.listTransactions(jwt, query);
     }
 
     @Operation(operationId = "getLoanTransaction")
@@ -117,15 +111,13 @@ public class LoansQueryController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long loanId,
             @PathVariable Long transactionId) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return loansQueryService.getTransaction(clientId, loanId, transactionId);
+        return loansQueryService.getTransaction(jwt, loanId, transactionId);
     }
 
     @Operation(operationId = "getLoanCharges")
     @GetMapping("/{loanId}/charges")
     public List<LoanChargeQueryData> getCharges(@AuthenticationPrincipal Jwt jwt, @PathVariable Long loanId) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return loansQueryService.getCharges(clientId, loanId);
+        return loansQueryService.getCharges(jwt, loanId);
     }
 
     @Operation(operationId = "getLoanCharge")
@@ -134,20 +126,20 @@ public class LoansQueryController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long loanId,
             @PathVariable Long chargeId) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return loansQueryService.getCharge(clientId, loanId, chargeId);
+        return loansQueryService.getCharge(jwt, loanId, chargeId);
     }
 
     @Operation(operationId = "getLoanGuarantors")
     @GetMapping("/{loanId}/guarantors")
     public List<LoanGuarantorQueryData> getGuarantors(@AuthenticationPrincipal Jwt jwt, @PathVariable Long loanId) {
-        Long clientId = userClientResolver.resolveClientId(jwt);
-        return loansQueryService.getGuarantors(clientId, loanId);
+        return loansQueryService.getGuarantors(jwt, loanId);
     }
 
     @Operation(operationId = "getLoanApplicationTemplate")
     @GetMapping("/template")
-    public LoanApplicationTemplateQueryData getApplicationTemplate(@RequestParam(required = false) Long productId) {
-        return loansQueryService.getApplicationTemplate(productId);
+    public LoanApplicationTemplateQueryData getApplicationTemplate(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) Long productId) {
+        return loansQueryService.getApplicationTemplate(jwt, productId);
     }
 }

@@ -19,22 +19,29 @@
 
 package org.apache.fineract.consumer.transfers.command.service;
 
-import feign.FeignException;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
+import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
+import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.AccountTransfersApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.AccountTransferRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostAccountTransfersResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
-import org.apache.fineract.consumer.infrastructure.jwt.IssuedJwt;
+import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
@@ -45,6 +52,7 @@ import org.apache.fineract.consumer.transfers.command.data.TransferChallengeComm
 import org.apache.fineract.consumer.transfers.command.data.TransferCommandData;
 import org.apache.fineract.consumer.transfers.command.data.TransferConstants;
 import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
+import org.apache.fineract.consumer.transfers.command.exception.TransferBeneficiaryLimitExceededException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferInvalidException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferNotFoundException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferStepUpInvalidException;
@@ -60,6 +68,7 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
 
     private final UserQueryService userQueryService;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
+    private final BeneficiariesQueryService beneficiariesQueryService;
     private final OtpCommandService otpCommandService;
     private final StepUpTokenService stepUpTokenService;
     private final ClientApi clientApi;
@@ -74,7 +83,8 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
 
-        requireAccess(user.getFineractClientId(), command.getFromAccountId(), command.getToAccountId(), toLoan);
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.TRANSFER_EXECUTE, command.getFromAccountId());
+        requireDestinationAllowed(jwt, user.getId(), command.getToAccountId(), toLoan, command.getAmount());
 
         otpCommandService.createOtp(publicId, OtpDestination.builder()
                 .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
@@ -93,7 +103,7 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         return TransferChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(maskEmail(user.getEmail()))
+                .sentTo(EmailMasking.mask(user.getEmail()))
                 .build();
     }
 
@@ -121,8 +131,10 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
             throw new TransferStepUpInvalidException();
         }
 
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.TRANSFER_EXECUTE, command.getFromAccountId());
+        requireDestinationAllowed(jwt, user.getId(), command.getToAccountId(), toLoan, command.getAmount());
+
         Long callerClientId = user.getFineractClientId();
-        requireAccess(callerClientId, command.getFromAccountId(), command.getToAccountId(), toLoan);
 
         Long callerOfficeId = call(() -> clientApi.retrieveOneClient(callerClientId, false)).getOfficeId();
 
@@ -178,31 +190,25 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         throw new TransferInvalidException();
     }
 
-    private void requireAccess(Long callerClientId, Long fromAccountId, Long toAccountId, boolean toLoan) {
-        boolean allowed = accessPolicyEvaluator.canAccessSavings(callerClientId, fromAccountId)
-                && (!toLoan || accessPolicyEvaluator.canAccessLoans(callerClientId, toAccountId));
-        if (!allowed) {
-            throw new TransferAccessDeniedException();
+    private void requireDestinationAllowed(Jwt jwt, Long userId, Long toAccountId, boolean toLoan, BigDecimal amount) {
+        ResourceType resourceType = toLoan ? ResourceType.LOANS : ResourceType.SAVINGS;
+        if (accessPolicyEvaluator.ownsResource(jwt, resourceType, toAccountId)) {
+            return;
+        }
+        BeneficiaryAccountType accountType = toLoan ? BeneficiaryAccountType.LOAN : BeneficiaryAccountType.SAVINGS;
+        BeneficiaryQueryData beneficiary = beneficiariesQueryService
+                .findActiveByAccount(userId, toAccountId, accountType)
+                .orElseThrow(TransferAccessDeniedException::new);
+        if (beneficiary.getTransferLimit() != null && amount.compareTo(beneficiary.getTransferLimit()) > 0) {
+            throw new TransferBeneficiaryLimitExceededException();
         }
     }
 
     private <T> T call(Supplier<T> upstream) {
-        try {
-            return upstream.get();
-        } catch (FeignException.NotFound e) {
-            throw new TransferNotFoundException();
-        } catch (FeignException.BadRequest e) {
-            throw new TransferInvalidException(e);
-        } catch (FeignException e) {
-            throw new TransferUpstreamUnavailableException(e);
-        }
+        return FineractCaller.call(upstream,
+                e -> new TransferNotFoundException(),
+                TransferInvalidException::new,
+                TransferUpstreamUnavailableException::new);
     }
 
-    private String maskEmail(String email) {
-        int at = email.indexOf('@');
-        if (at <= 1) {
-            return "***" + email.substring(Math.max(at, 0));
-        }
-        return email.charAt(0) + "***" + email.substring(at);
-    }
 }

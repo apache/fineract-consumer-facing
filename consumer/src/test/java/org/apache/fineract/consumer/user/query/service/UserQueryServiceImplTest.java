@@ -25,7 +25,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.domain.UserStatus;
 import org.apache.fineract.consumer.user.command.exception.UserNotFoundException;
 import org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
