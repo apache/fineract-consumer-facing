@@ -23,6 +23,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
@@ -40,6 +41,7 @@ import { ProfileStore } from './profile.store';
     MatButtonModule,
     MatCardModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatProgressBarModule,
     MatSelectModule,
@@ -66,6 +68,8 @@ import { ProfileStore } from './profile.store';
               [src]="image.imageDataUri"
               [alt]="'profile.card.photoAlt' | translate"
             />
+          } @else {
+            <mat-icon mat-card-avatar class="avatar-fallback" aria-hidden="true">person</mat-icon>
           }
           <mat-card-title>{{ profile.displayName }}</mat-card-title>
           <mat-card-subtitle>
@@ -248,6 +252,15 @@ import { ProfileStore } from './profile.store';
     .total {
       margin: 0.75rem 0 0;
       color: rgba(0, 0, 0, 0.6);
+    }
+    .avatar-fallback {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: #757575;
+      background-color: #e0e0e0;
+      border-radius: 50%;
     }
   `,
 })
