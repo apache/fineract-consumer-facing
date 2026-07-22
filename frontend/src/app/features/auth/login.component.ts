@@ -83,6 +83,9 @@ import { OtpComponent } from '../../shared/otp/otp.component';
             {{ 'auth.login.registerPrompt' | translate }}
             <a routerLink="/register">{{ 'auth.login.registerLink' | translate }}</a>
           </p>
+          <p class="forgot-prompt">
+            <a routerLink="/forgot-password">{{ 'auth.login.forgotPasswordLink' | translate }}</a>
+          </p>
         } @else {
           <app-otp
             [sentTo]="sentTo()"
@@ -113,6 +116,10 @@ import { OtpComponent } from '../../shared/otp/otp.component';
     }
     .register-prompt {
       margin: 1rem 0 0;
+      text-align: center;
+    }
+    .forgot-prompt {
+      margin: 0.25rem 0 0;
       text-align: center;
     }
   `,

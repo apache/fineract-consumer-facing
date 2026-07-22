@@ -29,6 +29,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
+import org.apache.fineract.consumer.infrastructure.validation.PasswordPolicy;
 
 @Getter
 @RequiredArgsConstructor
@@ -45,8 +46,8 @@ public final class SubmitRegistrationCommandRequest {
     private final String email;
 
     @NotBlank
-    @Size(min = 15, max = 64)
-    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$")
+    @Size(min = PasswordPolicy.MIN_LENGTH, max = PasswordPolicy.MAX_LENGTH)
+    @Pattern(regexp = PasswordPolicy.COMPLEXITY_PATTERN)
     private final String password;
 
     @NotBlank

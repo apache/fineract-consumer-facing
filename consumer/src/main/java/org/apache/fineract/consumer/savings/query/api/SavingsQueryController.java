@@ -72,14 +72,14 @@ public class SavingsQueryController {
             @PathVariable Long savingsId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            @RequestParam(required = false) Integer limit,
-            @RequestParam(required = false) Integer offset) {
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size) {
         SavingsTransactionSearchQuery query = SavingsTransactionSearchQuery.builder()
                 .savingsId(savingsId)
                 .fromDate(fromDate)
                 .toDate(toDate)
-                .limit(limit)
-                .offset(offset)
+                .page(page)
+                .size(size)
                 .build();
         return savingsQueryService.searchTransactions(jwt, query);
     }

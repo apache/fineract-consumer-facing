@@ -7,12 +7,7 @@
       "changeLanguage": "भाषा बदलें",
       "continue": "जारी रखें",
       "dismiss": "खारिज करें",
-      "pay": "भुगतान करें",
       "verify": "सत्यापित करें"
-    },
-    "charge": {
-      "confirmed": "भुगतान की पुष्टि हो गई।",
-      "payCta": "{{name}} को भुगतान करें"
     },
     "error": {
       "generic": "कुछ ग़लत हो गया। कृपया पुनः प्रयास करें।"
@@ -24,8 +19,8 @@
     "filter": {
       "from": "से",
       "to": "तक",
-      "limit": "सीमा",
-      "offset": "ऑफ़सेट"
+      "page": "पृष्ठ",
+      "size": "पृष्ठ आकार"
     },
     "language": {
       "en": "अंग्रेज़ी",
@@ -68,7 +63,17 @@
     "login": {
       "title": "साइन इन करें",
       "registerPrompt": "पंजीकरण करना है?",
-      "registerLink": "खाता बनाएँ"
+      "registerLink": "खाता बनाएँ",
+      "forgotPasswordLink": "पासवर्ड भूल गए?"
+    },
+    "forgotPassword": {
+      "title": "पासवर्ड रीसेट करें",
+      "sendCta": "रीसेट कोड भेजें",
+      "sentNotice": "यदि ईमेल पंजीकृत है, तो एक सत्यापन कोड भेजा गया है।",
+      "newPasswordLabel": "नया पासवर्ड",
+      "resetCta": "पासवर्ड रीसेट करें",
+      "backToLogin": "साइन इन पर वापस जाएँ",
+      "success": "पासवर्ड रीसेट हो गया। कृपया साइन इन करें।"
     }
   },
   "registration": {
@@ -105,9 +110,6 @@
       "typeLabel": "प्रकार:",
       "amountLabel": "राशि:",
       "runningBalanceLabel": "चालू शेष:"
-    },
-    "charge": {
-      "amountLabel": "भुगतान की राशि"
     }
   },
   "loans": {
@@ -132,9 +134,6 @@
       "amountLabel": "राशि:",
       "outstandingLabel": "बकाया ऋण शेष:",
       "backToLoan": "ऋण पर वापस जाएँ"
-    },
-    "charge": {
-      "confirmPrompt": "{{name}} पर बकाया {{amount}} का भुगतान करें?"
     },
     "apply": {
       "title": "ऋण के लिए आवेदन करें",
@@ -242,7 +241,8 @@
       "savings": "बचत",
       "loans": "ऋण",
       "transfers": "ट्रांसफ़र",
-      "beneficiaries": "लाभार्थी"
+      "beneficiaries": "लाभार्थी",
+      "profile": "प्रोफ़ाइल"
     }
   },
   "error.msg.consumer.auth.invalid.credentials": "ईमेल या पासवर्ड ग़लत है।",
@@ -265,10 +265,6 @@
   "error.msg.consumer.request.header.missing": "आपके अनुरोध में आवश्यक जानकारी नहीं है। कृपया पुनः प्रयास करें।",
   "error.msg.consumer.loans.command.access.denied": "आपके पास इस ऋण तक पहुँच नहीं है।",
   "error.msg.consumer.loans.command.application.invalid": "हम इस ऋण आवेदन को संसाधित नहीं कर सके। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
-  "error.msg.consumer.loans.command.charge.payment.invalid": "यह शुल्क भुगतान संसाधित नहीं हो सका। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
-  "error.msg.consumer.loans.command.charge.payment.not.found": "हमें वह ऋण शुल्क नहीं मिला।",
-  "error.msg.consumer.loans.command.charge.payment.stepup.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है। कृपया पुनः प्रयास करें।",
-  "error.msg.consumer.loans.command.charge.payment.upstream.unavailable": "ऋण शुल्क भुगतान अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
   "error.msg.consumer.loans.command.not.found": "हमें वह ऋण नहीं मिला।",
   "error.msg.consumer.loans.command.upstream.unavailable": "ऋण अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
   "error.msg.consumer.loans.access.denied": "आपके पास इस ऋण तक पहुँच नहीं है।",
@@ -281,11 +277,6 @@
   "error.msg.consumer.otp.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है।",
   "error.msg.consumer.registration.identity.not.verified": "दिए गए विवरण से हम आपकी पहचान सत्यापित नहीं कर सके।",
   "error.msg.consumer.identity.verification.unavailable": "पहचान सत्यापन अस्थायी रूप से अनुपलब्ध है। कृपया बाद में पुनः प्रयास करें।",
-  "error.msg.consumer.savings.command.access.denied": "आपके पास इस बचत खाते तक पहुँच नहीं है।",
-  "error.msg.consumer.savings.command.charge.payment.invalid": "यह शुल्क भुगतान संसाधित नहीं हो सका। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
-  "error.msg.consumer.savings.command.charge.payment.not.found": "हमें वह बचत शुल्क नहीं मिला।",
-  "error.msg.consumer.savings.command.charge.payment.stepup.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है। कृपया पुनः प्रयास करें।",
-  "error.msg.consumer.savings.command.charge.payment.upstream.unavailable": "बचत शुल्क भुगतान अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
   "error.msg.consumer.savings.account.access.denied": "आपके पास इस बचत खाते तक पहुँच नहीं है।",
   "error.msg.consumer.savings.account.not.found": "हमें वह बचत खाता नहीं मिला।",
   "error.msg.consumer.savings.product.not.found": "हमें वह बचत उत्पाद नहीं मिला।",
@@ -299,5 +290,48 @@
   "error.msg.consumer.transfers.command.upstream.unavailable": "ट्रांसफ़र अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
   "error.msg.consumer.user.binding.state.invalid": "इस क्रिया के लिए आपका खाता सही स्थिति में नहीं है।",
   "error.msg.consumer.user.already.exists": "इन विवरणों वाला खाता पहले से मौजूद है।",
-  "error.msg.consumer.user.not.found": "हमें आपका खाता नहीं मिला।"
+  "error.msg.consumer.user.not.found": "हमें आपका खाता नहीं मिला।",
+  "profile": {
+    "title": "प्रोफ़ाइल",
+    "card": {
+      "accountNo": "खाता संख्या",
+      "status": "स्थिति:",
+      "statusActive": "सक्रिय",
+      "statusInactive": "निष्क्रिय",
+      "memberSince": "सदस्यता आरंभ:",
+      "email": "ईमेल:",
+      "mobile": "मोबाइल:",
+      "kyc": "केवाईसी:",
+      "kycVerified": "सत्यापित",
+      "kycPending": "असत्यापित",
+      "photoAlt": "प्रोफ़ाइल फ़ोटो"
+    },
+    "charges": {
+      "statusAll": "सभी",
+      "statusActive": "सक्रिय",
+      "statusInactive": "निष्क्रिय",
+      "total": "कुल रिकॉर्ड: {{total}}"
+    },
+    "obligees": {
+      "title": "आपकी गारंटी वाले ऋण",
+      "loanAmount": "ऋण राशि",
+      "guaranteeAmount": "गारंटी राशि",
+      "amountReleased": "जारी राशि",
+      "empty": "कोई गारंटी वाला ऋण नहीं।"
+    },
+    "changePassword": {
+      "title": "पासवर्ड बदलें",
+      "currentLabel": "वर्तमान पासवर्ड",
+      "newLabel": "नया पासवर्ड",
+      "submitCta": "सत्यापन कोड भेजें",
+      "success": "पासवर्ड सफलतापूर्वक बदल गया"
+    }
+  },
+  "error.msg.consumer.user.password.invalid": "वर्तमान पासवर्ड गलत है।",
+  "error.msg.consumer.user.stepup.invalid": "सत्यापन विफल। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.user.password.reset.invalid": "पासवर्ड रीसेट विफल। ईमेल और कोड जाँचें।",
+  "error.msg.consumer.user.upstream.unavailable": "प्रोफ़ाइल सेवा अस्थायी रूप से अनुपलब्ध है।",
+  "error.msg.consumer.user.charge.status.invalid": "अमान्य शुल्क स्थिति फ़िल्टर।",
+  "error.msg.consumer.user.image.not.found": "कोई प्रोफ़ाइल फ़ोटो उपलब्ध नहीं।",
+  "error.msg.consumer.summary.upstream.unavailable": "खाता सारांश अस्थायी रूप से अनुपलब्ध है।"
 }

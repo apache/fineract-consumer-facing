@@ -19,11 +19,7 @@
 
 package org.apache.fineract.consumer.loans.command.service;
 
-import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommand;
-import org.apache.fineract.consumer.loans.command.data.InitiateLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.LoanApplicationCommandData;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentChallengeCommandData;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentCommandData;
 import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.WithdrawLoanApplicationCommand;
@@ -38,8 +34,4 @@ public interface LoansCommandService {
     LoanApplicationCommandData modifyApplication(Jwt jwt, ModifyLoanApplicationCommand command);
 
     LoanApplicationCommandData withdrawApplication(Jwt jwt, WithdrawLoanApplicationCommand command);
-
-    LoanChargePaymentChallengeCommandData initiateChargePayment(Jwt jwt, InitiateLoanChargePaymentCommand command);
-
-    LoanChargePaymentCommandData confirmChargePayment(Jwt jwt, ConfirmLoanChargePaymentCommand command);
 }

@@ -41,7 +41,7 @@ import org.apache.fineract.consumer.beneficiaries.query.repository.BeneficiaryQu
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

@@ -42,7 +42,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.query.Query;
-import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsApplicationTemplateQueryData;
@@ -111,6 +111,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     @Query
     public List<SavingsTransactionQueryData> searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, query.getSavingsId());
+        Integer limit = query.getSize();
+        Integer offset = query.getPage() * query.getSize();
         // TODO: Fix Fineract's GET /savingsaccounts/{id}/transactions/{txnId} endpoint to return an object, not a string, then refactor
         SavingsAccountTransactionsSearchResponse response = fetch(() ->
                 savingsAccountTransactionsApi.searchTransactions(
@@ -118,8 +120,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
                         isoDate(query.getFromDate()),
                         isoDate(query.getToDate()),
                         null, null, null, null, null, null, null,
-                        query.getOffset(),
-                        query.getLimit(),
+                        offset,
+                        limit,
                         null, null,
                         LOCALE, DATE_FORMAT));
         if (response == null || response.getContent() == null) {

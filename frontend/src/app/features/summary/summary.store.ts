@@ -19,13 +19,7 @@
 
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Observable, forkJoin, map, of, switchMap } from 'rxjs';
-import {
-  LoanAccountListItemQueryData,
-  LoansQueryControllerService,
-  SavingsAccountListItemQueryData,
-  SavingsQueryControllerService,
-} from '@bff/client';
+import { SummaryQueryControllerService } from '@bff/client';
 
 export interface SavingsCard {
   id: number;
@@ -46,8 +40,7 @@ export interface LoanCard {
 
 @Injectable({ providedIn: 'root' })
 export class SummaryStore {
-  private readonly savingsApi = inject(SavingsQueryControllerService);
-  private readonly loansApi = inject(LoansQueryControllerService);
+  private readonly summaryApi = inject(SummaryQueryControllerService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly savingsCards = signal<SavingsCard[]>([]);
@@ -56,68 +49,37 @@ export class SummaryStore {
 
   load(): void {
     this.loading.set(true);
-    forkJoin({ savings: this.loadSavingsCards(), loans: this.loadLoanCards() })
+    this.summaryApi
+      .getAccountsSummary()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: ({ savings, loans }) => {
-          this.savingsCards.set(savings);
-          this.loanCards.set(loans);
+        next: summary => {
+          this.savingsCards.set(
+            (summary.savings ?? [])
+              .filter(item => item.id != null)
+              .map(item => ({
+                id: item.id!,
+                accountNo: item.accountNo,
+                productName: item.productName,
+                currency: item.currency,
+                balance: item.accountBalance ?? 0,
+                availableBalance: item.availableBalance ?? 0,
+              })),
+          );
+          this.loanCards.set(
+            (summary.loans ?? [])
+              .filter(item => item.id != null)
+              .map(item => ({
+                id: item.id!,
+                accountNo: item.accountNo,
+                productName: item.productName,
+                currency: item.currency,
+                totalOutstanding: item.loanBalance ?? 0,
+              })),
+          );
           this.loading.set(false);
         },
         error: () => this.loading.set(false),
       });
-  }
-
-  private loadSavingsCards(): Observable<SavingsCard[]> {
-    return this.savingsApi.listSavingsAccounts().pipe(
-      switchMap(list => {
-        const withId = list.filter(
-          (item): item is SavingsAccountListItemQueryData & { id: number } => item.id != null,
-        );
-        if (withId.length === 0) {
-          return of<SavingsCard[]>([]);
-        }
-        return forkJoin(
-          withId.map(item =>
-            this.savingsApi.getSavingsAccount(item.id).pipe(
-              map(detail => ({
-                id: item.id,
-                accountNo: item.accountNo,
-                productName: item.productName,
-                currency: item.currency,
-                balance: detail.balance,
-                availableBalance: detail.availableBalance,
-              })),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
-  private loadLoanCards(): Observable<LoanCard[]> {
-    return this.loansApi.listLoanAccounts().pipe(
-      switchMap(list => {
-        const withId = list.filter(
-          (item): item is LoanAccountListItemQueryData & { id: number } => item.id != null,
-        );
-        if (withId.length === 0) {
-          return of<LoanCard[]>([]);
-        }
-        return forkJoin(
-          withId.map(item =>
-            this.loansApi.getLoanAccount(item.id).pipe(
-              map(detail => ({
-                id: item.id,
-                accountNo: item.accountNo,
-                productName: item.productName,
-                currency: item.currency,
-                totalOutstanding: detail.totalOutstanding,
-              })),
-            ),
-          ),
-        );
-      }),
-    );
   }
 }

@@ -85,6 +85,8 @@ public class FineractSeeder {
     private static final String FIRST_NAME = "Test";
     private static final String LAST_NAME_PREFIX = "User-";
     private static final String DOCUMENT_KEY_PREFIX = "PASS-";
+    public static final String CLIENT_EMAIL_LOCAL_PREFIX = "client-";
+    public static final String CLIENT_EMAIL_DOMAIN = "@seed.test";
     private static final String TRANSACTION_PROCESSING_STRATEGY = "mifos-standard-strategy";
     private static final String LOAN_TYPE_INDIVIDUAL = "individual";
     private static final String SAVINGS_PRODUCT_NAME_PREFIX = "CUKE-SAV-";
@@ -117,6 +119,7 @@ public class FineractSeeder {
             long fineractClientId,
             String documentTypeName,
             String documentKey,
+            String emailAddress,
             long savingsAccountId,
             long loanAccountId) {}
 
@@ -135,18 +138,20 @@ public class FineractSeeder {
 
     public SeededClientWithAccounts seedActiveClientWithAccounts() {
         ensureUsdCurrency();
-        long clientId = createActiveClient();
+        String emailAddress = CLIENT_EMAIL_LOCAL_PREFIX
+                + UUID.randomUUID().toString().substring(0, 8) + CLIENT_EMAIL_DOMAIN;
+        long clientId = createActiveClient(emailAddress);
         String documentKey = DOCUMENT_KEY_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         attachPassportIdentifier(clientId, documentKey);
         long savingsAccountId = createActiveSavingsAccount(clientId);
         long loanAccountId = createDisbursedLoanAccount(clientId);
         return new SeededClientWithAccounts(
-                clientId, PASSPORT_DOCUMENT_TYPE, documentKey, savingsAccountId, loanAccountId);
+                clientId, PASSPORT_DOCUMENT_TYPE, documentKey, emailAddress, savingsAccountId, loanAccountId);
     }
 
     public SeededTransferTarget seedTransferTarget() {
         ensureUsdCurrency();
-        long clientId = createActiveClient();
+        long clientId = createActiveClient(null);
         long savingsAccountId = createActiveSavingsAccount(clientId);
         String accountNumber = SAVINGS_ACCOUNTS
                 .retrieveSavingsAccount(savingsAccountId, null, null, null)
@@ -166,12 +171,13 @@ public class FineractSeeder {
                 DEPOSIT_COMMAND);
     }
 
-    private long createActiveClient() {
+    private long createActiveClient(String emailAddress) {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         PostClientsRequest body = new PostClientsRequest()
                 .officeId(HEAD_OFFICE_ID)
                 .firstname(FIRST_NAME)
                 .lastname(LAST_NAME_PREFIX + suffix)
+                .emailAddress(emailAddress)
                 .active(true)
                 .activationDate(FIXED_DATE)
                 .legalFormId(LEGAL_FORM_PERSON)

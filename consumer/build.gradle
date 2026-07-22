@@ -169,6 +169,67 @@ def retypeIntegerMoneyFields(schemas) {
 	}
 }
 
+def addMissingClientAccountBalanceFields(schemas) {
+	def missingMoneyFields = [
+		GetClientsSavingsAccounts: ['accountBalance', 'availableBalance'],
+		GetClientsLoanAccounts   : ['loanBalance', 'amountPaid']
+	]
+	missingMoneyFields.each { schemaName, propNames ->
+		def properties = schemas[schemaName]?.properties
+		if (properties == null) {
+			throw new GradleException("Fineract spec schema '$schemaName' missing — revisit addMissingClientAccountBalanceFields")
+		}
+		propNames.each { propName ->
+			if (!properties.containsKey(propName)) {
+				properties[propName] = [type: 'number']
+			}
+		}
+	}
+}
+
+def addMissingClientProfileFields(schemas) {
+	def missingFields = [
+		mobileNo    : [type: 'string'],
+		imagePresent: [type: 'boolean']
+	]
+	def properties = schemas.GetClientsClientIdResponse?.properties
+	if (properties == null) {
+		throw new GradleException("Fineract spec schema 'GetClientsClientIdResponse' missing — revisit addMissingClientProfileFields")
+	}
+	missingFields.each { propName, propDef ->
+		if (!properties.containsKey(propName)) {
+			properties[propName] = propDef
+		}
+	}
+}
+
+def fixObligeeDetailsResponseShape(paths) {
+	def obligeeOperationPaths = [
+		'/v1/clients/{clientId}/obligeedetails',
+		'/v1/clients/external-id/{externalId}/obligeedetails'
+	]
+	obligeeOperationPaths.each { pathName ->
+		def schema = paths[pathName]?.get?.responses?.'200'?.content?.'application/json'?.schema
+		if (schema == null) {
+			throw new GradleException("Fineract spec path '$pathName' missing 200 response schema — revisit fixObligeeDetailsResponseShape")
+		}
+		schema.remove('$ref')
+		schema.type = 'array'
+		schema.items = ['$ref': '#/components/schemas/GetObligeeData']
+	}
+}
+
+def fixClientImageResponseShape(paths) {
+	def operation = paths['/v1/{entityType}/{entityId}/images']?.get
+	if (operation?.responses == null) {
+		throw new GradleException("Fineract spec path '/v1/{entityType}/{entityId}/images' GET missing — revisit fixClientImageResponseShape")
+	}
+	operation.responses = ['200': [
+		description: 'base64 data-URI of the stored image',
+		content    : ['text/plain': [schema: [type: 'string']]]
+	]]
+}
+
 task sanitizeFineractSpec {
 	description = 'Strip null-only enums and retype integer money fields in the vendored Fineract spec before code generation.'
 	group = 'documentation'
@@ -178,6 +239,10 @@ task sanitizeFineractSpec {
 		def spec = new JsonSlurper().parse(fineractRawSpec)
 		stripNullOnlyEnums(spec)
 		retypeIntegerMoneyFields(spec.components.schemas)
+		addMissingClientAccountBalanceFields(spec.components.schemas)
+		addMissingClientProfileFields(spec.components.schemas)
+		fixObligeeDetailsResponseShape(spec.paths)
+		fixClientImageResponseShape(spec.paths)
 		fineractSanitizedSpec.parentFile.mkdirs()
 		fineractSanitizedSpec.text = JsonOutput.toJson(spec)
 	}

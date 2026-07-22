@@ -32,6 +32,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.data.PendingOtp;
@@ -51,6 +52,7 @@ class OtpCommandServiceImplTest {
     private static final UUID PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
     private static final String EMAIL = "user@example.com";
     private static final String TOKEN = "AB12CD";
+    private static final String WRONG_TOKEN = "XX99XX";
 
     @Mock
     private OtpCommandRepository otpCommandRepository;
@@ -107,9 +109,43 @@ class OtpCommandServiceImplTest {
     void validateOtpRejectsWrongToken() {
         when(otpCommandRepository.getPendingTokenHash(PUBLIC_ID)).thenReturn(sha256Hex(TOKEN));
 
-        assertThatThrownBy(() -> service.validateOtp(PUBLIC_ID, "XX99XX"))
+        assertThatThrownBy(() -> service.validateOtp(PUBLIC_ID, WRONG_TOKEN))
                 .isInstanceOf(OtpTokenInvalidException.class);
         verify(otpCommandRepository, never()).deletePendingOtp(PUBLIC_ID);
+    }
+
+    @Test
+    void validateOtpKeepsOtpAliveBelowAttemptCapAndAcceptsCorrectToken() {
+        when(otpCommandRepository.getPendingTokenHash(PUBLIC_ID)).thenReturn(sha256Hex(TOKEN));
+        AtomicLong failedAttempts = new AtomicLong();
+        when(otpCommandRepository.recordFailedValidationAttempt(PUBLIC_ID))
+                .thenAnswer(invocation -> failedAttempts.incrementAndGet());
+
+        for (int attempt = 1; attempt < OtpConstants.MAX_OTP_VALIDATION_ATTEMPTS; attempt++) {
+            assertThatThrownBy(() -> service.validateOtp(PUBLIC_ID, WRONG_TOKEN))
+                    .isInstanceOf(OtpTokenInvalidException.class);
+        }
+        verify(otpCommandRepository, never()).deletePendingOtp(PUBLIC_ID);
+
+        service.validateOtp(PUBLIC_ID, TOKEN);
+
+        verify(otpCommandRepository).deletePendingOtp(PUBLIC_ID);
+    }
+
+    @Test
+    void validateOtpInvalidatesPendingOtpOnFinalFailedAttempt() {
+        when(otpCommandRepository.getPendingTokenHash(PUBLIC_ID)).thenReturn(sha256Hex(TOKEN));
+        AtomicLong failedAttempts = new AtomicLong();
+        when(otpCommandRepository.recordFailedValidationAttempt(PUBLIC_ID))
+                .thenAnswer(invocation -> failedAttempts.incrementAndGet());
+
+        for (int attempt = 1; attempt <= OtpConstants.MAX_OTP_VALIDATION_ATTEMPTS; attempt++) {
+            assertThatThrownBy(() -> service.validateOtp(PUBLIC_ID, WRONG_TOKEN))
+                    .isInstanceOf(OtpTokenInvalidException.class);
+        }
+
+        assertThat(failedAttempts.get()).isEqualTo(OtpConstants.MAX_OTP_VALIDATION_ATTEMPTS);
+        verify(otpCommandRepository).deletePendingOtp(PUBLIC_ID);
     }
 
     @Test

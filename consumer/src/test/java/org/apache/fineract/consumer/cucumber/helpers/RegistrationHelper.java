@@ -44,7 +44,7 @@ public class RegistrationHelper {
     public record BoundUser(String email, String password) {}
 
     public record BoundUserWithAccounts(
-            String email, String password, long savingsAccountId, long loanAccountId) {}
+            String email, String password, String clientEmail, long savingsAccountId, long loanAccountId) {}
 
     public BoundUser registerBoundUser() {
         FineractSeeder.SeededClient seededClient = fineractSeeder.seedClientWithPassport();
@@ -58,7 +58,8 @@ public class RegistrationHelper {
         String email = bindUser(seededClient.fineractClientId(),
                 seededClient.documentTypeName(), seededClient.documentKey());
         return new BoundUserWithAccounts(
-                email, PASSWORD, seededClient.savingsAccountId(), seededClient.loanAccountId());
+                email, PASSWORD, seededClient.emailAddress(),
+                seededClient.savingsAccountId(), seededClient.loanAccountId());
     }
 
     private String bindUser(long fineractClientId, String documentTypeName, String documentKey) {

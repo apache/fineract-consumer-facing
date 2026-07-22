@@ -119,7 +119,8 @@ public class JwtConfig {
     }
 
     private static OAuth2TokenValidatorResult rejectDeniedTokens(Jwt jwt, JwtDenylist jwtDenylist) {
-        if (jwtDenylist.isDenied(jwt.getId())) {
+        if (jwtDenylist.isDenied(jwt.getId())
+                || jwtDenylist.isDeniedForSubject(jwt.getSubject(), jwt.getIssuedAt())) {
             return OAuth2TokenValidatorResult.failure(new OAuth2Error(
                     OAuth2ErrorCodes.INVALID_TOKEN, "token has been revoked", null));
         }

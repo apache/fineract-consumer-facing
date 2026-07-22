@@ -21,13 +21,10 @@ import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, tap } from 'rxjs';
 import {
-  ConfirmLoanChargePaymentCommandRequest,
   LoanAccountListItemQueryData,
   LoanAccountQueryData,
   LoanApplicationCommandData,
   LoanApplicationTemplateQueryData,
-  LoanChargePaymentChallengeCommandData,
-  LoanChargePaymentCommandData,
   LoanChargeQueryData,
   LoanGuarantorQueryData,
   LoanScheduleQueryData,
@@ -39,7 +36,6 @@ import {
   SubmitLoanApplicationCommandRequest,
   WithdrawLoanApplicationCommandRequest,
 } from '@bff/client';
-import { deviceFingerprint } from '../../core/auth/device-fingerprint';
 
 @Injectable({ providedIn: 'root' })
 export class LoansStore {
@@ -56,7 +52,6 @@ export class LoansStore {
   readonly template = signal<LoanApplicationTemplateQueryData | null>(null);
   readonly schedulePreview = signal<LoanScheduleQueryData | null>(null);
   readonly draft = signal<LoanApplicationCommandData | null>(null);
-  readonly chargePaymentChallenge = signal<LoanChargePaymentChallengeCommandData | null>(null);
   readonly loading = signal(false);
 
   loadLoans(): void {
@@ -161,24 +156,5 @@ export class LoansStore {
     return this.command
       .withdrawLoanApplication(loanId, 'withdraw', request)
       .pipe(tap(() => this.draft.set(null)));
-  }
-
-  initiateChargePayment(
-    loanId: number,
-    chargeId: number,
-  ): Observable<LoanChargePaymentChallengeCommandData> {
-    return this.command
-      .initiateLoanChargePayment(deviceFingerprint(), loanId, chargeId)
-      .pipe(tap(challenge => this.chargePaymentChallenge.set(challenge)));
-  }
-
-  confirmChargePayment(
-    loanId: number,
-    chargeId: number,
-    request: ConfirmLoanChargePaymentCommandRequest,
-  ): Observable<LoanChargePaymentCommandData> {
-    return this.command
-      .confirmLoanChargePayment(deviceFingerprint(), loanId, chargeId, request)
-      .pipe(tap(() => this.chargePaymentChallenge.set(null)));
   }
 }

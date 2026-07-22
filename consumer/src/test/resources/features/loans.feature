@@ -37,11 +37,3 @@ Feature: Consumer loan reads
     When I get the other client's loan account
     Then the loan request is denied as forbidden
 
-  Scenario: Initiating a loan charge payment without a session is rejected
-    When I initiate a loan charge payment without a session
-    Then the loan request is rejected as unauthorized
-
-  Scenario: Initiating a loan charge payment on another client's loan account is denied
-    Given another client owns a loan account
-    When I initiate a loan charge payment on the other client's loan account
-    Then the loan request is denied as forbidden

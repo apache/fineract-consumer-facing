@@ -65,6 +65,12 @@ public class OtpCommandServiceImpl implements OtpCommandService {
     public void validateOtp(UUID publicId, String token) {
         String storedHash = otpCommandRepository.getPendingTokenHash(publicId);
         if (token == null || storedHash == null || !storedHash.equals(hashToken(token))) {
+            if (storedHash != null) {
+                long failedAttempts = otpCommandRepository.recordFailedValidationAttempt(publicId);
+                if (failedAttempts >= OtpConstants.MAX_OTP_VALIDATION_ATTEMPTS) {
+                    otpCommandRepository.deletePendingOtp(publicId);
+                }
+            }
             throw new OtpTokenInvalidException();
         }
         otpCommandRepository.deletePendingOtp(publicId);

@@ -37,7 +37,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsCurrency;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsStatus;
-import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.savings.query.exception.SavingsQueryAccessDeniedException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsUpstreamUnavailableException;

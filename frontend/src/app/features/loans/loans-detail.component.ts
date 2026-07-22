@@ -17,24 +17,21 @@
  * under the License.
  */
 
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
-import { ChargePaymentComponent } from './charge-payment.component';
 import { LoansStore } from './loans.store';
 
 @Component({
   selector: 'app-loans-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    MatButtonModule,
     MatCardModule,
     MatProgressBarModule,
     MatTableModule,
@@ -42,7 +39,6 @@ import { LoansStore } from './loans.store';
     DatePipe,
     PageHeaderComponent,
     StatusBadgeComponent,
-    ChargePaymentComponent,
     TranslatePipe,
   ],
   template: `
@@ -91,12 +87,6 @@ import { LoansStore } from './loans.store';
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.outstanding' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.amountOutstanding | currency: row.currency }}</td>
           </ng-container>
-          <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef></th>
-            <td mat-cell *matCellDef="let row">
-              <button mat-button color="primary" (click)="pay(row.id)">{{ 'common.action.pay' | translate }}</button>
-            </td>
-          </ng-container>
 
           <tr mat-header-row *matHeaderRowDef="chargeColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: chargeColumns"></tr>
@@ -104,15 +94,6 @@ import { LoansStore } from './loans.store';
             <td [attr.colspan]="chargeColumns.length">{{ 'common.table.noCharges' | translate }}</td>
           </tr>
         </table>
-
-        @if (payingCharge(); as charge) {
-          <app-charge-payment
-            [loanId]="loanId"
-            [charge]="charge"
-            (paid)="onChargePaid()"
-            (cancelled)="payingChargeId.set(null)"
-          />
-        }
       </mat-card-content>
     </mat-card>
 
@@ -202,31 +183,15 @@ export class LoansDetailComponent {
   protected readonly store = inject(LoansStore);
 
   protected readonly loanId = Number(this.route.snapshot.paramMap.get('loanId'));
-  protected readonly chargeColumns = ['name', 'amount', 'amountOutstanding', 'actions'];
+  protected readonly chargeColumns = ['name', 'amount', 'amountOutstanding'];
   protected readonly guarantorColumns = ['displayName', 'guarantorType', 'relationship'];
   protected readonly txColumns = ['date', 'type', 'amount', 'outstandingLoanBalance'];
-
-  protected readonly payingChargeId = signal<number | null>(null);
-  protected readonly payingCharge = computed(() =>
-    this.store.charges().find(charge => charge.id === this.payingChargeId()),
-  );
 
   constructor() {
     this.store.loadLoan(this.loanId);
     this.store.loadCharges(this.loanId);
     this.store.loadGuarantors(this.loanId);
     this.store.loadTransactions(this.loanId);
-  }
-
-  protected pay(chargeId: number | undefined): void {
-    if (chargeId != null) {
-      this.payingChargeId.set(chargeId);
-    }
-  }
-
-  protected onChargePaid(): void {
-    this.payingChargeId.set(null);
-    this.store.loadCharges(this.loanId);
   }
 
   protected openTransaction(transactionId: number | undefined): void {

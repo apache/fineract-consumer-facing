@@ -7,12 +7,7 @@
       "changeLanguage": "Change language",
       "continue": "Continue",
       "dismiss": "Dismiss",
-      "pay": "Pay",
       "verify": "Verify"
-    },
-    "charge": {
-      "confirmed": "Payment confirmed.",
-      "payCta": "Pay {{name}}"
     },
     "error": {
       "generic": "Something went wrong. Please try again."
@@ -24,8 +19,8 @@
     "filter": {
       "from": "From",
       "to": "To",
-      "limit": "Limit",
-      "offset": "Offset"
+      "page": "Page",
+      "size": "Page size"
     },
     "language": {
       "en": "English",
@@ -68,7 +63,17 @@
     "login": {
       "title": "Sign in",
       "registerPrompt": "Need to register?",
-      "registerLink": "Create an account"
+      "registerLink": "Create an account",
+      "forgotPasswordLink": "Forgot password?"
+    },
+    "forgotPassword": {
+      "title": "Reset password",
+      "sendCta": "Send reset code",
+      "sentNotice": "If the email is registered, a verification code has been sent.",
+      "newPasswordLabel": "New password",
+      "resetCta": "Reset password",
+      "backToLogin": "Back to sign in",
+      "success": "Password reset. Please sign in."
     }
   },
   "registration": {
@@ -105,9 +110,6 @@
       "typeLabel": "Type:",
       "amountLabel": "Amount:",
       "runningBalanceLabel": "Running balance:"
-    },
-    "charge": {
-      "amountLabel": "Amount to pay"
     }
   },
   "loans": {
@@ -132,9 +134,6 @@
       "amountLabel": "Amount:",
       "outstandingLabel": "Outstanding loan balance:",
       "backToLoan": "Back to loan"
-    },
-    "charge": {
-      "confirmPrompt": "Pay outstanding {{amount}} on {{name}}?"
     },
     "apply": {
       "title": "Apply for a loan",
@@ -242,7 +241,8 @@
       "savings": "Savings",
       "loans": "Loans",
       "transfers": "Transfers",
-      "beneficiaries": "Beneficiaries"
+      "beneficiaries": "Beneficiaries",
+      "profile": "Profile"
     }
   },
   "error.msg.consumer.auth.invalid.credentials": "Incorrect email or password.",
@@ -265,10 +265,6 @@
   "error.msg.consumer.request.header.missing": "Your request is missing required information. Please try again.",
   "error.msg.consumer.loans.command.access.denied": "You don't have access to this loan.",
   "error.msg.consumer.loans.command.application.invalid": "We couldn't process this loan application. Please review the details and try again.",
-  "error.msg.consumer.loans.command.charge.payment.invalid": "This charge payment couldn't be processed. Please review the details and try again.",
-  "error.msg.consumer.loans.command.charge.payment.not.found": "We couldn't find that loan charge.",
-  "error.msg.consumer.loans.command.charge.payment.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
-  "error.msg.consumer.loans.command.charge.payment.upstream.unavailable": "Loan charge payments are temporarily unavailable. Please try again later.",
   "error.msg.consumer.loans.command.not.found": "We couldn't find that loan.",
   "error.msg.consumer.loans.command.upstream.unavailable": "Loans are temporarily unavailable. Please try again later.",
   "error.msg.consumer.loans.access.denied": "You don't have access to this loan.",
@@ -281,11 +277,6 @@
   "error.msg.consumer.otp.invalid": "That verification code is invalid or has expired.",
   "error.msg.consumer.registration.identity.not.verified": "We couldn't verify your identity with the details provided.",
   "error.msg.consumer.identity.verification.unavailable": "Identity verification is temporarily unavailable. Please try again later.",
-  "error.msg.consumer.savings.command.access.denied": "You don't have access to this savings account.",
-  "error.msg.consumer.savings.command.charge.payment.invalid": "This charge payment couldn't be processed. Please review the details and try again.",
-  "error.msg.consumer.savings.command.charge.payment.not.found": "We couldn't find that savings charge.",
-  "error.msg.consumer.savings.command.charge.payment.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
-  "error.msg.consumer.savings.command.charge.payment.upstream.unavailable": "Savings charge payments are temporarily unavailable. Please try again later.",
   "error.msg.consumer.savings.account.access.denied": "You don't have access to this savings account.",
   "error.msg.consumer.savings.account.not.found": "We couldn't find that savings account.",
   "error.msg.consumer.savings.product.not.found": "We couldn't find that savings product.",
@@ -299,5 +290,48 @@
   "error.msg.consumer.transfers.command.upstream.unavailable": "Transfers are temporarily unavailable. Please try again later.",
   "error.msg.consumer.user.binding.state.invalid": "Your account isn't in the right state for this action.",
   "error.msg.consumer.user.already.exists": "An account with these details already exists.",
-  "error.msg.consumer.user.not.found": "We couldn't find your account."
+  "error.msg.consumer.user.not.found": "We couldn't find your account.",
+  "profile": {
+    "title": "Profile",
+    "card": {
+      "accountNo": "Account no.",
+      "status": "Status:",
+      "statusActive": "Active",
+      "statusInactive": "Inactive",
+      "memberSince": "Member since:",
+      "email": "Email:",
+      "mobile": "Mobile:",
+      "kyc": "KYC:",
+      "kycVerified": "Verified",
+      "kycPending": "Not verified",
+      "photoAlt": "Profile photo"
+    },
+    "charges": {
+      "statusAll": "All",
+      "statusActive": "Active",
+      "statusInactive": "Inactive",
+      "total": "Total records: {{total}}"
+    },
+    "obligees": {
+      "title": "Loans you guarantee",
+      "loanAmount": "Loan amount",
+      "guaranteeAmount": "Guarantee amount",
+      "amountReleased": "Released",
+      "empty": "No guaranteed loans."
+    },
+    "changePassword": {
+      "title": "Change password",
+      "currentLabel": "Current password",
+      "newLabel": "New password",
+      "submitCta": "Send verification code",
+      "success": "Password changed successfully"
+    }
+  },
+  "error.msg.consumer.user.password.invalid": "Current password is incorrect.",
+  "error.msg.consumer.user.stepup.invalid": "Verification failed. Please try again.",
+  "error.msg.consumer.user.password.reset.invalid": "Password reset failed. Check the email and code.",
+  "error.msg.consumer.user.upstream.unavailable": "Profile service is temporarily unavailable.",
+  "error.msg.consumer.user.charge.status.invalid": "Invalid charge status filter.",
+  "error.msg.consumer.user.image.not.found": "No profile photo on file.",
+  "error.msg.consumer.summary.upstream.unavailable": "Account summary is temporarily unavailable."
 }

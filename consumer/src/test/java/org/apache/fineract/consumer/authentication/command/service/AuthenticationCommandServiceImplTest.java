@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -89,6 +90,8 @@ class AuthenticationCommandServiceImplTest {
     private static final String CHALLENGE_TOKEN = "challenge-token";
     private static final String PRESENTED_REFRESH_TOKEN = "presented-refresh-token";
     private static final String PRESENTED_TOKEN_HASH = "hash-of-presented-token";
+    private static final String OTHER_TOKEN_HASH = "other-hash";
+    private static final String REISSUED_ACCESS_TOKEN = "reissued-access-token";
     private static final Long NEW_TOKEN_ID = 42L;
     private static final Long SUCCESSOR_ID = 43L;
 
@@ -492,6 +495,109 @@ class AuthenticationCommandServiceImplTest {
 
             verify(jwtDenylist).deny(ACCESS_TOKEN_ID, ACCESS_TOKEN_EXPIRES_AT);
             verify(refreshTokenCommandRepository, never()).findByTokenHash(anyString());
+        }
+    }
+
+    @Nested
+    class RevokeAllSessions {
+
+        @Test
+        void revokesEveryRefreshTokenAndDenylistsSubject() {
+            RefreshToken first = RefreshToken.issue(USER_ID, PRESENTED_TOKEN_HASH, DEVICE_FINGERPRINT,
+                    Instant.now().plusSeconds(3600));
+            RefreshToken second = RefreshToken.issue(USER_ID, OTHER_TOKEN_HASH, OTHER_DEVICE_FINGERPRINT,
+                    Instant.now().plusSeconds(3600));
+            when(refreshTokenCommandRepository.findByUserId(USER_ID)).thenReturn(List.of(first, second));
+            when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            Instant before = Instant.now();
+            service.revokeAllSessions(USER_ID, PUBLIC_ID);
+
+            assertThat(first.getRevokedAt()).isNotNull();
+            assertThat(second.getRevokedAt()).isNotNull();
+            verify(refreshTokenCommandRepository).save(first);
+            verify(refreshTokenCommandRepository).save(second);
+
+            ArgumentCaptor<Instant> cutoff = ArgumentCaptor.forClass(Instant.class);
+            verify(jwtDenylist).denyAllIssuedUpTo(eq(PUBLIC_ID.toString()), cutoff.capture());
+            assertThat(cutoff.getValue()).isBetween(before, Instant.now());
+        }
+
+        @Test
+        void userWithoutTokensStillDenylistsSubject() {
+            when(refreshTokenCommandRepository.findByUserId(USER_ID)).thenReturn(List.of());
+
+            service.revokeAllSessions(USER_ID, PUBLIC_ID);
+
+            verify(refreshTokenCommandRepository, never()).save(any());
+            verify(jwtDenylist).denyAllIssuedUpTo(eq(PUBLIC_ID.toString()), any(Instant.class));
+        }
+    }
+
+    @Nested
+    class RevokeAllSessionsAndReissue {
+
+        private void stubSessionEstablishment() {
+            when(userQueryService.findById(USER_ID)).thenReturn(UserQueryData.builder()
+                    .id(USER_ID)
+                    .publicId(PUBLIC_ID)
+                    .email(EMAIL)
+                    .status(UserStatus.BOUND)
+                    .build());
+            when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
+                    .thenReturn(issuedJwt(REISSUED_ACCESS_TOKEN, PROPERTIES.getAccessTokenTtl()));
+        }
+
+        @Test
+        void revokesEveryRefreshTokenBeforeReissuing() {
+            RefreshToken first = RefreshToken.issue(USER_ID, PRESENTED_TOKEN_HASH, DEVICE_FINGERPRINT,
+                    Instant.now().plusSeconds(3600));
+            RefreshToken second = RefreshToken.issue(USER_ID, OTHER_TOKEN_HASH, OTHER_DEVICE_FINGERPRINT,
+                    Instant.now().plusSeconds(3600));
+            when(refreshTokenCommandRepository.findByUserId(USER_ID)).thenReturn(List.of(first, second));
+            when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            stubSessionEstablishment();
+
+            service.revokeAllSessionsAndReissue(USER_ID, PUBLIC_ID, DEVICE_FINGERPRINT);
+
+            assertThat(first.getRevokedAt()).isNotNull();
+            assertThat(second.getRevokedAt()).isNotNull();
+            verify(refreshTokenCommandRepository).save(first);
+            verify(refreshTokenCommandRepository).save(second);
+        }
+
+        @Test
+        void denylistCutoffIsStrictlyBeforeTheCurrentSecond() {
+            when(refreshTokenCommandRepository.findByUserId(USER_ID)).thenReturn(List.of());
+            when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            stubSessionEstablishment();
+
+            Instant before = Instant.now();
+            service.revokeAllSessionsAndReissue(USER_ID, PUBLIC_ID, DEVICE_FINGERPRINT);
+
+            ArgumentCaptor<Instant> cutoff = ArgumentCaptor.forClass(Instant.class);
+            verify(jwtDenylist).denyAllIssuedUpTo(eq(PUBLIC_ID.toString()), cutoff.capture());
+            assertThat(cutoff.getValue())
+                    .isBefore(Instant.now().truncatedTo(ChronoUnit.SECONDS))
+                    .isAfterOrEqualTo(before.truncatedTo(ChronoUnit.SECONDS).minusMillis(1));
+        }
+
+        @Test
+        void establishesAndReturnsFreshDeviceBoundSession() {
+            when(refreshTokenCommandRepository.findByUserId(USER_ID)).thenReturn(List.of());
+            when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            stubSessionEstablishment();
+
+            EstablishedSessionCommandData session =
+                    service.revokeAllSessionsAndReissue(USER_ID, PUBLIC_ID, DEVICE_FINGERPRINT);
+
+            assertThat(session.getAccessToken()).isEqualTo(REISSUED_ACCESS_TOKEN);
+            assertThat(session.getRefreshToken()).isNotBlank();
+
+            ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
+            verify(refreshTokenCommandRepository).save(saved.capture());
+            assertThat(saved.getValue().getUserId()).isEqualTo(USER_ID);
+            assertThat(saved.getValue().getDeviceFingerprint()).isEqualTo(DEVICE_FINGERPRINT);
         }
     }
 }

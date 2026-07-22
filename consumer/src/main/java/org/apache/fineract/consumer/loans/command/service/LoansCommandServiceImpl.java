@@ -19,49 +19,28 @@
 
 package org.apache.fineract.consumer.loans.command.service;
 
-import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.command.Command;
 import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoanChargesApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdChargesChargeIdRequest;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdChargesChargeIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PutLoansLoanIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PutLoansLoanIdResponse;
-import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.OwnedAccountsCache;
-import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommand;
-import org.apache.fineract.consumer.loans.command.data.InitiateLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.LoanApplicationCommandData;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentChallengeCommandData;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentCommandData;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentConstants;
 import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.WithdrawLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.exception.LoanApplicationInvalidException;
-import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentInvalidException;
-import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentNotFoundException;
-import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentStepUpInvalidException;
-import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentUpstreamUnavailableException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandNotFoundException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandUpstreamUnavailableException;
-import org.apache.fineract.consumer.otp.command.data.OtpConstants;
-import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
-import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -79,9 +58,6 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final OwnedAccountsCache ownedAccountsCache;
     private final LoansApi loansApi;
-    private final OtpCommandService otpCommandService;
-    private final StepUpTokenService stepUpTokenService;
-    private final LoanChargesApi loanChargesApi;
 
     @Override
     @Command
@@ -128,82 +104,6 @@ public class LoansCommandServiceImpl implements LoansCommandService {
                 .resourceId(response.getResourceId())
                 .clientId(clientId)
                 .build();
-    }
-
-    @Override
-    @Command
-    public LoanChargePaymentChallengeCommandData initiateChargePayment(
-            Jwt jwt, InitiateLoanChargePaymentCommand command) {
-        UUID publicId = UUID.fromString(jwt.getSubject());
-        UserQueryData user = userQueryService.findByPublicId(publicId);
-
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_CHARGE_PAY, command.getLoanId());
-
-        otpCommandService.createOtp(publicId, OtpDestination.builder()
-                .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
-                .target(user.getEmail())
-                .build());
-
-        String actionFingerprint = stepUpTokenService.actionFingerprint(
-                LoanChargePaymentConstants.ENDPOINT,
-                command.getLoanId(),
-                command.getChargeId());
-        IssuedJwt issued = stepUpTokenService.issue(
-                publicId, command.getDeviceFingerprint(), actionFingerprint, StepUpConstants.STEPUP_TTL);
-
-        return LoanChargePaymentChallengeCommandData.builder()
-                .stepUpToken(issued.getTokenValue())
-                .expiresAt(issued.getExpiresAt())
-                .sentTo(EmailMasking.mask(user.getEmail()))
-                .build();
-    }
-
-    @Override
-    @Command
-    public LoanChargePaymentCommandData confirmChargePayment(Jwt jwt, ConfirmLoanChargePaymentCommand command) {
-        UUID publicId = UUID.fromString(jwt.getSubject());
-        String actionFingerprint = stepUpTokenService.actionFingerprint(
-                LoanChargePaymentConstants.ENDPOINT,
-                command.getLoanId(),
-                command.getChargeId());
-        if (!stepUpTokenService.verify(
-                command.getStepUpToken(), publicId, command.getDeviceFingerprint(), actionFingerprint)) {
-            throw new LoanChargePaymentStepUpInvalidException();
-        }
-
-        UserQueryData user = userQueryService.findByPublicId(publicId);
-        try {
-            otpCommandService.validateOtp(publicId, command.getOtp());
-        } catch (OtpTokenInvalidException e) {
-            throw new LoanChargePaymentStepUpInvalidException();
-        }
-
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_CHARGE_PAY, command.getLoanId());
-
-        PostLoansLoanIdChargesChargeIdRequest request = new PostLoansLoanIdChargesChargeIdRequest()
-                .transactionDate(LocalDate.now().toString())
-                .locale(LoanChargePaymentConstants.LOCALE)
-                .dateFormat(LoanChargePaymentConstants.DATE_FORMAT);
-
-        PostLoansLoanIdChargesChargeIdResponse response =
-                callChargePayment(() -> loanChargesApi.executeLoanChargeOnExistingCharge(
-                        command.getLoanId(),
-                        command.getChargeId(),
-                        request,
-                        LoanChargePaymentConstants.PAY_COMMAND));
-
-        return LoanChargePaymentCommandData.builder()
-                .loanId(command.getLoanId())
-                .chargeId(command.getChargeId())
-                .resourceId(response.getResourceId())
-                .build();
-    }
-
-    private <T> T callChargePayment(Supplier<T> upstream) {
-        return FineractCaller.call(upstream,
-                e -> new LoanChargePaymentNotFoundException(),
-                LoanChargePaymentInvalidException::new,
-                LoanChargePaymentUpstreamUnavailableException::new);
     }
 
     private Long resolveClientId(Jwt jwt) {

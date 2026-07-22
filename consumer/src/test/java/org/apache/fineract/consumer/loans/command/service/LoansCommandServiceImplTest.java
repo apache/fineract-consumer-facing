@@ -19,50 +19,29 @@
 
 package org.apache.fineract.consumer.loans.command.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Instant;
+import feign.FeignException;
 import java.time.LocalDate;
 import java.util.UUID;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoanChargesApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdChargesChargeIdRequest;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdChargesChargeIdResponse;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansResponse;
-import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.OwnedAccountsCache;
-import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommand;
-import org.apache.fineract.consumer.loans.command.data.InitiateLoanChargePaymentCommand;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentChallengeCommandData;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentCommandData;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentConstants;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansResponse;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
-import feign.FeignException;
-import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
-import org.apache.fineract.consumer.loans.command.exception.LoanChargePaymentStepUpInvalidException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandUpstreamUnavailableException;
-import org.apache.fineract.consumer.otp.command.data.OtpConstants;
-import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
-import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
 import org.apache.fineract.consumer.user.query.domain.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -74,12 +53,7 @@ class LoansCommandServiceImplTest {
     private static final UUID PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
     private static final Long CLIENT_ID = 42L;
     private static final Long LOAN_ID = 7L;
-    private static final Long CHARGE_ID = 13L;
     private static final String EMAIL = "user@test.com";
-    private static final String DEVICE_FINGERPRINT = "device-abc";
-    private static final String STEP_UP_TOKEN = "step-up-token";
-    private static final String OTP = "123456";
-    private static final String ACTION_FINGERPRINT = "action-fingerprint";
 
     @Mock
     private UserQueryService userQueryService;
@@ -92,15 +66,6 @@ class LoansCommandServiceImplTest {
 
     @Mock
     private LoansApi loansApi;
-
-    @Mock
-    private OtpCommandService otpCommandService;
-
-    @Mock
-    private StepUpTokenService stepUpTokenService;
-
-    @Mock
-    private LoanChargesApi loanChargesApi;
 
     @InjectMocks
     private LoansCommandServiceImpl service;
@@ -121,60 +86,6 @@ class LoansCommandServiceImplTest {
                 .email(EMAIL)
                 .status(UserStatus.BOUND)
                 .build();
-    }
-
-    private static InitiateLoanChargePaymentCommand initiateCommand() {
-        return InitiateLoanChargePaymentCommand.builder()
-                .loanId(LOAN_ID)
-                .chargeId(CHARGE_ID)
-                .deviceFingerprint(DEVICE_FINGERPRINT)
-                .build();
-    }
-
-    private static ConfirmLoanChargePaymentCommand confirmCommand() {
-        return ConfirmLoanChargePaymentCommand.builder()
-                .loanId(LOAN_ID)
-                .chargeId(CHARGE_ID)
-                .stepUpToken(STEP_UP_TOKEN)
-                .otp(OTP)
-                .deviceFingerprint(DEVICE_FINGERPRINT)
-                .build();
-    }
-
-    @Test
-    void initiateSendsOtpIssuesTokenAndMasksDestination() {
-        Instant expiresAt = Instant.now().plusSeconds(300);
-        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(stepUpTokenService.actionFingerprint(
-                LoanChargePaymentConstants.ENDPOINT, LOAN_ID, CHARGE_ID))
-                .thenReturn(ACTION_FINGERPRINT);
-        when(stepUpTokenService.issue(eq(PUBLIC_ID), eq(DEVICE_FINGERPRINT), eq(ACTION_FINGERPRINT), any()))
-                .thenReturn(IssuedJwt.builder().tokenValue(STEP_UP_TOKEN).expiresAt(expiresAt).build());
-
-        LoanChargePaymentChallengeCommandData result = service.initiateChargePayment(jwt(), initiateCommand());
-
-        assertThat(result.getStepUpToken()).isEqualTo(STEP_UP_TOKEN);
-        assertThat(result.getExpiresAt()).isEqualTo(expiresAt);
-        assertThat(result.getSentTo()).isEqualTo("u***@test.com");
-
-        ArgumentCaptor<OtpDestination> destination = ArgumentCaptor.forClass(OtpDestination.class);
-        verify(otpCommandService).createOtp(eq(PUBLIC_ID), destination.capture());
-        assertThat(destination.getValue().getDeliveryMethod()).isEqualTo(OtpConstants.EMAIL_DELIVERY_METHOD_NAME);
-        assertThat(destination.getValue().getTarget()).isEqualTo(EMAIL);
-    }
-
-    @Test
-    void initiateDeniedWhenAccessPolicyRejects() {
-        Jwt jwt = jwt();
-        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        doThrow(new LoanCommandAccessDeniedException())
-                .when(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOAN_CHARGE_PAY, LOAN_ID);
-
-        assertThatThrownBy(() -> service.initiateChargePayment(jwt, initiateCommand()))
-                .isInstanceOf(LoanCommandAccessDeniedException.class)
-                .hasFieldOrPropertyWithValue("code", LoanCommandAccessDeniedException.CODE);
-
-        verify(otpCommandService, never()).createOtp(any(), any());
     }
 
     @Test
@@ -209,70 +120,5 @@ class LoansCommandServiceImplTest {
                 .isInstanceOf(LoanCommandUpstreamUnavailableException.class);
 
         verify(ownedAccountsCache, never()).evict(any());
-    }
-
-    @Test
-    void confirmPaysChargeWithPayCommandAndNoAmount() {
-        when(stepUpTokenService.actionFingerprint(
-                LoanChargePaymentConstants.ENDPOINT, LOAN_ID, CHARGE_ID))
-                .thenReturn(ACTION_FINGERPRINT);
-        when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
-        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(loanChargesApi.executeLoanChargeOnExistingCharge(
-                eq(LOAN_ID), eq(CHARGE_ID), any(), eq(LoanChargePaymentConstants.PAY_COMMAND)))
-                .thenReturn(new PostLoansLoanIdChargesChargeIdResponse().resourceId(99L));
-
-        LoanChargePaymentCommandData result = service.confirmChargePayment(jwt(), confirmCommand());
-
-        assertThat(result.getLoanId()).isEqualTo(LOAN_ID);
-        assertThat(result.getChargeId()).isEqualTo(CHARGE_ID);
-        assertThat(result.getResourceId()).isEqualTo(99L);
-
-        ArgumentCaptor<PostLoansLoanIdChargesChargeIdRequest> body =
-                ArgumentCaptor.forClass(PostLoansLoanIdChargesChargeIdRequest.class);
-        verify(loanChargesApi).executeLoanChargeOnExistingCharge(
-                eq(LOAN_ID), eq(CHARGE_ID), body.capture(),
-                eq(LoanChargePaymentConstants.PAY_COMMAND));
-        assertThat(body.getValue().getAmount()).isNull();
-        assertThat(body.getValue().getLocale()).isEqualTo(LoanChargePaymentConstants.LOCALE);
-        assertThat(body.getValue().getDateFormat()).isEqualTo(LoanChargePaymentConstants.DATE_FORMAT);
-        assertThat(body.getValue().getTransactionDate()).isNotBlank();
-    }
-
-    @Test
-    void confirmRejectedWhenStepUpTokenInvalid() {
-        when(stepUpTokenService.actionFingerprint(
-                LoanChargePaymentConstants.ENDPOINT, LOAN_ID, CHARGE_ID))
-                .thenReturn(ACTION_FINGERPRINT);
-        when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(false);
-
-        assertThatThrownBy(() -> service.confirmChargePayment(jwt(), confirmCommand()))
-                .isInstanceOf(LoanChargePaymentStepUpInvalidException.class)
-                .extracting(e -> LoanChargePaymentStepUpInvalidException.CODE)
-                .isEqualTo(LoanChargePaymentStepUpInvalidException.CODE);
-
-        verify(loanChargesApi, never()).executeLoanChargeOnExistingCharge(any(), any(), any(), any());
-    }
-
-    @Test
-    void confirmRejectedWhenOtpInvalid() {
-        when(stepUpTokenService.actionFingerprint(
-                LoanChargePaymentConstants.ENDPOINT, LOAN_ID, CHARGE_ID))
-                .thenReturn(ACTION_FINGERPRINT);
-        when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
-        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        doThrowOtpInvalid();
-
-        assertThatThrownBy(() -> service.confirmChargePayment(jwt(), confirmCommand()))
-                .isInstanceOf(LoanChargePaymentStepUpInvalidException.class)
-                .extracting(e -> LoanChargePaymentStepUpInvalidException.CODE)
-                .isEqualTo(LoanChargePaymentStepUpInvalidException.CODE);
-
-        verify(loanChargesApi, never()).executeLoanChargeOnExistingCharge(any(), any(), any(), any());
-    }
-
-    private void doThrowOtpInvalid() {
-        org.mockito.Mockito.doThrow(new OtpTokenInvalidException())
-                .when(otpCommandService).validateOtp(PUBLIC_ID, OTP);
     }
 }

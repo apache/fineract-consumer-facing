@@ -32,6 +32,11 @@ export const routes: Routes = [
       import('./features/registration/registration.component').then(m => m.RegistrationComponent),
   },
   {
+    path: 'forgot-password',
+    loadComponent: () =>
+      import('./features/auth/forgot-password.component').then(m => m.ForgotPasswordComponent),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell.component').then(m => m.ShellComponent),
@@ -60,6 +65,11 @@ export const routes: Routes = [
           import('./features/beneficiaries/beneficiaries.component').then(
             m => m.BeneficiariesComponent,
           ),
+      },
+      {
+        path: 'profile',
+        loadComponent: () =>
+          import('./features/profile/profile.component').then(m => m.ProfileComponent),
       },
     ],
   },

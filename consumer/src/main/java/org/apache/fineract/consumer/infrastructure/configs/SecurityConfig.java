@@ -40,6 +40,15 @@ import tools.jackson.databind.ObjectMapper;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private static final String REGISTRATION_PATH_PREFIX = "/api/v1/registration/";
+    private static final String[] PUBLIC_POST_PATHS = {
+            "/api/v1/authentication/login",
+            "/api/v1/authentication/2fa",
+            "/api/v1/authentication/refresh",
+            "/api/v1/user/password/forgot",
+            "/api/v1/user/password/reset"
+    };
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
             @Qualifier("accessTokenJwtDecoder") JwtDecoder accessTokenJwtDecoder,
@@ -52,13 +61,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/actuator/health",
-                                "/api/v1/registration/**"
+                                REGISTRATION_PATH_PREFIX + "**"
                         ).permitAll()
-                        .requestMatchers(HttpMethod.POST,
-                                "/api/v1/authentication/login",
-                                "/api/v1/authentication/2fa",
-                                "/api/v1/authentication/refresh"
-                        ).permitAll()
+                        .requestMatchers(HttpMethod.POST, PUBLIC_POST_PATHS).permitAll()
                         .requestMatchers("/api/v1/savings/**").authenticated()
                         .requestMatchers("/api/v1/loans/**").authenticated()
                         .requestMatchers("/api/v1/transfers/**").authenticated()
@@ -74,7 +79,22 @@ public class SecurityConfig {
     }
 
     private static String resolveAccessTokenCookie(HttpServletRequest request) {
+        if (isPublicPath(request.getRequestURI())) {
+            return null;
+        }
         Cookie cookie = WebUtils.getCookie(request, AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME);
         return cookie != null ? cookie.getValue() : null;
+    }
+
+    private static boolean isPublicPath(String path) {
+        if (path.startsWith(REGISTRATION_PATH_PREFIX)) {
+            return true;
+        }
+        for (String publicPath : PUBLIC_POST_PATHS) {
+            if (publicPath.equals(path)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

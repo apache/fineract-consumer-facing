@@ -27,4 +27,5 @@ public final class OtpConstants {
     public static final String EMAIL_DELIVERY_METHOD_NAME = "email";
     public static final String SMS_DELIVERY_METHOD_NAME = "sms";
     public static final int OTP_TTL_SECONDS = 300;
+    public static final int MAX_OTP_VALIDATION_ATTEMPTS = 5;
 }

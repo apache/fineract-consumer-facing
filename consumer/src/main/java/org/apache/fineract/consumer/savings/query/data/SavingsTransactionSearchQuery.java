@@ -35,6 +35,6 @@ public final class SavingsTransactionSearchQuery {
     private final Long savingsId;
     private final LocalDate fromDate;
     private final LocalDate toDate;
-    private final Integer limit;
-    private final Integer offset;
+    private final Integer page;
+    private final Integer size;
 }
