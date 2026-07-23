@@ -17,8 +17,8 @@
 
 databaseChangeLog:
   - include:
-      file: db/changelog/changes/001-create-users-table.yaml
+      file: db/changelog/user/001-create-users-table.yaml
   - include:
-      file: db/changelog/changes/002-create-refresh-tokens.yaml
+      file: db/changelog/authentication/002-create-refresh-tokens.yaml
   - include:
-      file: db/changelog/changes/003-create-beneficiaries.yaml
+      file: db/changelog/beneficiaries/003-create-beneficiaries.yaml

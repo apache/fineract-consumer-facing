@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.apache.fineract.consumer.user.command.data.UserStatus;
 import org.apache.fineract.consumer.user.command.exception.InvalidBindingStateException;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;

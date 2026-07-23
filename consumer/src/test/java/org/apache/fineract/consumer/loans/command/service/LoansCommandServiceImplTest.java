@@ -37,7 +37,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansResponse;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandUpstreamUnavailableException;
-import org.apache.fineract.consumer.user.query.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;

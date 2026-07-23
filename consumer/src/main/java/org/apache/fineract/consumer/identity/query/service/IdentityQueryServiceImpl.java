@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.registration.query.service;
+package org.apache.fineract.consumer.identity.query.service;
 
 import feign.FeignException;
 import java.util.List;
@@ -25,9 +25,9 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientIdentifierApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.ClientIdentifierData;
 import org.apache.fineract.consumer.infrastructure.query.Query;
-import org.apache.fineract.consumer.registration.query.data.IdentityVerificationQuery;
-import org.apache.fineract.consumer.registration.query.data.IdentityVerificationQueryData;
-import org.apache.fineract.consumer.registration.query.exception.IdentityVerificationException;
+import org.apache.fineract.consumer.identity.query.data.IdentityVerificationQuery;
+import org.apache.fineract.consumer.identity.query.data.IdentityVerificationQueryData;
+import org.apache.fineract.consumer.identity.query.exception.IdentityVerificationException;
 import org.springframework.stereotype.Service;
 
 @Service

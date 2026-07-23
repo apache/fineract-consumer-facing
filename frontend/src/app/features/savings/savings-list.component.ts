@@ -78,31 +78,15 @@ import { SavingsStore } from './savings.store';
           </tr>
         </table>
 
-        <div class="actions">
-          <button mat-stroked-button color="warn" (click)="tryForbiddenAccount()">
+        <div class="actions-row">
+          <button mat-stroked-button color="warn" class="btn-danger" (click)="tryForbiddenAccount()">
             {{ 'savings.list.tryForbidden' | translate }}
           </button>
         </div>
       </mat-card-content>
     </mat-card>
   `,
-  styles: `
-    table {
-      width: 100%;
-    }
-    .clickable {
-      cursor: pointer;
-    }
-    .actions {
-      display: flex;
-      gap: 0.75rem;
-      margin-top: 1rem;
-    }
-    .actions button {
-      background-color: #ffd6d6;
-      color: #b00020;
-    }
-  `,
+  styleUrls: ['../../shared/css/table.scss', '../../shared/css/actions.scss'],
 })
 export class SavingsListComponent {
   protected readonly store = inject(SavingsStore);

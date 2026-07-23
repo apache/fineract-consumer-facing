@@ -26,7 +26,7 @@ import feign.Util;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.cucumber.clients.AuthenticationClient;
 import org.apache.fineract.consumer.cucumber.clients.MailpitClient;
 import org.springframework.http.HttpHeaders;

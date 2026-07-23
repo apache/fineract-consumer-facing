@@ -20,6 +20,8 @@
 package org.apache.fineract.consumer.otp.command.service;
 
 import java.util.UUID;
+import java.util.function.Supplier;
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.data.PendingOtp;
 
@@ -28,4 +30,6 @@ public interface OtpCommandService {
     PendingOtp createOtp(UUID publicId, OtpDestination destination);
 
     void validateOtp(UUID publicId, String token);
+
+    void validateOtp(UUID publicId, String token, Supplier<? extends AbstractConsumerException> onInvalid);
 }

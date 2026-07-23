@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.infrastructure.access.service;
 
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.ActionPolicies;
 import org.apache.fineract.consumer.infrastructure.access.data.ActionPolicy;
@@ -27,6 +28,7 @@ import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessKycRequiredException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessPolicyMissingException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
@@ -39,10 +41,11 @@ public class AccessPolicyEvaluator {
     private final UserClientResolver userClientResolver;
 
     public void authorize(Jwt jwt, ConsumerAction action) {
-        authorize(jwt, action, null);
+        authorize(jwt, action, null, AccessPolicyMissingException::new);
     }
 
-    public void authorize(Jwt jwt, ConsumerAction action, Long resourceId) {
+    public void authorize(Jwt jwt, ConsumerAction action, Long resourceId,
+            Supplier<? extends AbstractConsumerException> onDenied) {
         ActionPolicy policy = ActionPolicies.forAction(action)
                 .orElseThrow(AccessPolicyMissingException::new);
         if (!policy.getRequiredScope().equals(jwt.getClaimAsString(JwtClaims.SCOPE))) {
@@ -53,7 +56,7 @@ public class AccessPolicyEvaluator {
             throw new AccessKycRequiredException();
         }
         if (policy.getOwnership() != null && !ownsResource(jwt, policy.getOwnership(), resourceId)) {
-            throw policy.getDenialException().get();
+            throw onDenied.get();
         }
     }
 

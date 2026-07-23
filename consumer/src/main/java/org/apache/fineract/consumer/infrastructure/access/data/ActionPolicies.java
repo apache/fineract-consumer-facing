@@ -22,15 +22,8 @@ package org.apache.fineract.consumer.infrastructure.access.data;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
-import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
-import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
-import org.apache.fineract.consumer.loans.query.exception.LoanQueryAccessDeniedException;
-import org.apache.fineract.consumer.savings.query.exception.SavingsQueryAccessDeniedException;
-import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
 
 public final class ActionPolicies {
 
@@ -54,25 +47,23 @@ public final class ActionPolicies {
             unownedScopeOnly(ConsumerAction.USER_PROFILE_VIEW),
             unownedScopeOnly(ConsumerAction.USER_IMAGE_VIEW),
             unownedScopeOnly(ConsumerAction.USER_PASSWORD_CHANGE),
-            owned(ConsumerAction.SAVINGS_VIEW, ResourceType.SAVINGS, SavingsQueryAccessDeniedException::new),
-            owned(ConsumerAction.LOANS_VIEW, ResourceType.LOANS, LoanQueryAccessDeniedException::new),
-            owned(ConsumerAction.LOAN_APPLICATION_MODIFY, ResourceType.LOANS, LoanCommandAccessDeniedException::new),
-            owned(ConsumerAction.LOAN_APPLICATION_WITHDRAW, ResourceType.LOANS, LoanCommandAccessDeniedException::new),
-            owned(ConsumerAction.TRANSFER_EXECUTE, ResourceType.SAVINGS, TransferAccessDeniedException::new))
+            owned(ConsumerAction.SAVINGS_VIEW, ResourceType.SAVINGS),
+            owned(ConsumerAction.LOANS_VIEW, ResourceType.LOANS),
+            owned(ConsumerAction.LOAN_APPLICATION_MODIFY, ResourceType.LOANS),
+            owned(ConsumerAction.LOAN_APPLICATION_WITHDRAW, ResourceType.LOANS),
+            owned(ConsumerAction.TRANSFER_EXECUTE, ResourceType.SAVINGS))
             .collect(Collectors.toUnmodifiableMap(ActionPolicy::getAction, Function.identity()));
 
     public static Optional<ActionPolicy> forAction(ConsumerAction action) {
         return Optional.ofNullable(POLICIES.get(action));
     }
 
-    private static ActionPolicy owned(ConsumerAction action, ResourceType ownership,
-            Supplier<AbstractConsumerException> denialException) {
+    private static ActionPolicy owned(ConsumerAction action, ResourceType ownership) {
         return ActionPolicy.builder()
                 .action(action)
                 .requiredScope(AuthenticationConstants.SCOPE_CONSUMER_FULL)
                 .requiresKycVerified(true)
                 .ownership(ownership)
-                .denialException(denialException)
                 .build();
     }
 

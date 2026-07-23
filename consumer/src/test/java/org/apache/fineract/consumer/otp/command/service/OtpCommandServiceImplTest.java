@@ -33,6 +33,7 @@ import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.data.PendingOtp;
@@ -45,6 +46,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
 class OtpCommandServiceImplTest {
@@ -158,12 +160,60 @@ class OtpCommandServiceImplTest {
     }
 
     @Test
+    void validateOtpWithSupplierThrowsSuppliedExceptionAndCountsFailedAttempt() {
+        when(otpCommandRepository.getPendingTokenHash(PUBLIC_ID)).thenReturn(sha256Hex(TOKEN));
+        when(otpCommandRepository.recordFailedValidationAttempt(PUBLIC_ID)).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.validateOtp(PUBLIC_ID, WRONG_TOKEN, StepUpTestException::new))
+                .isInstanceOf(StepUpTestException.class);
+        verify(otpCommandRepository).recordFailedValidationAttempt(PUBLIC_ID);
+        verify(otpCommandRepository, never()).deletePendingOtp(PUBLIC_ID);
+    }
+
+    @Test
+    void validateOtpWithSupplierInvalidatesPendingOtpAtAttemptCap() {
+        when(otpCommandRepository.getPendingTokenHash(PUBLIC_ID)).thenReturn(sha256Hex(TOKEN));
+        when(otpCommandRepository.recordFailedValidationAttempt(PUBLIC_ID))
+                .thenReturn((long) OtpConstants.MAX_OTP_VALIDATION_ATTEMPTS);
+
+        assertThatThrownBy(() -> service.validateOtp(PUBLIC_ID, WRONG_TOKEN, StepUpTestException::new))
+                .isInstanceOf(StepUpTestException.class);
+        verify(otpCommandRepository).deletePendingOtp(PUBLIC_ID);
+    }
+
+    @Test
+    void validateOtpWithSupplierAcceptsCorrectTokenAndDeletes() {
+        when(otpCommandRepository.getPendingTokenHash(PUBLIC_ID)).thenReturn(sha256Hex(TOKEN));
+
+        service.validateOtp(PUBLIC_ID, TOKEN, StepUpTestException::new);
+
+        verify(otpCommandRepository).deletePendingOtp(PUBLIC_ID);
+    }
+
+    @Test
+    void validateOtpWithSupplierRejectsMissingOtpWithoutCountingAttempts() {
+        when(otpCommandRepository.getPendingTokenHash(PUBLIC_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.validateOtp(PUBLIC_ID, TOKEN, StepUpTestException::new))
+                .isInstanceOf(StepUpTestException.class);
+        verify(otpCommandRepository, never()).recordFailedValidationAttempt(PUBLIC_ID);
+        verify(otpCommandRepository, never()).deletePendingOtp(PUBLIC_ID);
+    }
+
+    @Test
     void validateOtpRejectsNullToken() {
         when(otpCommandRepository.getPendingTokenHash(PUBLIC_ID)).thenReturn(sha256Hex(TOKEN));
 
         assertThatThrownBy(() -> service.validateOtp(PUBLIC_ID, null))
                 .isInstanceOf(OtpTokenInvalidException.class);
         verify(otpCommandRepository, never()).deletePendingOtp(PUBLIC_ID);
+    }
+
+    private static final class StepUpTestException extends AbstractConsumerException {
+
+        private StepUpTestException() {
+            super(HttpStatus.BAD_REQUEST, "error.msg.consumer.test.step.up", "test step-up failure");
+        }
     }
 
     private static OtpDestination emailDestination() {

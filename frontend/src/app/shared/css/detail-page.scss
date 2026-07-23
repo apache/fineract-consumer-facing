@@ -12,21 +12,14 @@
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
+ * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
 
-package org.apache.fineract.consumer.registration.query.exception;
-
-import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
-import org.springframework.http.HttpStatus;
-
-public class IdentityVerificationException extends AbstractConsumerException {
-
-    public static final String CODE = "error.msg.consumer.identity.verification.unavailable";
-
-    public IdentityVerificationException(Throwable cause) {
-        super(HttpStatus.BAD_GATEWAY, CODE, "identity verification temporarily unavailable", cause);
-    }
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
 }

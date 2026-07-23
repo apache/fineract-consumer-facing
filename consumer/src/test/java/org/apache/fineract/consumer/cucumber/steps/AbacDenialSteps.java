@@ -25,7 +25,7 @@ import feign.FeignException;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.client.ApiClient;
 import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
 import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;

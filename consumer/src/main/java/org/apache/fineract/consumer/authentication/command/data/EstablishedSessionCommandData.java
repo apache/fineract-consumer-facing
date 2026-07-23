@@ -25,6 +25,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthCookiePayload;
 
 @Getter
 @RequiredArgsConstructor
@@ -39,4 +40,13 @@ public final class EstablishedSessionCommandData {
     private final String refreshToken;
     @ToString.Include
     private final Instant refreshTokenExpiresAt;
+
+    public AuthCookiePayload toCookiePayload() {
+        return AuthCookiePayload.builder()
+                .accessToken(accessToken)
+                .accessTokenExpiresAt(accessTokenExpiresAt)
+                .refreshToken(refreshToken)
+                .refreshTokenExpiresAt(refreshTokenExpiresAt)
+                .build();
+    }
 }

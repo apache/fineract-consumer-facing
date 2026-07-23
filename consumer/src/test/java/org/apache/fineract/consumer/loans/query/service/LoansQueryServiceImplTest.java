@@ -21,6 +21,8 @@ package org.apache.fineract.consumer.loans.query.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -151,7 +153,7 @@ class LoansQueryServiceImplTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getId()).isEqualTo(1L);
         assertThat(result.get(1).getId()).isEqualTo(2L);
-        verify(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOANS_VIEW, LOAN_ID);
+        verify(accessPolicyEvaluator).authorize(eq(jwt), eq(ConsumerAction.LOANS_VIEW), eq(LOAN_ID), any());
     }
 
     @Test
@@ -169,7 +171,7 @@ class LoansQueryServiceImplTest {
     void listTransactionsDeniedWhenAccessPolicyRejects() {
         Jwt jwt = jwt();
         doThrow(new LoanQueryAccessDeniedException())
-                .when(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOANS_VIEW, LOAN_ID);
+                .when(accessPolicyEvaluator).authorize(eq(jwt), eq(ConsumerAction.LOANS_VIEW), eq(LOAN_ID), any());
 
         LoanTransactionListQuery query = LoanTransactionListQuery.builder().loanId(LOAN_ID).build();
 

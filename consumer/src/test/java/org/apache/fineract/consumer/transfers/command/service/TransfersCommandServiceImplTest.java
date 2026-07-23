@@ -19,10 +19,12 @@
 
 package org.apache.fineract.consumer.transfers.command.service;
 
+import static org.apache.fineract.consumer.testsupport.ExceptionSupplierAnswers.throwsCallerSuppliedException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -32,7 +34,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
@@ -49,7 +51,6 @@ import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
 import org.apache.fineract.consumer.transfers.command.data.ConfirmTransferCommand;
 import org.apache.fineract.consumer.transfers.command.data.InitiateTransferCommand;
@@ -60,7 +61,7 @@ import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDe
 import org.apache.fineract.consumer.transfers.command.exception.TransferBeneficiaryLimitExceededException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferInvalidException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferStepUpInvalidException;
-import org.apache.fineract.consumer.user.query.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;
@@ -195,7 +196,7 @@ class TransfersCommandServiceImplTest {
         assertThat(result.getExpiresAt()).isEqualTo(expiresAt);
         assertThat(result.getSentTo()).isEqualTo("u***@test.com");
 
-        verify(accessPolicyEvaluator).authorize(any(), eq(ConsumerAction.TRANSFER_EXECUTE), eq(FROM_SAVINGS_ID));
+        verify(accessPolicyEvaluator).authorize(any(), eq(ConsumerAction.TRANSFER_EXECUTE), eq(FROM_SAVINGS_ID), any());
 
         ArgumentCaptor<OtpDestination> destination = ArgumentCaptor.forClass(OtpDestination.class);
         verify(otpCommandService).createOtp(eq(PUBLIC_ID), destination.capture());
@@ -286,7 +287,7 @@ class TransfersCommandServiceImplTest {
     void initiateDeniedWhenAuthorizeRejects() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         doThrow(new TransferAccessDeniedException())
-                .when(accessPolicyEvaluator).authorize(any(), eq(ConsumerAction.TRANSFER_EXECUTE), eq(FROM_SAVINGS_ID));
+                .when(accessPolicyEvaluator).authorize(any(), eq(ConsumerAction.TRANSFER_EXECUTE), eq(FROM_SAVINGS_ID), any());
 
         assertThatThrownBy(() -> service.initiate(jwt(), initiateSavingsCommand()))
                 .isInstanceOf(TransferAccessDeniedException.class)
@@ -339,7 +340,7 @@ class TransfersCommandServiceImplTest {
         assertThat(result.getToAccountId()).isEqualTo(TO_SAVINGS_ID);
         assertThat(result.getAmount()).isEqualTo(AMOUNT);
 
-        verify(accessPolicyEvaluator).authorize(any(), eq(ConsumerAction.TRANSFER_EXECUTE), eq(FROM_SAVINGS_ID));
+        verify(accessPolicyEvaluator).authorize(any(), eq(ConsumerAction.TRANSFER_EXECUTE), eq(FROM_SAVINGS_ID), any());
 
         ArgumentCaptor<AccountTransferRequest> request = ArgumentCaptor.forClass(AccountTransferRequest.class);
         verify(accountTransfersApi).createAccountTransfer(request.capture());
@@ -397,8 +398,7 @@ class TransfersCommandServiceImplTest {
                 .thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        doThrow(new OtpTokenInvalidException())
-                .when(otpCommandService).validateOtp(PUBLIC_ID, OTP);
+        doAnswer(throwsCallerSuppliedException(2)).when(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
 
         assertThatThrownBy(() -> service.confirm(jwt(), confirmSavingsCommand()))
                 .isInstanceOf(TransferStepUpInvalidException.class)

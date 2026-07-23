@@ -21,7 +21,7 @@ package org.apache.fineract.consumer.beneficiaries.query.service;
 
 import java.util.List;
 import java.util.Optional;
-import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryTemplateQueryData;
 import org.springframework.security.oauth2.jwt.Jwt;

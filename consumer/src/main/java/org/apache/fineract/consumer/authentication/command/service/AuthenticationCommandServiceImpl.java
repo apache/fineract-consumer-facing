@@ -30,7 +30,9 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthData;
 import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginChallengeCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginCommand;
@@ -52,12 +54,7 @@ import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
 import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
-import org.apache.fineract.consumer.user.query.domain.UserStatus;
-import org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData;
-import org.apache.fineract.consumer.user.query.data.UserQueryData;
-import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -73,7 +70,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     private static final int REFRESH_TOKEN_BYTE_LENGTH = 32;
     private static final String REFRESH_TOKEN_HASH_ALGORITHM = "SHA-256";
 
-    private final UserQueryService userQueryService;
+    private final PrincipalUserAuthLookup principalUserAuthLookup;
     private final OtpCommandService otpCommandService;
     private final PasswordEncoder passwordEncoder;
     private final JwtIssuer jwtIssuer;
@@ -86,8 +83,8 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     @Override
     @Command
     public LoginChallengeCommandData login(LoginCommand command) {
-        UserCredentialsQueryData user = userQueryService.findCredentialsByEmail(command.getEmail())
-                .filter(candidate -> candidate.getStatus() == UserStatus.BOUND)
+        PrincipalUserAuthCredentialsData user = principalUserAuthLookup.findCredentialsByEmail(command.getEmail())
+                .filter(PrincipalUserAuthCredentialsData::isBound)
                 .filter(candidate -> passwordEncoder.matches(command.getPassword(), candidate.getPasswordHash()))
                 .orElseThrow(InvalidCredentialsException::new);
 
@@ -125,14 +122,10 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         }
 
         UUID publicId = UUID.fromString(challenge.getSubject());
-        try {
-            otpCommandService.validateOtp(publicId, command.getToken());
-        } catch (OtpTokenInvalidException e) {
-            throw new TwoFactorInvalidException(e);
-        }
+        otpCommandService.validateOtp(publicId, command.getToken(), TwoFactorInvalidException::new);
 
-        UserQueryData user = userQueryService.findByPublicId(publicId);
-        return establishSession(user.getId(), publicId, user.getStatus() == UserStatus.BOUND,
+        PrincipalUserAuthData user = principalUserAuthLookup.findByPublicId(publicId);
+        return establishSession(user.getId(), publicId, user.isBound(),
                 command.getDeviceFingerprint(), null);
     }
 
@@ -161,8 +154,8 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
             predecessor = current;
         }
 
-        UserQueryData user = userQueryService.findById(current.getUserId());
-        return establishSession(user.getId(), user.getPublicId(), user.getStatus() == UserStatus.BOUND,
+        PrincipalUserAuthData user = principalUserAuthLookup.findById(current.getUserId());
+        return establishSession(user.getId(), user.getPublicId(), user.isBound(),
                 command.getDeviceFingerprint(), predecessor);
     }
 
@@ -198,8 +191,8 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         revokeAllActiveTokens(userId);
         jwtDenylist.denyAllIssuedUpTo(publicId.toString(),
                 Instant.now().truncatedTo(ChronoUnit.SECONDS).minusMillis(1));
-        UserQueryData user = userQueryService.findById(userId);
-        return establishSession(user.getId(), user.getPublicId(), user.getStatus() == UserStatus.BOUND,
+        PrincipalUserAuthData user = principalUserAuthLookup.findById(userId);
+        return establishSession(user.getId(), user.getPublicId(), user.isBound(),
                 deviceFingerprint, null);
     }
 

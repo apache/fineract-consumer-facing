@@ -22,7 +22,7 @@ package org.apache.fineract.consumer.authentication.command.api;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginChallengeCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginCommand;
@@ -35,7 +35,8 @@ import org.apache.fineract.consumer.authentication.command.data.VerifyTwoFactorC
 import org.apache.fineract.consumer.authentication.command.exception.RefreshTokenInvalidException;
 import org.apache.fineract.consumer.authentication.command.service.AuthenticationCommandService;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
-import org.apache.fineract.consumer.infrastructure.web.AuthCookieFactory;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthCookiePayload;
+import org.apache.fineract.consumer.infrastructure.access.service.AuthCookieFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
@@ -115,8 +116,9 @@ public class AuthenticationCommandController {
     }
 
     private ResponseEntity<SessionCommandData> sessionResponse(EstablishedSessionCommandData session) {
-        ResponseCookie accessCookie = authCookieFactory.accessCookie(session);
-        ResponseCookie refreshCookie = authCookieFactory.refreshCookie(session);
+        AuthCookiePayload cookiePayload = session.toCookiePayload();
+        ResponseCookie accessCookie = authCookieFactory.accessCookie(cookiePayload);
+        ResponseCookie refreshCookie = authCookieFactory.refreshCookie(cookiePayload);
         SessionCommandData body = SessionCommandData.builder()
                 .expiresAt(session.getAccessTokenExpiresAt())
                 .build();

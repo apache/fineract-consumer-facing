@@ -17,9 +17,16 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.user.query.domain;
+package org.apache.fineract.consumer.identity.query.exception;
 
-public enum UserStatus {
-    PENDING_OTP,
-    BOUND
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
+import org.springframework.http.HttpStatus;
+
+public class IdentityVerificationException extends AbstractConsumerException {
+
+    public static final String CODE = "error.msg.consumer.identity.verification.unavailable";
+
+    public IdentityVerificationException(Throwable cause) {
+        super(HttpStatus.BAD_GATEWAY, CODE, "identity verification temporarily unavailable", cause);
+    }
 }

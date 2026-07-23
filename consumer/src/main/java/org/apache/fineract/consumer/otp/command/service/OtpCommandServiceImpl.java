@@ -26,8 +26,10 @@ import java.security.SecureRandom;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.data.PendingOtp;
@@ -63,6 +65,12 @@ public class OtpCommandServiceImpl implements OtpCommandService {
     @Override
     @Command
     public void validateOtp(UUID publicId, String token) {
+        validateOtp(publicId, token, OtpTokenInvalidException::new);
+    }
+
+    @Override
+    @Command
+    public void validateOtp(UUID publicId, String token, Supplier<? extends AbstractConsumerException> onInvalid) {
         String storedHash = otpCommandRepository.getPendingTokenHash(publicId);
         if (token == null || storedHash == null || !storedHash.equals(hashToken(token))) {
             if (storedHash != null) {
@@ -71,7 +79,7 @@ public class OtpCommandServiceImpl implements OtpCommandService {
                     otpCommandRepository.deletePendingOtp(publicId);
                 }
             }
-            throw new OtpTokenInvalidException();
+            throw onInvalid.get();
         }
         otpCommandRepository.deletePendingOtp(publicId);
     }

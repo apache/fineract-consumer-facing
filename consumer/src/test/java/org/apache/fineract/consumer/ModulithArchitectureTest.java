@@ -12,25 +12,20 @@
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
+ * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
 
-package org.apache.fineract.consumer.registration.query.data;
+package org.apache.fineract.consumer;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.ToString;
+import org.junit.jupiter.api.Test;
+import org.springframework.modulith.core.ApplicationModules;
 
-@Getter
-@RequiredArgsConstructor
-@Builder
-@ToString(onlyExplicitlyIncluded = true)
-public final class IdentityVerificationQuery {
+class ModulithArchitectureTest {
 
-    private final Long fineractClientId;
-    private final String documentTypeName;
-    private final String documentKey;
+    @Test
+    void verifiesModularStructure() {
+        ApplicationModules.of(ConsumerApplication.class).verify();
+    }
 }

@@ -97,7 +97,7 @@ import { LoansStore } from './loans.store';
           </mat-form-field>
         </form>
 
-        <div class="actions">
+        <div class="actions-row">
           <button mat-stroked-button type="button" [disabled]="loading() || form.invalid" (click)="preview()">
             {{ 'loans.apply.previewCta' | translate }}
           </button>
@@ -156,7 +156,7 @@ import { LoansStore } from './loans.store';
         </mat-card-header>
         <mat-card-content>
           <p>{{ 'loans.apply.draftHint' | translate }}</p>
-          <div class="actions">
+          <div class="actions-row">
             <button mat-stroked-button type="button" [disabled]="loading() || form.invalid" (click)="modify(draft.loanId)">
               {{ 'loans.apply.modifyCta' | translate }}
             </button>
@@ -168,6 +168,7 @@ import { LoansStore } from './loans.store';
       </mat-card>
     }
   `,
+  styleUrls: ['../../shared/css/table.scss', '../../shared/css/actions.scss'],
   styles: `
     :host {
       display: flex;
@@ -179,14 +180,6 @@ import { LoansStore } from './loans.store';
       display: flex;
       flex-wrap: wrap;
       gap: 0.75rem;
-    }
-    .actions {
-      display: flex;
-      gap: 0.75rem;
-      margin-top: 1rem;
-    }
-    table {
-      width: 100%;
     }
   `,
 })

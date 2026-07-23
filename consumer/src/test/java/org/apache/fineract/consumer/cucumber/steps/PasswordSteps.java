@@ -33,7 +33,7 @@ import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.client.api.UserCommandControllerApi;
 import org.apache.fineract.consumer.client.api.UserQueryControllerApi;
 import org.apache.fineract.consumer.client.model.ForgotPasswordCommandRequest;

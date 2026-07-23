@@ -29,12 +29,13 @@ import static org.mockito.Mockito.when;
 
 import java.util.Set;
 import java.util.UUID;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.access.data.ActionPolicies;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.data.OwnedAccounts;
 import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessKycRequiredException;
+import org.apache.fineract.consumer.infrastructure.access.exception.AccessPolicyMissingException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
@@ -79,7 +80,8 @@ class AccessPolicyEvaluatorTest {
     void authorizePassesWhenScopeKycAndOwnershipSatisfied() {
         stubOwnedAccounts();
 
-        assertThatCode(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_VIEW, OWNED_SAVINGS_ID))
+        assertThatCode(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_VIEW, OWNED_SAVINGS_ID,
+                SavingsQueryAccessDeniedException::new))
                 .doesNotThrowAnyException();
     }
 
@@ -87,7 +89,8 @@ class AccessPolicyEvaluatorTest {
     void authorizeRejectsWrongScopeBeforeAnyOwnershipLookup() {
         Jwt jwt = jwt("openbanking:read", true);
 
-        assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, OWNED_SAVINGS_ID))
+        assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, OWNED_SAVINGS_ID,
+                SavingsQueryAccessDeniedException::new))
                 .isInstanceOf(AccessScopeInsufficientException.class)
                 .hasFieldOrPropertyWithValue("code", AccessScopeInsufficientException.CODE);
         verify(ownedAccountsCache, never()).ownedAccounts(anyLong());
@@ -97,7 +100,8 @@ class AccessPolicyEvaluatorTest {
     void authorizeRejectsMissingScopeClaim() {
         Jwt jwt = jwt(null, true);
 
-        assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, OWNED_LOAN_ID))
+        assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, OWNED_LOAN_ID,
+                LoanQueryAccessDeniedException::new))
                 .isInstanceOf(AccessScopeInsufficientException.class);
     }
 
@@ -105,7 +109,8 @@ class AccessPolicyEvaluatorTest {
     void authorizeRejectsKycNotVerified() {
         Jwt jwt = jwt(AuthenticationConstants.SCOPE_CONSUMER_FULL, false);
 
-        assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.TRANSFER_EXECUTE, OWNED_SAVINGS_ID))
+        assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.TRANSFER_EXECUTE, OWNED_SAVINGS_ID,
+                TransferAccessDeniedException::new))
                 .isInstanceOf(AccessKycRequiredException.class)
                 .hasFieldOrPropertyWithValue("code", AccessKycRequiredException.CODE);
         verify(ownedAccountsCache, never()).ownedAccounts(anyLong());
@@ -115,7 +120,8 @@ class AccessPolicyEvaluatorTest {
     void authorizeRejectsMissingKycClaim() {
         Jwt jwt = jwt(AuthenticationConstants.SCOPE_CONSUMER_FULL, null);
 
-        assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, OWNED_LOAN_ID))
+        assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, OWNED_LOAN_ID,
+                LoanQueryAccessDeniedException::new))
                 .isInstanceOf(AccessKycRequiredException.class);
     }
 
@@ -123,7 +129,8 @@ class AccessPolicyEvaluatorTest {
     void authorizeDeniesNonOwnedSavingsWithQuerySideException() {
         stubOwnedAccounts();
 
-        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_VIEW, FOREIGN_ACCOUNT_ID))
+        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_VIEW, FOREIGN_ACCOUNT_ID,
+                SavingsQueryAccessDeniedException::new))
                 .isInstanceOf(SavingsQueryAccessDeniedException.class)
                 .hasFieldOrPropertyWithValue("code", SavingsQueryAccessDeniedException.CODE);
     }
@@ -132,7 +139,8 @@ class AccessPolicyEvaluatorTest {
     void authorizeDeniesNonOwnedLoanWithQuerySideException() {
         stubOwnedAccounts();
 
-        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.LOANS_VIEW, FOREIGN_ACCOUNT_ID))
+        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.LOANS_VIEW, FOREIGN_ACCOUNT_ID,
+                LoanQueryAccessDeniedException::new))
                 .isInstanceOf(LoanQueryAccessDeniedException.class)
                 .hasFieldOrPropertyWithValue("code", LoanQueryAccessDeniedException.CODE);
     }
@@ -141,7 +149,8 @@ class AccessPolicyEvaluatorTest {
     void authorizeDeniesNonOwnedLoanModifyWithCommandSideException() {
         stubOwnedAccounts();
 
-        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.LOAN_APPLICATION_MODIFY, FOREIGN_ACCOUNT_ID))
+        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.LOAN_APPLICATION_MODIFY, FOREIGN_ACCOUNT_ID,
+                LoanCommandAccessDeniedException::new))
                 .isInstanceOf(LoanCommandAccessDeniedException.class)
                 .hasFieldOrPropertyWithValue("code", LoanCommandAccessDeniedException.CODE);
     }
@@ -150,7 +159,8 @@ class AccessPolicyEvaluatorTest {
     void authorizeDeniesNonOwnedTransferSource() {
         stubOwnedAccounts();
 
-        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.TRANSFER_EXECUTE, FOREIGN_ACCOUNT_ID))
+        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.TRANSFER_EXECUTE, FOREIGN_ACCOUNT_ID,
+                TransferAccessDeniedException::new))
                 .isInstanceOf(TransferAccessDeniedException.class)
                 .hasFieldOrPropertyWithValue("code", TransferAccessDeniedException.CODE);
     }
@@ -182,8 +192,19 @@ class AccessPolicyEvaluatorTest {
     void authorizeDeniesNullResourceIdWhenOwnershipRequired() {
         when(userClientResolver.resolveClientId(validJwt())).thenReturn(CLIENT_ID);
 
-        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_VIEW))
+        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_VIEW, null,
+                SavingsQueryAccessDeniedException::new))
                 .isInstanceOf(SavingsQueryAccessDeniedException.class);
+        verify(ownedAccountsCache, never()).ownedAccounts(anyLong());
+    }
+
+    @Test
+    void twoArgOverloadFallsBackToPolicyMissingOnOwnedAction() {
+        when(userClientResolver.resolveClientId(validJwt())).thenReturn(CLIENT_ID);
+
+        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_VIEW))
+                .isInstanceOf(AccessPolicyMissingException.class)
+                .hasFieldOrPropertyWithValue("code", AccessPolicyMissingException.CODE);
         verify(ownedAccountsCache, never()).ownedAccounts(anyLong());
     }
 

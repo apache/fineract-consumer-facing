@@ -19,13 +19,11 @@
 
 package org.apache.fineract.consumer.infrastructure.access.data;
 
-import java.util.function.Supplier;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
-import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
 
 @Getter
 @RequiredArgsConstructor
@@ -38,5 +36,4 @@ public final class ActionPolicy {
     private final String requiredScope;
     private final boolean requiresKycVerified;
     private final ResourceType ownership;
-    private final Supplier<AbstractConsumerException> denialException;
 }

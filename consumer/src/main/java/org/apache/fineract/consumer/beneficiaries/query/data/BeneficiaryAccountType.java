@@ -17,9 +17,9 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.user.command.domain;
+package org.apache.fineract.consumer.beneficiaries.query.data;
 
-public enum UserStatus {
-    PENDING_OTP,
-    BOUND
+public enum BeneficiaryAccountType {
+    SAVINGS,
+    LOAN
 }

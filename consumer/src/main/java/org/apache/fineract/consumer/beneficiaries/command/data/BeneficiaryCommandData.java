@@ -25,7 +25,6 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
-import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
 
 @Getter
 @RequiredArgsConstructor

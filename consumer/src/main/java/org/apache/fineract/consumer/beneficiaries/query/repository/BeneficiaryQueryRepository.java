@@ -21,7 +21,7 @@ package org.apache.fineract.consumer.beneficiaries.query.repository;
 
 import java.util.List;
 import java.util.Optional;
-import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryQueryEntity;
 import org.springframework.data.repository.Repository;
 

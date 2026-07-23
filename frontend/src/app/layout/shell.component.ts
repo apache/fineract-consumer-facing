@@ -65,7 +65,7 @@ import { LanguageSwitcherComponent } from '../shared/language-switcher.component
     <mat-toolbar>
       <button
         mat-icon-button
-        class="toolbar-action nav-toggle-btn"
+        class="icon-button-lg nav-toggle-btn"
         [attr.aria-label]="'layout.shell.toggleNav' | translate"
         (click)="toggleSidenav()"
       >
@@ -77,7 +77,7 @@ import { LanguageSwitcherComponent } from '../shared/language-switcher.component
       <app-language-switcher />
       <button
         mat-icon-button
-        class="toolbar-action logout-btn"
+        class="icon-button-lg logout-btn"
         [attr.aria-label]="'layout.shell.logout' | translate"
         (click)="logout()"
       >
@@ -115,18 +115,10 @@ import { LanguageSwitcherComponent } from '../shared/language-switcher.component
       </mat-sidenav-content>
     </mat-sidenav-container>
   `,
+  styleUrls: ['../shared/css/icon-button.scss'],
   styles: `
     .brand-icon {
       margin-right: 0.5rem;
-    }
-    .toolbar-action {
-      width: 3rem;
-      height: 3rem;
-    }
-    .toolbar-action mat-icon {
-      font-size: 1.75rem;
-      width: 1.75rem;
-      height: 1.75rem;
     }
     .nav-toggle-btn {
       margin-right: 0.5rem;

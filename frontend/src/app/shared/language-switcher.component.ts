@@ -36,7 +36,7 @@ interface LanguageOption {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatIconModule, MatMenuModule, TranslatePipe],
   template: `
-    <button mat-icon-button class="lang-trigger" [matMenuTriggerFor]="menu" [attr.aria-label]="'common.action.changeLanguage' | translate">
+    <button mat-icon-button class="icon-button-lg" [matMenuTriggerFor]="menu" [attr.aria-label]="'common.action.changeLanguage' | translate">
       <mat-icon>language</mat-icon>
     </button>
     <mat-menu #menu="matMenu">
@@ -48,17 +48,7 @@ interface LanguageOption {
       }
     </mat-menu>
   `,
-  styles: `
-    .lang-trigger {
-      width: 3rem;
-      height: 3rem;
-    }
-    .lang-trigger mat-icon {
-      font-size: 1.75rem;
-      width: 1.75rem;
-      height: 1.75rem;
-    }
-  `,
+  styleUrls: ['./css/icon-button.scss'],
 })
 export class LanguageSwitcherComponent {
   private readonly translate = inject(TranslateService);

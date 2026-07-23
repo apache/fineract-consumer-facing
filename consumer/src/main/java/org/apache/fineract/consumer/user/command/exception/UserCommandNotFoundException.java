@@ -17,15 +17,16 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.authentication.command.data;
+package org.apache.fineract.consumer.user.command.exception;
 
-public final class AuthenticationConstants {
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
+import org.springframework.http.HttpStatus;
 
-    private AuthenticationConstants() {
+public class UserCommandNotFoundException extends AbstractConsumerException {
+
+    public static final String CODE = "error.msg.consumer.user.not.found";
+
+    public UserCommandNotFoundException() {
+        super(HttpStatus.NOT_FOUND, CODE, "user not found");
     }
-
-    public static final String ACCESS_TOKEN_COOKIE_NAME = "access_token";
-    public static final String REFRESH_TOKEN_COOKIE_NAME = "refresh_token";
-    public static final String CHALLENGE_PURPOSE_VALUE = "2fa_challenge";
-    public static final String SCOPE_CONSUMER_FULL = "consumer:full";
 }

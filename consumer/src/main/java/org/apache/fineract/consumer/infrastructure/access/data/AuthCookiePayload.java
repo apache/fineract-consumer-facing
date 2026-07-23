@@ -17,21 +17,26 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.access.repository;
+package org.apache.fineract.consumer.infrastructure.access.data;
 
-import java.util.Optional;
-import java.util.UUID;
-import org.apache.fineract.consumer.infrastructure.access.data.PrincipalUserData;
-import org.apache.fineract.consumer.user.command.domain.User;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.Repository;
+import java.time.Instant;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 
-public interface PrincipalUserRepository extends Repository<User, Long> {
+@Getter
+@RequiredArgsConstructor
+@Builder
+@EqualsAndHashCode
+@ToString(onlyExplicitlyIncluded = true)
+public final class AuthCookiePayload {
 
-    @Query("""
-            SELECT new org.apache.fineract.consumer.infrastructure.access.data.PrincipalUserData(u.id, u.fineractClientId)
-            FROM User u
-            WHERE u.publicId = :publicId
-            """)
-    Optional<PrincipalUserData> findByPublicId(UUID publicId);
+    private final String accessToken;
+    @ToString.Include
+    private final Instant accessTokenExpiresAt;
+    private final String refreshToken;
+    @ToString.Include
+    private final Instant refreshTokenExpiresAt;
 }

@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.user.command.service;
 
+import static org.apache.fineract.consumer.testsupport.ExceptionSupplierAnswers.throwsCallerSuppliedException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,7 +43,6 @@ import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
 import org.apache.fineract.consumer.user.command.data.ConfirmPasswordChangeCommand;
 import org.apache.fineract.consumer.user.command.data.CreateUserCommand;
@@ -52,10 +52,10 @@ import org.apache.fineract.consumer.user.command.data.ResetPasswordCommand;
 import org.apache.fineract.consumer.user.command.data.UserCommandConstants;
 import org.apache.fineract.consumer.user.command.data.UserCreatedCommandData;
 import org.apache.fineract.consumer.user.command.data.UserPasswordChangeChallengeCommandData;
+import org.apache.fineract.consumer.user.command.data.UserStatus;
 import org.apache.fineract.consumer.user.command.domain.User;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
 import org.apache.fineract.consumer.user.command.exception.UserAlreadyExistsException;
-import org.apache.fineract.consumer.user.command.exception.UserNotFoundException;
+import org.apache.fineract.consumer.user.command.exception.UserCommandNotFoundException;
 import org.apache.fineract.consumer.user.command.exception.UserPasswordInvalidException;
 import org.apache.fineract.consumer.user.command.exception.UserPasswordResetInvalidException;
 import org.apache.fineract.consumer.user.command.exception.UserStepUpInvalidException;
@@ -203,7 +203,7 @@ class UserCommandServiceImplTest {
             when(repository.findById(USER_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.markOtpVerified(USER_ID))
-                    .isInstanceOf(UserNotFoundException.class);
+                    .isInstanceOf(UserCommandNotFoundException.class);
             verify(repository, never()).save(any());
         }
     }
@@ -311,7 +311,7 @@ class UserCommandServiceImplTest {
 
             EstablishedSessionCommandData session = service.confirmPasswordChange(jwt(), confirmCommand());
 
-            verify(otpCommandService).validateOtp(PUBLIC_ID, OTP);
+            verify(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
             verify(repository).save(user);
             assertThat(user.getPasswordHash()).isEqualTo(NEW_PASSWORD_HASH);
             verify(authenticationCommandService).revokeAllSessionsAndReissue(USER_ID, PUBLIC_ID, DEVICE_FINGERPRINT);
@@ -336,7 +336,7 @@ class UserCommandServiceImplTest {
             stubActionFingerprint();
             when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT))
                     .thenReturn(true);
-            doThrow(new OtpTokenInvalidException()).when(otpCommandService).validateOtp(PUBLIC_ID, OTP);
+            doAnswer(throwsCallerSuppliedException(2)).when(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
 
             assertThatThrownBy(() -> service.confirmPasswordChange(jwt(), confirmCommand()))
                     .isInstanceOf(UserStepUpInvalidException.class);
@@ -409,7 +409,7 @@ class UserCommandServiceImplTest {
 
             service.resetPassword(resetCommand());
 
-            verify(otpCommandService).validateOtp(PUBLIC_ID, OTP);
+            verify(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
             verify(repository).save(user);
             assertThat(user.getPasswordHash()).isEqualTo(NEW_PASSWORD_HASH);
             verify(authenticationCommandService).revokeAllSessions(USER_ID, PUBLIC_ID);
@@ -423,7 +423,7 @@ class UserCommandServiceImplTest {
                     .isInstanceOf(UserPasswordResetInvalidException.class)
                     .hasFieldOrPropertyWithValue("code", UserPasswordResetInvalidException.CODE);
 
-            verify(otpCommandService, never()).validateOtp(any(), any());
+            verify(otpCommandService, never()).validateOtp(any(), any(), any());
             verify(repository, never()).save(any());
             verify(authenticationCommandService, never()).revokeAllSessions(any(), any());
         }
@@ -432,7 +432,7 @@ class UserCommandServiceImplTest {
         void invalidOtpIsRejectedWithTheGenericErrorAndPasswordUnchanged() {
             User user = existingUser();
             when(repository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
-            doThrow(new OtpTokenInvalidException()).when(otpCommandService).validateOtp(PUBLIC_ID, OTP);
+            doAnswer(throwsCallerSuppliedException(2)).when(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
 
             assertThatThrownBy(() -> service.resetPassword(resetCommand()))
                     .isInstanceOf(UserPasswordResetInvalidException.class)

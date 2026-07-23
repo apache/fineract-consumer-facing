@@ -41,6 +41,7 @@ import { TranslatePipe } from '@ngx-translate/core';
         <mat-label>{{ 'common.otp.codeLabel' | translate }}</mat-label>
         <input
           matInput
+          class="otp-input"
           formControlName="otp"
           autocomplete="one-time-code"
           autocapitalize="characters"
@@ -48,7 +49,7 @@ import { TranslatePipe } from '@ngx-translate/core';
           (input)="uppercase($event)"
         />
       </mat-form-field>
-      <div class="actions">
+      <div class="actions-end">
         @if (showCancel()) {
           <button mat-button type="button" [disabled]="loading()" (click)="cancelled.emit()">
             {{ 'common.action.cancel' | translate }}
@@ -60,21 +61,7 @@ import { TranslatePipe } from '@ngx-translate/core';
       </div>
     </form>
   `,
-  styles: `
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    input {
-      text-transform: uppercase;
-    }
-    .actions {
-      display: flex;
-      gap: 0.5rem;
-      justify-content: flex-end;
-    }
-  `,
+  styleUrls: ['../css/form.scss', '../css/actions.scss'],
 })
 export class OtpComponent {
   private readonly fb = inject(NonNullableFormBuilder);
