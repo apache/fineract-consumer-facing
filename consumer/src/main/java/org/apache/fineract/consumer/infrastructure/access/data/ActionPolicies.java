@@ -29,7 +29,6 @@ import org.apache.fineract.consumer.authentication.command.data.AuthenticationCo
 import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
 import org.apache.fineract.consumer.loans.query.exception.LoanQueryAccessDeniedException;
-import org.apache.fineract.consumer.savings.command.exception.SavingsCommandAccessDeniedException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsQueryAccessDeniedException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
 
@@ -49,10 +48,14 @@ public final class ActionPolicies {
             unowned(ConsumerAction.BENEFICIARY_ADD),
             unowned(ConsumerAction.BENEFICIARY_MODIFY),
             unowned(ConsumerAction.BENEFICIARY_DELETE),
+            unowned(ConsumerAction.SUMMARY_VIEW),
+            unowned(ConsumerAction.USER_CHARGES_LIST),
+            unowned(ConsumerAction.USER_OBLIGEES_VIEW),
+            unownedScopeOnly(ConsumerAction.USER_PROFILE_VIEW),
+            unownedScopeOnly(ConsumerAction.USER_IMAGE_VIEW),
+            unownedScopeOnly(ConsumerAction.USER_PASSWORD_CHANGE),
             owned(ConsumerAction.SAVINGS_VIEW, ResourceType.SAVINGS, SavingsQueryAccessDeniedException::new),
-            owned(ConsumerAction.SAVINGS_CHARGE_PAY, ResourceType.SAVINGS, SavingsCommandAccessDeniedException::new),
             owned(ConsumerAction.LOANS_VIEW, ResourceType.LOANS, LoanQueryAccessDeniedException::new),
-            owned(ConsumerAction.LOAN_CHARGE_PAY, ResourceType.LOANS, LoanCommandAccessDeniedException::new),
             owned(ConsumerAction.LOAN_APPLICATION_MODIFY, ResourceType.LOANS, LoanCommandAccessDeniedException::new),
             owned(ConsumerAction.LOAN_APPLICATION_WITHDRAW, ResourceType.LOANS, LoanCommandAccessDeniedException::new),
             owned(ConsumerAction.TRANSFER_EXECUTE, ResourceType.SAVINGS, TransferAccessDeniedException::new))
@@ -78,6 +81,14 @@ public final class ActionPolicies {
                 .action(action)
                 .requiredScope(AuthenticationConstants.SCOPE_CONSUMER_FULL)
                 .requiresKycVerified(true)
+                .build();
+    }
+
+    private static ActionPolicy unownedScopeOnly(ConsumerAction action) {
+        return ActionPolicy.builder()
+                .action(action)
+                .requiredScope(AuthenticationConstants.SCOPE_CONSUMER_FULL)
+                .requiresKycVerified(false)
                 .build();
     }
 }

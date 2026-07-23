@@ -28,7 +28,6 @@ import org.apache.fineract.consumer.infrastructure.access.exception.AccessKycReq
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessPolicyMissingException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
-import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 

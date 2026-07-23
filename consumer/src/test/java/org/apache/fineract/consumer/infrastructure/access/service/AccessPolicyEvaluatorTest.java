@@ -37,10 +37,8 @@ import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessKycRequiredException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
-import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
 import org.apache.fineract.consumer.loans.query.exception.LoanQueryAccessDeniedException;
-import org.apache.fineract.consumer.savings.command.exception.SavingsCommandAccessDeniedException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsQueryAccessDeniedException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
 import org.junit.jupiter.api.Test;
@@ -131,15 +129,6 @@ class AccessPolicyEvaluatorTest {
     }
 
     @Test
-    void authorizeDeniesNonOwnedSavingsChargeWithCommandSideException() {
-        stubOwnedAccounts();
-
-        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_CHARGE_PAY, FOREIGN_ACCOUNT_ID))
-                .isInstanceOf(SavingsCommandAccessDeniedException.class)
-                .hasFieldOrPropertyWithValue("code", SavingsCommandAccessDeniedException.CODE);
-    }
-
-    @Test
     void authorizeDeniesNonOwnedLoanWithQuerySideException() {
         stubOwnedAccounts();
 
@@ -149,10 +138,10 @@ class AccessPolicyEvaluatorTest {
     }
 
     @Test
-    void authorizeDeniesNonOwnedLoanChargeWithCommandSideException() {
+    void authorizeDeniesNonOwnedLoanModifyWithCommandSideException() {
         stubOwnedAccounts();
 
-        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.LOAN_CHARGE_PAY, FOREIGN_ACCOUNT_ID))
+        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.LOAN_APPLICATION_MODIFY, FOREIGN_ACCOUNT_ID))
                 .isInstanceOf(LoanCommandAccessDeniedException.class)
                 .hasFieldOrPropertyWithValue("code", LoanCommandAccessDeniedException.CODE);
     }

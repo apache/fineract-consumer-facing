@@ -20,12 +20,15 @@
 package org.apache.fineract.consumer.user.command.repository;
 
 import java.util.Optional;
+import java.util.UUID;
 import org.apache.fineract.consumer.user.command.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserCommandRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByEmail(String email);
+
+    Optional<User> findByPublicId(UUID publicId);
 
     Optional<User> findByFineractClientId(Long fineractClientId);
 }

@@ -24,6 +24,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Map;
@@ -179,6 +180,27 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
                         refreshTokenCommandRepository.save(token);
                     });
         }
+    }
+
+    @Override
+    @Command
+    @Transactional
+    public void revokeAllSessions(Long userId, UUID publicId) {
+        revokeAllActiveTokens(userId);
+        jwtDenylist.denyAllIssuedUpTo(publicId.toString(), Instant.now());
+    }
+
+    @Override
+    @Command
+    @Transactional
+    public EstablishedSessionCommandData revokeAllSessionsAndReissue(Long userId, UUID publicId,
+            String deviceFingerprint) {
+        revokeAllActiveTokens(userId);
+        jwtDenylist.denyAllIssuedUpTo(publicId.toString(),
+                Instant.now().truncatedTo(ChronoUnit.SECONDS).minusMillis(1));
+        UserQueryData user = userQueryService.findById(userId);
+        return establishSession(user.getId(), user.getPublicId(), user.getStatus() == UserStatus.BOUND,
+                deviceFingerprint, null);
     }
 
     private EstablishedSessionCommandData establishSession(Long userId, UUID publicId, boolean kycVerified,

@@ -48,7 +48,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.query.Query;
-import org.apache.fineract.consumer.infrastructure.web.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.loans.query.data.CalculateLoanScheduleQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanAccountListItemQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanAccountQueryData;

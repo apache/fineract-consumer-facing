@@ -59,6 +59,12 @@ public final class AuthenticationClient {
         return throwIfError(API.login(deviceFingerprint, Map.of("email", email, "password", password)));
     }
 
+    public Response loginWithAccessCookie(String email, String password, String deviceFingerprint,
+            String accessToken) {
+        return throwIfError(API.loginWithCookie(ACCESS_COOKIE_PREFIX + accessToken, deviceFingerprint,
+                Map.of("email", email, "password", password)));
+    }
+
     public Response verifyTwoFactor(String challengeToken, String otpToken, String deviceFingerprint) {
         return throwIfError(API.verifyTwoFactor(deviceFingerprint,
                 Map.of("challengeToken", challengeToken, "token", otpToken)));
@@ -95,6 +101,12 @@ public final class AuthenticationClient {
         @RequestLine("POST /api/v1/authentication/login")
         @Headers({ "Content-Type: " + MediaType.APPLICATION_JSON_VALUE, ConsumerHeaders.DEVICE_FINGERPRINT + ": {fingerprint}" })
         Response login(@Param("fingerprint") String fingerprint, Map<String, Object> body);
+
+        @RequestLine("POST /api/v1/authentication/login")
+        @Headers({ "Content-Type: " + MediaType.APPLICATION_JSON_VALUE, "Cookie: {cookie}",
+                ConsumerHeaders.DEVICE_FINGERPRINT + ": {fingerprint}" })
+        Response loginWithCookie(@Param("cookie") String cookie, @Param("fingerprint") String fingerprint,
+                Map<String, Object> body);
 
         @RequestLine("POST /api/v1/authentication/2fa")
         @Headers({ "Content-Type: " + MediaType.APPLICATION_JSON_VALUE, ConsumerHeaders.DEVICE_FINGERPRINT + ": {fingerprint}" })

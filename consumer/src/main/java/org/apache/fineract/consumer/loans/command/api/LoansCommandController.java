@@ -22,13 +22,7 @@ package org.apache.fineract.consumer.loans.command.api;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
-import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommand;
-import org.apache.fineract.consumer.loans.command.data.ConfirmLoanChargePaymentCommandRequest;
-import org.apache.fineract.consumer.loans.command.data.InitiateLoanChargePaymentCommand;
 import org.apache.fineract.consumer.loans.command.data.LoanApplicationCommandData;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentChallengeCommandData;
-import org.apache.fineract.consumer.loans.command.data.LoanChargePaymentCommandData;
 import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommandRequest;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
@@ -46,7 +40,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -124,38 +117,5 @@ public class LoansCommandController {
                 .withdrawnOnDate(request.getWithdrawnOnDate())
                 .build();
         return ResponseEntity.ok(loansCommandService.withdrawApplication(jwt, cmd));
-    }
-
-    @Operation(operationId = "initiateLoanChargePayment")
-    @PostMapping("/{loanId}/charges/{chargeId}/pay")
-    public ResponseEntity<LoanChargePaymentChallengeCommandData> initiateChargePayment(
-            @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(ConsumerHeaders.DEVICE_FINGERPRINT) String deviceFingerprint,
-            @PathVariable Long loanId,
-            @PathVariable Long chargeId) {
-        InitiateLoanChargePaymentCommand command = InitiateLoanChargePaymentCommand.builder()
-                .loanId(loanId)
-                .chargeId(chargeId)
-                .deviceFingerprint(deviceFingerprint)
-                .build();
-        return ResponseEntity.ok(loansCommandService.initiateChargePayment(jwt, command));
-    }
-
-    @Operation(operationId = "confirmLoanChargePayment")
-    @PostMapping("/{loanId}/charges/{chargeId}/pay/confirm")
-    public ResponseEntity<LoanChargePaymentCommandData> confirmChargePayment(
-            @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(ConsumerHeaders.DEVICE_FINGERPRINT) String deviceFingerprint,
-            @PathVariable Long loanId,
-            @PathVariable Long chargeId,
-            @Valid @RequestBody ConfirmLoanChargePaymentCommandRequest request) {
-        ConfirmLoanChargePaymentCommand command = ConfirmLoanChargePaymentCommand.builder()
-                .loanId(loanId)
-                .chargeId(chargeId)
-                .stepUpToken(request.getStepUpToken())
-                .otp(request.getOtp())
-                .deviceFingerprint(deviceFingerprint)
-                .build();
-        return ResponseEntity.ok(loansCommandService.confirmChargePayment(jwt, command));
     }
 }

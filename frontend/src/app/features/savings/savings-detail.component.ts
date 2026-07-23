@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
@@ -32,7 +32,6 @@ import { MatTableModule } from '@angular/material/table';
 import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
-import { ChargePaymentComponent } from './charge-payment.component';
 import { SavingsStore } from './savings.store';
 
 function toIsoDate(value: Date | null): string | undefined {
@@ -63,7 +62,6 @@ function toIsoDate(value: Date | null): string | undefined {
     DecimalPipe,
     PageHeaderComponent,
     StatusBadgeComponent,
-    ChargePaymentComponent,
   ],
   template: `
     <app-page-header [title]="'savings.detail.title' | translate" />
@@ -112,12 +110,6 @@ function toIsoDate(value: Date | null): string | undefined {
             <th mat-header-cell *matHeaderCellDef class="num">{{ 'common.table.outstanding' | translate }}</th>
             <td mat-cell *matCellDef="let row" class="num">{{ row.amountOutstanding | number: '1.2-2' }}</td>
           </ng-container>
-          <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef></th>
-            <td mat-cell *matCellDef="let row">
-              <button mat-button color="primary" (click)="pay(row.id)">{{ 'common.action.pay' | translate }}</button>
-            </td>
-          </ng-container>
 
           <tr mat-header-row *matHeaderRowDef="chargeColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: chargeColumns"></tr>
@@ -125,15 +117,6 @@ function toIsoDate(value: Date | null): string | undefined {
             <td [attr.colspan]="chargeColumns.length">{{ 'common.table.noCharges' | translate }}</td>
           </tr>
         </table>
-
-        @if (payingCharge(); as charge) {
-          <app-charge-payment
-            [savingsId]="savingsId"
-            [charge]="charge"
-            (paid)="onChargePaid()"
-            (cancelled)="payingChargeId.set(null)"
-          />
-        }
       </mat-card-content>
     </mat-card>
 
@@ -156,12 +139,12 @@ function toIsoDate(value: Date | null): string | undefined {
             <mat-datepicker #toPicker />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>{{ 'common.filter.limit' | translate }}</mat-label>
-            <input matInput type="number" formControlName="limit" />
+            <mat-label>{{ 'common.filter.page' | translate }}</mat-label>
+            <input matInput type="number" min="0" formControlName="page" />
           </mat-form-field>
           <mat-form-field appearance="fill">
-            <mat-label>{{ 'common.filter.offset' | translate }}</mat-label>
-            <input matInput type="number" formControlName="offset" />
+            <mat-label>{{ 'common.filter.size' | translate }}</mat-label>
+            <input matInput type="number" min="1" formControlName="size" />
           </mat-form-field>
           <button mat-flat-button color="primary" type="submit">{{ 'common.action.applyFilter' | translate }}</button>
         </form>
@@ -227,46 +210,30 @@ export class SavingsDetailComponent {
   protected readonly store = inject(SavingsStore);
 
   protected readonly savingsId = Number(this.route.snapshot.paramMap.get('savingsId'));
-  protected readonly chargeColumns = ['name', 'amount', 'amountOutstanding', 'actions'];
+  protected readonly chargeColumns = ['name', 'amount', 'amountOutstanding'];
   protected readonly txColumns = ['date', 'type', 'amount', 'runningBalance'];
-
-  protected readonly payingChargeId = signal<number | null>(null);
-  protected readonly payingCharge = computed(() =>
-    this.store.charges().find(charge => charge.id === this.payingChargeId()),
-  );
 
   protected readonly filterForm = this.fb.group({
     fromDate: this.fb.control<Date | null>(null),
     toDate: this.fb.control<Date | null>(null),
-    limit: this.fb.control<number>(20),
-    offset: this.fb.control<number>(0),
+    page: this.fb.control<number>(0),
+    size: this.fb.control<number>(20),
   });
 
   constructor() {
     this.store.loadAccount(this.savingsId);
     this.store.loadCharges(this.savingsId);
-    this.store.loadTransactions(this.savingsId, { limit: 20, offset: 0 });
+    this.store.loadTransactions(this.savingsId, { page: 0, size: 20 });
   }
 
   protected applyFilter(): void {
-    const { fromDate, toDate, limit, offset } = this.filterForm.getRawValue();
+    const { fromDate, toDate, page, size } = this.filterForm.getRawValue();
     this.store.loadTransactions(this.savingsId, {
       fromDate: toIsoDate(fromDate),
       toDate: toIsoDate(toDate),
-      limit,
-      offset,
+      page,
+      size,
     });
-  }
-
-  protected pay(chargeId: number | undefined): void {
-    if (chargeId != null) {
-      this.payingChargeId.set(chargeId);
-    }
-  }
-
-  protected onChargePaid(): void {
-    this.payingChargeId.set(null);
-    this.store.loadCharges(this.savingsId);
   }
 
   protected openTransaction(transactionId: number | undefined): void {

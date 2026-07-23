@@ -19,10 +19,17 @@
 
 package org.apache.fineract.consumer.user.query.service;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.fineract.consumer.user.query.data.UserChargesQuery;
+import org.apache.fineract.consumer.user.query.data.UserChargesQueryResponse;
 import org.apache.fineract.consumer.user.query.data.UserCredentialsQueryData;
+import org.apache.fineract.consumer.user.query.data.UserImageQueryData;
+import org.apache.fineract.consumer.user.query.data.UserObligeeQueryData;
+import org.apache.fineract.consumer.user.query.data.UserProfileQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface UserQueryService {
 
@@ -31,4 +38,12 @@ public interface UserQueryService {
     UserQueryData findById(Long id);
 
     Optional<UserCredentialsQueryData> findCredentialsByEmail(String email);
+
+    UserProfileQueryData getProfile(Jwt jwt);
+
+    UserChargesQueryResponse getCharges(Jwt jwt, UserChargesQuery query);
+
+    List<UserObligeeQueryData> getObligees(Jwt jwt);
+
+    UserImageQueryData getImage(Jwt jwt, Integer maxWidth, Integer maxHeight);
 }

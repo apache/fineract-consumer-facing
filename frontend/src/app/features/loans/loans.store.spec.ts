@@ -24,6 +24,11 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Configuration, LoanSchedulePreviewQueryRequest } from '@bff/client';
 import { LoansStore } from './loans.store';
 
+const LOANS_URL = '/api/v1/loans';
+const SCHEDULE_PREVIEW_URL = `${LOANS_URL}/schedule-preview`;
+const LOAN_ID = 42;
+const LOAN_URL = `${LOANS_URL}/${LOAN_ID}`;
+
 const previewRequest: LoanSchedulePreviewQueryRequest = {
   productId: 1,
   principal: 1000,
@@ -63,7 +68,7 @@ describe('LoansStore', () => {
   it('previewSchedule posts to schedule-preview and sets the schedulePreview signal', () => {
     store.previewSchedule(previewRequest).subscribe();
     controller
-      .expectOne('/api/v1/loans/schedule-preview')
+      .expectOne(SCHEDULE_PREVIEW_URL)
       .flush({ totalRepaymentExpected: 1024, periods: [{ period: 1 }] });
 
     expect(store.schedulePreview()?.totalRepaymentExpected).toBe(1024);
@@ -71,31 +76,19 @@ describe('LoansStore', () => {
 
   it('submit stores the returned draft', () => {
     store.submit(previewRequest).subscribe();
-    controller.expectOne('/api/v1/loans').flush({ loanId: 42 });
+    controller.expectOne(LOANS_URL).flush({ loanId: LOAN_ID });
 
-    expect(store.draft()?.loanId).toBe(42);
+    expect(store.draft()?.loanId).toBe(LOAN_ID);
   });
 
   it('withdraw sends command=withdraw and clears the draft', () => {
-    store.draft.set({ loanId: 42 });
+    store.draft.set({ loanId: LOAN_ID });
 
-    store.withdraw(42, { withdrawnOnDate: '2026-06-25' }).subscribe();
-    const req = controller.expectOne(r => r.url === '/api/v1/loans/42');
+    store.withdraw(LOAN_ID, { withdrawnOnDate: '2026-06-25' }).subscribe();
+    const req = controller.expectOne(r => r.url === LOAN_URL);
     expect(req.request.params.get('command')).toBe('withdraw');
-    req.flush({ loanId: 42 });
+    req.flush({ loanId: LOAN_ID });
 
     expect(store.draft()).toBeNull();
-  });
-
-  it('initiateChargePayment stores the challenge and confirmChargePayment clears it', () => {
-    store.initiateChargePayment(7, 3).subscribe();
-    controller
-      .expectOne('/api/v1/loans/7/charges/3/pay')
-      .flush({ stepUpToken: 'tok', sentTo: 'a***@example.com' });
-    expect(store.chargePaymentChallenge()?.stepUpToken).toBe('tok');
-
-    store.confirmChargePayment(7, 3, { stepUpToken: 'tok', otp: '123456' }).subscribe();
-    controller.expectOne('/api/v1/loans/7/charges/3/pay/confirm').flush({ loanId: 7 });
-    expect(store.chargePaymentChallenge()).toBeNull();
   });
 });

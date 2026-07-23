@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.Instant;
+import org.apache.fineract.consumer.infrastructure.configs.AuthenticationProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,10 +41,16 @@ import org.springframework.data.redis.core.ValueOperations;
 @ExtendWith(MockitoExtension.class)
 class JwtDenylistTest {
 
+    private static final String KEY_PREFIX = "jwt:denylist:";
+    private static final String SUBJECT_KEY_PREFIX = KEY_PREFIX + "subject:";
     private static final String TOKEN_ID = "3f2c8a1e-0000-4000-8000-000000000001";
-    private static final String EXPECTED_KEY = "jwt:denylist:" + TOKEN_ID;
+    private static final String EXPECTED_KEY = KEY_PREFIX + TOKEN_ID;
+    private static final String SUBJECT = "7d4b9c2f-0000-4000-8000-000000000002";
+    private static final String OTHER_SUBJECT = "other-subject";
+    private static final String EXPECTED_SUBJECT_KEY = SUBJECT_KEY_PREFIX + SUBJECT;
     private static final Duration TOKEN_LIFETIME = Duration.ofSeconds(900);
     private static final Duration CLOCK_SKEW_PAD = Duration.ofSeconds(60);
+    private static final Instant CUTOFF = Instant.parse("2026-07-22T12:00:00Z");
 
     @Mock
     private StringRedisTemplate redisTemplate;
@@ -55,7 +62,8 @@ class JwtDenylistTest {
 
     @BeforeEach
     void setUp() {
-        denylist = new JwtDenylist(redisTemplate);
+        AuthenticationProperties properties = new AuthenticationProperties(TOKEN_LIFETIME, null, null, null, false);
+        denylist = new JwtDenylist(redisTemplate, properties);
     }
 
     @Test
@@ -104,5 +112,60 @@ class JwtDenylistTest {
         when(redisTemplate.hasKey(EXPECTED_KEY)).thenThrow(new RedisConnectionFailureException("store down"));
 
         assertThat(denylist.isDenied(TOKEN_ID)).isTrue();
+    }
+
+    @Test
+    void denyAllIssuedUpToWritesSubjectKeyWithAccessTokenTtlPlusSkewPad() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        denylist.denyAllIssuedUpTo(SUBJECT, CUTOFF);
+
+        verify(valueOperations).set(EXPECTED_SUBJECT_KEY, CUTOFF.toString(), TOKEN_LIFETIME.plus(CLOCK_SKEW_PAD));
+    }
+
+    @Test
+    void tokenIssuedBeforeCutoffIsDeniedForSubject() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(EXPECTED_SUBJECT_KEY)).thenReturn(CUTOFF.toString());
+
+        assertThat(denylist.isDeniedForSubject(SUBJECT, CUTOFF.minusSeconds(1))).isTrue();
+    }
+
+    @Test
+    void tokenIssuedExactlyAtCutoffIsDeniedForSubject() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(EXPECTED_SUBJECT_KEY)).thenReturn(CUTOFF.toString());
+
+        assertThat(denylist.isDeniedForSubject(SUBJECT, CUTOFF)).isTrue();
+    }
+
+    @Test
+    void tokenIssuedAfterCutoffIsNotDeniedForSubject() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(EXPECTED_SUBJECT_KEY)).thenReturn(CUTOFF.toString());
+
+        assertThat(denylist.isDeniedForSubject(SUBJECT, CUTOFF.plusSeconds(1))).isFalse();
+    }
+
+    @Test
+    void subjectWithoutCutoffIsNotDenied() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(SUBJECT_KEY_PREFIX + OTHER_SUBJECT)).thenReturn(null);
+
+        assertThat(denylist.isDeniedForSubject(OTHER_SUBJECT, CUTOFF)).isFalse();
+    }
+
+    @Test
+    void nullSubjectIsNotDenied() {
+        assertThat(denylist.isDeniedForSubject(null, CUTOFF)).isFalse();
+
+        verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
+    void nullIssuedAtIsNotDenied() {
+        assertThat(denylist.isDeniedForSubject(SUBJECT, null)).isFalse();
+
+        verifyNoInteractions(redisTemplate);
     }
 }

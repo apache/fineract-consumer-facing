@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.authentication.command.service;
 
+import java.util.UUID;
 import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginChallengeCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginCommand;
@@ -35,4 +36,8 @@ public interface AuthenticationCommandService {
     EstablishedSessionCommandData refresh(RefreshSessionCommand command);
 
     void logout(LogoutCommand command);
+
+    void revokeAllSessions(Long userId, UUID publicId);
+
+    EstablishedSessionCommandData revokeAllSessionsAndReissue(Long userId, UUID publicId, String deviceFingerprint);
 }

@@ -24,6 +24,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Configuration } from '@bff/client';
 import { SummaryStore } from './summary.store';
 
+const ACCOUNTS_SUMMARY_URL = '/api/v1/summary/accounts';
+
 describe('SummaryStore', () => {
   let store: SummaryStore;
   let controller: HttpTestingController;
@@ -43,18 +45,24 @@ describe('SummaryStore', () => {
 
   afterEach(() => controller.verify());
 
-  it('merges list fields with per-account detail balances', () => {
+  it('maps the single accounts-summary response into savings and loan cards', () => {
     store.load();
 
-    controller
-      .expectOne('/api/v1/savings')
-      .flush([{ id: 1, accountNo: '000001', productName: 'Passbook', currency: 'USD' }]);
-    controller
-      .expectOne('/api/v1/loans')
-      .flush([{ id: 5, accountNo: 'L-5', productName: 'Personal', currency: 'USD' }]);
-
-    controller.expectOne('/api/v1/savings/1').flush({ balance: 100, availableBalance: 90 });
-    controller.expectOne('/api/v1/loans/5').flush({ totalOutstanding: 250 });
+    controller.expectOne(ACCOUNTS_SUMMARY_URL).flush({
+      savings: [
+        {
+          id: 1,
+          accountNo: '000001',
+          productName: 'Passbook',
+          currency: 'USD',
+          accountBalance: 100,
+          availableBalance: 90,
+        },
+      ],
+      loans: [
+        { id: 5, accountNo: 'L-5', productName: 'Personal', currency: 'USD', loanBalance: 250 },
+      ],
+    });
 
     expect(store.savingsCards()).toEqual([
       {
@@ -72,11 +80,34 @@ describe('SummaryStore', () => {
     expect(store.loading()).toBe(false);
   });
 
-  it('skips detail fetches when an account list is empty', () => {
+  it('renders null balances as zero', () => {
     store.load();
 
-    controller.expectOne('/api/v1/savings').flush([]);
-    controller.expectOne('/api/v1/loans').flush([]);
+    controller.expectOne(ACCOUNTS_SUMMARY_URL).flush({
+      savings: [{ id: 2, accountNo: '000002', productName: 'Passbook', currency: 'USD' }],
+      loans: [{ id: 7, accountNo: 'L-7', productName: 'Personal', currency: 'USD' }],
+    });
+
+    expect(store.savingsCards()).toEqual([
+      {
+        id: 2,
+        accountNo: '000002',
+        productName: 'Passbook',
+        currency: 'USD',
+        balance: 0,
+        availableBalance: 0,
+      },
+    ]);
+    expect(store.loanCards()).toEqual([
+      { id: 7, accountNo: 'L-7', productName: 'Personal', currency: 'USD', totalOutstanding: 0 },
+    ]);
+    expect(store.loading()).toBe(false);
+  });
+
+  it('handles an empty summary', () => {
+    store.load();
+
+    controller.expectOne(ACCOUNTS_SUMMARY_URL).flush({});
 
     expect(store.savingsCards()).toEqual([]);
     expect(store.loanCards()).toEqual([]);

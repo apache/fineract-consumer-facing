@@ -85,6 +85,11 @@ public class User {
         return user;
     }
 
+    public void changePassword(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+        this.updatedAt = Instant.now();
+    }
+
     public void markOtpVerified() {
         if (status != UserStatus.PENDING_OTP) {
             throw new InvalidBindingStateException();

@@ -19,33 +19,25 @@
 
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Observable, tap } from 'rxjs';
 import {
-  ConfirmSavingsChargePaymentCommandRequest,
-  InitiateSavingsChargePaymentCommandRequest,
   SavingsAccountListItemQueryData,
   SavingsAccountQueryData,
   SavingsApplicationTemplateQueryData,
-  SavingsChargePaymentChallengeCommandData,
-  SavingsChargePaymentCommandData,
   SavingsChargeQueryData,
-  SavingsCommandControllerService,
   SavingsQueryControllerService,
   SavingsTransactionQueryData,
 } from '@bff/client';
-import { deviceFingerprint } from '../../core/auth/device-fingerprint';
 
 export interface TransactionFilter {
   fromDate?: string;
   toDate?: string;
-  limit?: number;
-  offset?: number;
+  page?: number;
+  size?: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class SavingsStore {
   private readonly query = inject(SavingsQueryControllerService);
-  private readonly command = inject(SavingsCommandControllerService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly accounts = signal<SavingsAccountListItemQueryData[]>([]);
@@ -54,7 +46,6 @@ export class SavingsStore {
   readonly transactions = signal<SavingsTransactionQueryData[]>([]);
   readonly selectedTransaction = signal<SavingsTransactionQueryData | null>(null);
   readonly template = signal<SavingsApplicationTemplateQueryData | null>(null);
-  readonly chargePaymentChallenge = signal<SavingsChargePaymentChallengeCommandData | null>(null);
   readonly loading = signal(false);
 
   loadAccounts(): void {
@@ -101,7 +92,7 @@ export class SavingsStore {
     this.transactions.set([]);
     this.loading.set(true);
     this.query
-      .searchSavingsTransactions(savingsId, filter.fromDate, filter.toDate, filter.limit, filter.offset)
+      .searchSavingsTransactions(savingsId, filter.fromDate, filter.toDate, filter.page, filter.size)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: rows => {
@@ -124,25 +115,5 @@ export class SavingsStore {
       .getSavingsApplicationTemplate(productId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(template => this.template.set(template));
-  }
-
-  initiateChargePayment(
-    savingsId: number,
-    chargeId: number,
-    request: InitiateSavingsChargePaymentCommandRequest,
-  ): Observable<SavingsChargePaymentChallengeCommandData> {
-    return this.command
-      .initiateSavingsChargePayment(deviceFingerprint(), savingsId, chargeId, request)
-      .pipe(tap(challenge => this.chargePaymentChallenge.set(challenge)));
-  }
-
-  confirmChargePayment(
-    savingsId: number,
-    chargeId: number,
-    request: ConfirmSavingsChargePaymentCommandRequest,
-  ): Observable<SavingsChargePaymentCommandData> {
-    return this.command
-      .confirmSavingsChargePayment(deviceFingerprint(), savingsId, chargeId, request)
-      .pipe(tap(() => this.chargePaymentChallenge.set(null)));
   }
 }

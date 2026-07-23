@@ -37,11 +37,3 @@ Feature: Consumer savings reads
     When I get the other client's savings account
     Then the savings request is denied as forbidden
 
-  Scenario: Initiating a charge payment without a session is rejected
-    When I initiate a charge payment without a session
-    Then the savings request is rejected as unauthorized
-
-  Scenario: Initiating a charge payment on another client's savings account is denied
-    Given another client owns a savings account
-    When I initiate a charge payment on the other client's savings account
-    Then the savings request is denied as forbidden

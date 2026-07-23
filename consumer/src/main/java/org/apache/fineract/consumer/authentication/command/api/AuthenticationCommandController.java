@@ -21,8 +21,6 @@ package org.apache.fineract.consumer.authentication.command.api;
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
-import java.time.Duration;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
 import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
@@ -36,8 +34,8 @@ import org.apache.fineract.consumer.authentication.command.data.VerifyTwoFactorC
 import org.apache.fineract.consumer.authentication.command.data.VerifyTwoFactorCommandRequest;
 import org.apache.fineract.consumer.authentication.command.exception.RefreshTokenInvalidException;
 import org.apache.fineract.consumer.authentication.command.service.AuthenticationCommandService;
-import org.apache.fineract.consumer.infrastructure.configs.AuthenticationProperties;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.AuthCookieFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
@@ -56,12 +54,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthenticationCommandController {
 
-    private static final String ACCESS_COOKIE_PATH = "/api/v1";
-    private static final String REFRESH_COOKIE_PATH = "/api/v1/authentication";
-    private static final String SAME_SITE_STRICT = "Strict";
-
     private final AuthenticationCommandService authenticationCommandService;
-    private final AuthenticationProperties authenticationProperties;
+    private final AuthCookieFactory authCookieFactory;
 
     @Operation(operationId = "login")
     @PostMapping("/login")
@@ -115,19 +109,14 @@ public class AuthenticationCommandController {
                 .accessTokenExpiresAt(accessToken.getExpiresAt())
                 .build());
         return ResponseEntity.noContent()
-                .header(HttpHeaders.SET_COOKIE, accessCookie("", Duration.ZERO).toString())
-                .header(HttpHeaders.SET_COOKIE, refreshCookie("", Duration.ZERO).toString())
+                .header(HttpHeaders.SET_COOKIE, authCookieFactory.expiredAccessCookie().toString())
+                .header(HttpHeaders.SET_COOKIE, authCookieFactory.expiredRefreshCookie().toString())
                 .build();
     }
 
     private ResponseEntity<SessionCommandData> sessionResponse(EstablishedSessionCommandData session) {
-        Instant now = Instant.now();
-        ResponseCookie accessCookie = accessCookie(
-                session.getAccessToken(),
-                Duration.between(now, session.getAccessTokenExpiresAt()));
-        ResponseCookie refreshCookie = refreshCookie(
-                session.getRefreshToken(),
-                Duration.between(now, session.getRefreshTokenExpiresAt()));
+        ResponseCookie accessCookie = authCookieFactory.accessCookie(session);
+        ResponseCookie refreshCookie = authCookieFactory.refreshCookie(session);
         SessionCommandData body = SessionCommandData.builder()
                 .expiresAt(session.getAccessTokenExpiresAt())
                 .build();
@@ -135,23 +124,5 @@ public class AuthenticationCommandController {
                 .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
                 .body(body);
-    }
-
-    private ResponseCookie accessCookie(String value, Duration maxAge) {
-        return cookie(AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME, value, ACCESS_COOKIE_PATH, maxAge);
-    }
-
-    private ResponseCookie refreshCookie(String value, Duration maxAge) {
-        return cookie(AuthenticationConstants.REFRESH_TOKEN_COOKIE_NAME, value, REFRESH_COOKIE_PATH, maxAge);
-    }
-
-    private ResponseCookie cookie(String name, String value, String path, Duration maxAge) {
-        return ResponseCookie.from(name, value)
-                .httpOnly(true)
-                .secure(authenticationProperties.isCookieSecure())
-                .sameSite(SAME_SITE_STRICT)
-                .path(path)
-                .maxAge(maxAge)
-                .build();
     }
 }

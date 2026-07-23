@@ -20,10 +20,12 @@
 package org.apache.fineract.consumer.otp.command.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +41,7 @@ class OtpCommandRepositoryTest {
 
     private static final UUID PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
     private static final String EXPECTED_KEY = "otp:pending:" + PUBLIC_ID;
+    private static final String EXPECTED_ATTEMPTS_KEY = "otp:attempts:" + PUBLIC_ID;
     private static final String TOKEN_HASH = "a1b2c3d4e5f6";
 
     @Mock
@@ -64,6 +67,33 @@ class OtpCommandRepositoryTest {
     }
 
     @Test
+    void saveResetsFailedAttemptCounter() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        repository.savePendingOtp(PUBLIC_ID, TOKEN_HASH);
+
+        verify(redisTemplate).delete(EXPECTED_ATTEMPTS_KEY);
+    }
+
+    @Test
+    void recordFailedValidationAttemptIncrementsCounter() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.increment(EXPECTED_ATTEMPTS_KEY)).thenReturn(2L);
+
+        assertThat(repository.recordFailedValidationAttempt(PUBLIC_ID)).isEqualTo(2L);
+        verify(redisTemplate, never()).expire(EXPECTED_ATTEMPTS_KEY, Duration.ofSeconds(OtpConstants.OTP_TTL_SECONDS));
+    }
+
+    @Test
+    void recordFailedValidationAttemptSetsTtlOnFirstFailure() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.increment(EXPECTED_ATTEMPTS_KEY)).thenReturn(1L);
+
+        assertThat(repository.recordFailedValidationAttempt(PUBLIC_ID)).isEqualTo(1L);
+        verify(redisTemplate).expire(EXPECTED_ATTEMPTS_KEY, Duration.ofSeconds(OtpConstants.OTP_TTL_SECONDS));
+    }
+
+    @Test
     void getReturnsStoredHash() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get(EXPECTED_KEY)).thenReturn(TOKEN_HASH);
@@ -80,9 +110,9 @@ class OtpCommandRepositoryTest {
     }
 
     @Test
-    void deleteRemovesNamespacedKey() {
+    void deleteRemovesPendingOtpAndAttemptCounter() {
         repository.deletePendingOtp(PUBLIC_ID);
 
-        verify(redisTemplate).delete(EXPECTED_KEY);
+        verify(redisTemplate).delete(List.of(EXPECTED_KEY, EXPECTED_ATTEMPTS_KEY));
     }
 }

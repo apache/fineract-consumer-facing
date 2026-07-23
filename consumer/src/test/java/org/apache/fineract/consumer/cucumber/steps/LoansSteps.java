@@ -27,7 +27,6 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.util.List;
 import java.util.Objects;
-import org.apache.fineract.consumer.client.api.LoansCommandControllerApi;
 import org.apache.fineract.consumer.client.api.LoansQueryControllerApi;
 import org.apache.fineract.consumer.client.model.LoanAccountListItemQueryData;
 import org.apache.fineract.consumer.client.model.LoanAccountQueryData;
@@ -41,7 +40,6 @@ public class LoansSteps {
     private static final String DEVICE_FINGERPRINT = "cucumber-loans-device";
     private static final int UNAUTHORIZED = 401;
     private static final int FORBIDDEN = 403;
-    private static final long ARBITRARY_CHARGE_ID = 1L;
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final FineractSeeder fineractSeeder = new FineractSeeder();
@@ -49,7 +47,6 @@ public class LoansSteps {
 
     private RegistrationHelper.BoundUserWithAccounts user;
     private LoansQueryControllerApi loansApi;
-    private LoansCommandControllerApi loansCommandApi;
     private long foreignLoanId;
 
     private List<LoanAccountListItemQueryData> listResult;
@@ -61,7 +58,6 @@ public class LoansSteps {
         user = registrationHelper.registerBoundUserWithAccounts();
         String accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
         loansApi = authenticatedClient(accessToken);
-        loansCommandApi = authenticatedCommandClient(accessToken);
     }
 
     @When("I list my loan accounts")
@@ -111,18 +107,6 @@ public class LoansSteps {
         assertThat(errorStatus).isEqualTo(FORBIDDEN);
     }
 
-    @When("I initiate a loan charge payment without a session")
-    public void initiateChargePaymentWithoutSession() {
-        errorStatus = captureErrorStatus(() -> unauthenticatedCommandClient().initiateLoanChargePayment(
-                DEVICE_FINGERPRINT, user.loanAccountId(), ARBITRARY_CHARGE_ID));
-    }
-
-    @When("I initiate a loan charge payment on the other client's loan account")
-    public void initiateChargePaymentOnForeignLoan() {
-        errorStatus = captureErrorStatus(() -> loansCommandApi.initiateLoanChargePayment(
-                DEVICE_FINGERPRINT, foreignLoanId, ARBITRARY_CHARGE_ID));
-    }
-
     private static int captureErrorStatus(Runnable call) {
         try {
             call.run();
@@ -138,13 +122,5 @@ public class LoansSteps {
 
     private static LoansQueryControllerApi unauthenticatedClient() {
         return ConsumerApiClientFactory.unauthenticated(LoansQueryControllerApi.class);
-    }
-
-    private static LoansCommandControllerApi authenticatedCommandClient(String bearerToken) {
-        return ConsumerApiClientFactory.authenticated(LoansCommandControllerApi.class, bearerToken, DEVICE_FINGERPRINT);
-    }
-
-    private static LoansCommandControllerApi unauthenticatedCommandClient() {
-        return ConsumerApiClientFactory.unauthenticated(LoansCommandControllerApi.class);
     }
 }

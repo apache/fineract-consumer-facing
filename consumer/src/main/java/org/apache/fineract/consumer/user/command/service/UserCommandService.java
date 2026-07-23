@@ -19,12 +19,27 @@
 
 package org.apache.fineract.consumer.user.command.service;
 
+import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
+import org.apache.fineract.consumer.user.command.data.ConfirmPasswordChangeCommand;
 import org.apache.fineract.consumer.user.command.data.CreateUserCommand;
+import org.apache.fineract.consumer.user.command.data.ForgotPasswordCommand;
+import org.apache.fineract.consumer.user.command.data.InitiatePasswordChangeCommand;
+import org.apache.fineract.consumer.user.command.data.ResetPasswordCommand;
 import org.apache.fineract.consumer.user.command.data.UserCreatedCommandData;
+import org.apache.fineract.consumer.user.command.data.UserPasswordChangeChallengeCommandData;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface UserCommandService {
 
     UserCreatedCommandData create(CreateUserCommand command);
 
     void markOtpVerified(Long userId);
+
+    UserPasswordChangeChallengeCommandData initiatePasswordChange(Jwt jwt, InitiatePasswordChangeCommand command);
+
+    EstablishedSessionCommandData confirmPasswordChange(Jwt jwt, ConfirmPasswordChangeCommand command);
+
+    void forgotPassword(ForgotPasswordCommand command);
+
+    void resetPassword(ResetPasswordCommand command);
 }

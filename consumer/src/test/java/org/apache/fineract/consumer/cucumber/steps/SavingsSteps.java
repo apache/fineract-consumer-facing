@@ -27,10 +27,7 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.util.List;
 import java.util.Objects;
-import java.math.BigDecimal;
-import org.apache.fineract.consumer.client.api.SavingsCommandControllerApi;
 import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
-import org.apache.fineract.consumer.client.model.InitiateSavingsChargePaymentCommandRequest;
 import org.apache.fineract.consumer.client.model.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.client.model.SavingsAccountQueryData;
 import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
@@ -43,8 +40,6 @@ public class SavingsSteps {
     private static final String DEVICE_FINGERPRINT = "cucumber-savings-device";
     private static final int UNAUTHORIZED = 401;
     private static final int FORBIDDEN = 403;
-    private static final long ARBITRARY_CHARGE_ID = 1L;
-    private static final BigDecimal CHARGE_AMOUNT = new BigDecimal("10.00");
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final FineractSeeder fineractSeeder = new FineractSeeder();
@@ -52,7 +47,6 @@ public class SavingsSteps {
 
     private RegistrationHelper.BoundUserWithAccounts user;
     private SavingsQueryControllerApi savingsApi;
-    private SavingsCommandControllerApi savingsCommandApi;
     private long foreignSavingsId;
 
     private List<SavingsAccountListItemQueryData> listResult;
@@ -64,7 +58,6 @@ public class SavingsSteps {
         user = registrationHelper.registerBoundUserWithAccounts();
         String accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
         savingsApi = authenticatedClient(accessToken);
-        savingsCommandApi = authenticatedCommandClient(accessToken);
     }
 
     @When("I list my savings accounts")
@@ -114,22 +107,6 @@ public class SavingsSteps {
         assertThat(errorStatus).isEqualTo(FORBIDDEN);
     }
 
-    @When("I initiate a charge payment without a session")
-    public void initiateChargePaymentWithoutSession() {
-        errorStatus = captureErrorStatus(() -> unauthenticatedCommandClient().initiateSavingsChargePayment(
-                DEVICE_FINGERPRINT, user.savingsAccountId(), ARBITRARY_CHARGE_ID, chargePaymentRequest()));
-    }
-
-    @When("I initiate a charge payment on the other client's savings account")
-    public void initiateChargePaymentOnForeignSavings() {
-        errorStatus = captureErrorStatus(() -> savingsCommandApi.initiateSavingsChargePayment(
-                DEVICE_FINGERPRINT, foreignSavingsId, ARBITRARY_CHARGE_ID, chargePaymentRequest()));
-    }
-
-    private static InitiateSavingsChargePaymentCommandRequest chargePaymentRequest() {
-        return new InitiateSavingsChargePaymentCommandRequest().amount(CHARGE_AMOUNT);
-    }
-
     private static int captureErrorStatus(Runnable call) {
         try {
             call.run();
@@ -145,13 +122,5 @@ public class SavingsSteps {
 
     private static SavingsQueryControllerApi unauthenticatedClient() {
         return ConsumerApiClientFactory.unauthenticated(SavingsQueryControllerApi.class);
-    }
-
-    private static SavingsCommandControllerApi authenticatedCommandClient(String bearerToken) {
-        return ConsumerApiClientFactory.authenticated(SavingsCommandControllerApi.class, bearerToken, DEVICE_FINGERPRINT);
-    }
-
-    private static SavingsCommandControllerApi unauthenticatedCommandClient() {
-        return ConsumerApiClientFactory.unauthenticated(SavingsCommandControllerApi.class);
     }
 }
