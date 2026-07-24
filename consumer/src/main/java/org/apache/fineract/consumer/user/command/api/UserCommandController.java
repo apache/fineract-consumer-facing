@@ -24,7 +24,8 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
 import org.apache.fineract.consumer.authentication.command.data.SessionCommandData;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
-import org.apache.fineract.consumer.infrastructure.web.AuthCookieFactory;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthCookiePayload;
+import org.apache.fineract.consumer.infrastructure.access.service.AuthCookieFactory;
 import org.apache.fineract.consumer.user.command.data.ConfirmPasswordChangeCommand;
 import org.apache.fineract.consumer.user.command.data.ConfirmPasswordChangeCommandRequest;
 import org.apache.fineract.consumer.user.command.data.ForgotPasswordCommand;
@@ -80,9 +81,10 @@ public class UserCommandController {
                 .deviceFingerprint(deviceFingerprint)
                 .build();
         EstablishedSessionCommandData session = userCommandService.confirmPasswordChange(jwt, command);
+        AuthCookiePayload cookiePayload = session.toCookiePayload();
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, authCookieFactory.accessCookie(session).toString())
-                .header(HttpHeaders.SET_COOKIE, authCookieFactory.refreshCookie(session).toString())
+                .header(HttpHeaders.SET_COOKIE, authCookieFactory.accessCookie(cookiePayload).toString())
+                .header(HttpHeaders.SET_COOKIE, authCookieFactory.refreshCookie(cookiePayload).toString())
                 .body(SessionCommandData.builder()
                         .expiresAt(session.getAccessTokenExpiresAt())
                         .build());

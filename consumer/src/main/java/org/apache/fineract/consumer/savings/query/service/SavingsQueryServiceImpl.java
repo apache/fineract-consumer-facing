@@ -52,6 +52,7 @@ import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryDa
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionSearchQuery;
 import org.apache.fineract.consumer.savings.query.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsProductNotFoundException;
+import org.apache.fineract.consumer.savings.query.exception.SavingsQueryAccessDeniedException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsRequestInvalidException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsUpstreamUnavailableException;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -90,7 +91,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     @Override
     @Query
     public SavingsAccountQueryData getAccount(Jwt jwt, Long savingsId) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId);
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
+                SavingsQueryAccessDeniedException::new);
         SavingsAccountData account = fetch(() -> savingsAccountApi.retrieveSavingsAccount(savingsId, null, null, null));
         return toAccountData(account);
     }
@@ -98,7 +100,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     @Override
     @Query
     public List<SavingsChargeQueryData> getCharges(Jwt jwt, Long savingsId) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId);
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
+                SavingsQueryAccessDeniedException::new);
         List<GetSavingsAccountsSavingsAccountIdChargesResponse> charges =
                 fetch(() -> savingsChargesApi.retrieveAllSavingsAccountCharges(savingsId, null));
         if (charges == null) {
@@ -110,7 +113,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     @Override
     @Query
     public List<SavingsTransactionQueryData> searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, query.getSavingsId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, query.getSavingsId(),
+                SavingsQueryAccessDeniedException::new);
         Integer limit = query.getSize();
         Integer offset = query.getPage() * query.getSize();
         // TODO: Fix Fineract's GET /savingsaccounts/{id}/transactions/{txnId} endpoint to return an object, not a string, then refactor
@@ -133,7 +137,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     @Override
     @Query
     public SavingsTransactionQueryData getTransaction(Jwt jwt, Long savingsId, Long transactionId) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId);
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
+                SavingsQueryAccessDeniedException::new);
         String json = fetch(() ->
                 savingsAccountTransactionsApi.retrieveOneSavingsAccountTransaction(savingsId, transactionId));
         return toTransactionData(deserialize(json));

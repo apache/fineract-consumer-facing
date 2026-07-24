@@ -33,12 +33,12 @@ import org.apache.fineract.consumer.registration.command.data.SubmitRegistration
 import org.apache.fineract.consumer.registration.command.data.VerifyOtpCommand;
 import org.apache.fineract.consumer.registration.command.data.VerifyOtpCommandData;
 import org.apache.fineract.consumer.registration.command.exception.IdentityNotVerifiedException;
-import org.apache.fineract.consumer.registration.query.data.IdentityVerificationQueryData;
-import org.apache.fineract.consumer.registration.query.data.IdentityVerificationQuery;
-import org.apache.fineract.consumer.registration.query.service.IdentityQueryService;
+import org.apache.fineract.consumer.identity.query.data.IdentityVerificationQueryData;
+import org.apache.fineract.consumer.identity.query.data.IdentityVerificationQuery;
+import org.apache.fineract.consumer.identity.query.service.IdentityQueryService;
 import org.apache.fineract.consumer.user.command.data.CreateUserCommand;
 import org.apache.fineract.consumer.user.command.data.UserCreatedCommandData;
-import org.apache.fineract.consumer.user.command.domain.UserStatus;
+import org.apache.fineract.consumer.user.command.data.UserStatus;
 import org.apache.fineract.consumer.user.command.service.UserCommandService;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;

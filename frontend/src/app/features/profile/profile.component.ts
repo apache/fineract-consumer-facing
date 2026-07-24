@@ -232,26 +232,15 @@ import { ProfileStore } from './profile.store';
       </mat-card-content>
     </mat-card>
   `,
+  styleUrls: [
+    '../../shared/css/detail-page.scss',
+    '../../shared/css/table.scss',
+    '../../shared/css/filter-bar.scss',
+  ],
   styles: `
-    :host {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      padding: 2rem;
-    }
-    table {
-      width: 100%;
-    }
-    .filter {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
     .total {
       margin: 0.75rem 0 0;
-      color: rgba(0, 0, 0, 0.6);
+      color: var(--text-muted);
     }
     .avatar-fallback {
       display: flex;

@@ -12,21 +12,15 @@
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
+ * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
 
-package org.apache.fineract.consumer.user.command.exception;
-
-import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
-import org.springframework.http.HttpStatus;
-
-public class UserNotFoundException extends AbstractConsumerException {
-
-    public static final String CODE = "error.msg.consumer.user.not.found";
-
-    public UserNotFoundException() {
-        super(HttpStatus.NOT_FOUND, CODE, "user not found");
-    }
+.filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
 }

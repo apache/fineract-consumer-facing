@@ -12,32 +12,12 @@
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
+ * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
 
-package org.apache.fineract.consumer.registration.query.data;
-
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.ToString;
-
-@Getter
-@RequiredArgsConstructor
-@EqualsAndHashCode
-@ToString
-public final class IdentityVerificationQueryData {
-
-    private final boolean verified;
-    private final String maskedLastFour;
-
-    public static IdentityVerificationQueryData denied() {
-        return new IdentityVerificationQueryData(false, null);
-    }
-
-    public static IdentityVerificationQueryData verified(String maskedLastFour) {
-        return new IdentityVerificationQueryData(true, maskedLastFour);
-    }
+:host {
+  display: block;
+  padding: 1rem;
 }

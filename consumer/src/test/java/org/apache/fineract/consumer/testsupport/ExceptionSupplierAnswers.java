@@ -16,16 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.apache.fineract.consumer.testsupport;
 
-package org.apache.fineract.consumer.authentication.command.data;
+import java.util.function.Supplier;
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
+import org.mockito.stubbing.Answer;
 
-public final class AuthenticationConstants {
+public final class ExceptionSupplierAnswers {
 
-    private AuthenticationConstants() {
+    private ExceptionSupplierAnswers() {}
+
+    public static Answer<Void> throwsCallerSuppliedException(int supplierArgIndex) {
+        return invocation -> {
+            Supplier<? extends AbstractConsumerException> supplier = invocation.getArgument(supplierArgIndex);
+            throw supplier.get();
+        };
     }
-
-    public static final String ACCESS_TOKEN_COOKIE_NAME = "access_token";
-    public static final String REFRESH_TOKEN_COOKIE_NAME = "refresh_token";
-    public static final String CHALLENGE_PURPOSE_VALUE = "2fa_challenge";
-    public static final String SCOPE_CONSUMER_FULL = "consumer:full";
 }

@@ -19,7 +19,7 @@
 
 package org.apache.fineract.consumer.cucumber.helpers;
 
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.client.ApiClient;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
 import org.springframework.http.HttpHeaders;

@@ -21,7 +21,7 @@ package org.apache.fineract.consumer.infrastructure.configs;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.access.filter.DeviceFingerprintFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;

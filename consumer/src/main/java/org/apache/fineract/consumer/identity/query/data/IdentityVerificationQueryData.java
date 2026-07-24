@@ -17,12 +17,27 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.registration.query.service;
+package org.apache.fineract.consumer.identity.query.data;
 
-import org.apache.fineract.consumer.registration.query.data.IdentityVerificationQuery;
-import org.apache.fineract.consumer.registration.query.data.IdentityVerificationQueryData;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 
-public interface IdentityQueryService {
+@Getter
+@RequiredArgsConstructor
+@EqualsAndHashCode
+@ToString
+public final class IdentityVerificationQueryData {
 
-    IdentityVerificationQueryData verifyIdentity(IdentityVerificationQuery query);
+    private final boolean verified;
+    private final String maskedLastFour;
+
+    public static IdentityVerificationQueryData denied() {
+        return new IdentityVerificationQueryData(false, null);
+    }
+
+    public static IdentityVerificationQueryData verified(String maskedLastFour) {
+        return new IdentityVerificationQueryData(true, maskedLastFour);
+    }
 }

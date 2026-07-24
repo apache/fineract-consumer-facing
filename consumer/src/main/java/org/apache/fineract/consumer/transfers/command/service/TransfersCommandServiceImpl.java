@@ -24,7 +24,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
@@ -44,7 +44,6 @@ import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
 import org.apache.fineract.consumer.transfers.command.data.ConfirmTransferCommand;
 import org.apache.fineract.consumer.transfers.command.data.InitiateTransferCommand;
@@ -83,7 +82,8 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
 
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.TRANSFER_EXECUTE, command.getFromAccountId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.TRANSFER_EXECUTE, command.getFromAccountId(),
+                TransferAccessDeniedException::new);
         requireDestinationAllowed(jwt, user.getId(), command.getToAccountId(), toLoan, command.getAmount());
 
         otpCommandService.createOtp(publicId, OtpDestination.builder()
@@ -125,13 +125,10 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         }
 
         UserQueryData user = userQueryService.findByPublicId(publicId);
-        try {
-            otpCommandService.validateOtp(publicId, command.getOtp());
-        } catch (OtpTokenInvalidException e) {
-            throw new TransferStepUpInvalidException();
-        }
+        otpCommandService.validateOtp(publicId, command.getOtp(), TransferStepUpInvalidException::new);
 
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.TRANSFER_EXECUTE, command.getFromAccountId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.TRANSFER_EXECUTE, command.getFromAccountId(),
+                TransferAccessDeniedException::new);
         requireDestinationAllowed(jwt, user.getId(), command.getToAccountId(), toLoan, command.getAmount());
 
         Long callerClientId = user.getFineractClientId();

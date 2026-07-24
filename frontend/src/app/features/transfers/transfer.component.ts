@@ -82,7 +82,7 @@ import { TransfersStore } from './transfers.store';
                 <mat-label>{{ 'transfers.form.amountLabel' | translate }}</mat-label>
                 <input matInput type="number" step="0.01" formControlName="amount" />
               </mat-form-field>
-              <div class="actions">
+              <div class="actions-end">
                 <button
                   mat-flat-button
                   color="primary"
@@ -124,24 +124,15 @@ import { TransfersStore } from './transfers.store';
       </mat-card-content>
     </mat-card>
   `,
+  styleUrls: [
+    '../../shared/css/centered-page.scss',
+    '../../shared/css/form.scss',
+    '../../shared/css/actions.scss',
+  ],
   styles: `
-    :host {
-      display: flex;
-      justify-content: center;
-      padding: 2rem 1rem;
-    }
     .transfer-card {
       width: 100%;
       max-width: 28rem;
-    }
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    .actions {
-      display: flex;
-      justify-content: flex-end;
     }
     dl {
       display: grid;

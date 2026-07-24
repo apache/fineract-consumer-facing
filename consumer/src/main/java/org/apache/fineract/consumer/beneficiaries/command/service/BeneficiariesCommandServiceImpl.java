@@ -25,6 +25,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryChallengeCommandData;
+import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryCommandData;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryConstants;
 import org.apache.fineract.consumer.beneficiaries.command.data.ConfirmAddBeneficiaryCommand;
@@ -33,7 +34,6 @@ import org.apache.fineract.consumer.beneficiaries.command.data.InitiateAddBenefi
 import org.apache.fineract.consumer.beneficiaries.command.data.InitiateUpdateBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.data.ResolvedBeneficiaryAccount;
 import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
-import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
@@ -59,7 +59,6 @@ import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
 import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
@@ -279,11 +278,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     }
 
     private void validateOtp(UUID publicId, String otp) {
-        try {
-            otpCommandService.validateOtp(publicId, otp);
-        } catch (OtpTokenInvalidException e) {
-            throw new BeneficiaryStepUpInvalidException();
-        }
+        otpCommandService.validateOtp(publicId, otp, BeneficiaryStepUpInvalidException::new);
     }
 
     private String addActionFingerprint(String name, String officeName, String accountNumber,

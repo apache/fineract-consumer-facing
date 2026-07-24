@@ -45,7 +45,7 @@ import { OtpComponent } from '../../shared/otp/otp.component';
     TranslatePipe,
   ],
   template: `
-    <mat-card class="login-card">
+    <mat-card class="page-card">
       <mat-card-header>
         <mat-card-title>{{ 'auth.login.title' | translate }}</mat-card-title>
       </mat-card-header>
@@ -79,11 +79,11 @@ import { OtpComponent } from '../../shared/otp/otp.component';
               {{ 'common.action.continue' | translate }}
             </button>
           </form>
-          <p class="register-prompt">
+          <p class="prompt">
             {{ 'auth.login.registerPrompt' | translate }}
             <a routerLink="/register">{{ 'auth.login.registerLink' | translate }}</a>
           </p>
-          <p class="forgot-prompt">
+          <p class="prompt">
             <a routerLink="/forgot-password">{{ 'auth.login.forgotPasswordLink' | translate }}</a>
           </p>
         } @else {
@@ -97,32 +97,7 @@ import { OtpComponent } from '../../shared/otp/otp.component';
       </mat-card-content>
     </mat-card>
   `,
-  styles: `
-    :host {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100dvh;
-      padding: 2rem 1rem;
-    }
-    .login-card {
-      width: 100%;
-      max-width: 24rem;
-    }
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    .register-prompt {
-      margin: 1rem 0 0;
-      text-align: center;
-    }
-    .forgot-prompt {
-      margin: 0.25rem 0 0;
-      text-align: center;
-    }
-  `,
+  styleUrls: ['../../shared/css/centered-page.scss', '../../shared/css/form.scss'],
 })
 export class LoginComponent {
   private readonly fb = inject(NonNullableFormBuilder);

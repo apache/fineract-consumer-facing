@@ -32,7 +32,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
 import org.apache.fineract.consumer.client.api.BeneficiariesQueryControllerApi;
 import org.apache.fineract.consumer.client.api.TransfersCommandControllerApi;

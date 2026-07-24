@@ -21,6 +21,8 @@ package org.apache.fineract.consumer.savings.query.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -124,7 +126,7 @@ class SavingsQueryServiceImplTest {
     void getAccountDeniedWhenAccessPolicyRejects() {
         Jwt jwt = jwt();
         doThrow(new SavingsQueryAccessDeniedException())
-                .when(accessPolicyEvaluator).authorize(jwt, ConsumerAction.SAVINGS_VIEW, SAVINGS_ID);
+                .when(accessPolicyEvaluator).authorize(eq(jwt), eq(ConsumerAction.SAVINGS_VIEW), eq(SAVINGS_ID), any());
 
         assertThatThrownBy(() -> service.getAccount(jwt, SAVINGS_ID))
                 .isInstanceOf(SavingsQueryAccessDeniedException.class)

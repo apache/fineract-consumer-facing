@@ -50,12 +50,7 @@ import { SavingsStore } from './savings.store';
       </mat-card>
     }
   `,
-  styles: `
-    :host {
-      display: block;
-      padding: 1rem;
-    }
-  `,
+  styleUrls: ['../../shared/css/transaction-page.scss'],
 })
 export class SavingsTransactionComponent {
   private readonly route = inject(ActivatedRoute);

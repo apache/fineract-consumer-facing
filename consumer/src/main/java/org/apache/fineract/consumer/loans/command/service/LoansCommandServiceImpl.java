@@ -39,6 +39,7 @@ import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationComm
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.WithdrawLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.exception.LoanApplicationInvalidException;
+import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandNotFoundException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandUpstreamUnavailableException;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
@@ -77,7 +78,8 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     @Override
     @Command
     public LoanApplicationCommandData modifyApplication(Jwt jwt, ModifyLoanApplicationCommand command) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_MODIFY, command.getLoanId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_MODIFY, command.getLoanId(),
+                LoanCommandAccessDeniedException::new);
         Long clientId = resolveClientId(jwt);
         PutLoansLoanIdRequest request = buildModifyRequest(command);
         PutLoansLoanIdResponse response = call(() -> loansApi.modifyLoanApplication(command.getLoanId(), request, null));
@@ -91,7 +93,8 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     @Override
     @Command
     public LoanApplicationCommandData withdrawApplication(Jwt jwt, WithdrawLoanApplicationCommand command) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_WITHDRAW, command.getLoanId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_WITHDRAW, command.getLoanId(),
+                LoanCommandAccessDeniedException::new);
         Long clientId = resolveClientId(jwt);
         PostLoansLoanIdRequest request = new PostLoansLoanIdRequest()
                 .withdrawnOnDate(command.getWithdrawnOnDate().toString())

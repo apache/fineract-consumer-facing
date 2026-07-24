@@ -162,20 +162,7 @@ import { LoansStore } from './loans.store';
       </mat-card-content>
     </mat-card>
   `,
-  styles: `
-    :host {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      padding: 2rem;
-    }
-    table {
-      width: 100%;
-    }
-    .clickable {
-      cursor: pointer;
-    }
-  `,
+  styleUrls: ['../../shared/css/detail-page.scss', '../../shared/css/table.scss'],
 })
 export class LoansDetailComponent {
   private readonly route = inject(ActivatedRoute);

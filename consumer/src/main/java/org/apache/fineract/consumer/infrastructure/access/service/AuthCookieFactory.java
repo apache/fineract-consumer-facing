@@ -17,13 +17,13 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.web;
+package org.apache.fineract.consumer.infrastructure.access.service;
 
 import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
-import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthCookiePayload;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.configs.AuthenticationProperties;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
@@ -38,14 +38,14 @@ public class AuthCookieFactory {
 
     private final AuthenticationProperties authenticationProperties;
 
-    public ResponseCookie accessCookie(EstablishedSessionCommandData session) {
-        return accessCookie(session.getAccessToken(),
-                Duration.between(Instant.now(), session.getAccessTokenExpiresAt()));
+    public ResponseCookie accessCookie(AuthCookiePayload payload) {
+        return accessCookie(payload.getAccessToken(),
+                Duration.between(Instant.now(), payload.getAccessTokenExpiresAt()));
     }
 
-    public ResponseCookie refreshCookie(EstablishedSessionCommandData session) {
-        return refreshCookie(session.getRefreshToken(),
-                Duration.between(Instant.now(), session.getRefreshTokenExpiresAt()));
+    public ResponseCookie refreshCookie(AuthCookiePayload payload) {
+        return refreshCookie(payload.getRefreshToken(),
+                Duration.between(Instant.now(), payload.getRefreshTokenExpiresAt()));
     }
 
     public ResponseCookie expiredAccessCookie() {

@@ -48,7 +48,7 @@ import { RegistrationService } from './registration.service';
     TranslatePipe,
   ],
   template: `
-    <mat-card class="registration-card">
+    <mat-card class="page-card">
       @if (step() !== 'done') {
         <mat-card-header>
           <mat-card-title>{{ 'registration.title' | translate }}</mat-card-title>
@@ -144,23 +144,8 @@ import { RegistrationService } from './registration.service';
       </mat-card-content>
     </mat-card>
   `,
+  styleUrls: ['../../shared/css/centered-page.scss', '../../shared/css/form.scss'],
   styles: `
-    :host {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100dvh;
-      padding: 2rem 1rem;
-    }
-    .registration-card {
-      width: 100%;
-      max-width: 24rem;
-    }
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
     .done {
       display: flex;
       flex-direction: column;
@@ -176,7 +161,7 @@ import { RegistrationService } from './registration.service';
     }
     .done-sub {
       margin: 0;
-      color: rgba(0, 0, 0, 0.6);
+      color: var(--text-muted);
     }
   `,
 })

@@ -60,6 +60,7 @@ import org.apache.fineract.consumer.loans.query.data.LoanScheduleQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
 import org.apache.fineract.consumer.loans.query.exception.LoanProductNotFoundException;
+import org.apache.fineract.consumer.loans.query.exception.LoanQueryAccessDeniedException;
 import org.apache.fineract.consumer.loans.query.exception.LoanQueryNotFoundException;
 import org.apache.fineract.consumer.loans.query.exception.LoanQueryUpstreamUnavailableException;
 import org.apache.fineract.consumer.loans.query.exception.LoanSchedulePreviewInvalidException;
@@ -110,7 +111,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     @Override
     @Query
     public LoanAccountQueryData getLoan(Jwt jwt, Long loanId) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
+                LoanQueryAccessDeniedException::new);
         GetLoansLoanIdResponse loan = fetch(() -> loansApi.retrieveLoan(loanId, false, ASSOCIATIONS, null, null));
         return toAccountData(loan);
     }
@@ -118,7 +120,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     @Override
     @Query
     public List<LoanTransactionQueryData> listTransactions(Jwt jwt, LoanTransactionListQuery query) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, query.getLoanId());
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, query.getLoanId(),
+                LoanQueryAccessDeniedException::new);
         GetLoansLoanIdTransactionsResponse response = fetch(() -> loanTransactionsApi.retrieveTransactionsByLoanId(
                 query.getLoanId(), null, query.getPage(), query.getSize(), query.getSort()));
         if (response == null || response.getContent() == null) {
@@ -130,7 +133,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     @Override
     @Query
     public LoanTransactionQueryData getTransaction(Jwt jwt, Long loanId, Long transactionId) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
+                LoanQueryAccessDeniedException::new);
         GetLoansLoanIdTransactionsTransactionIdResponse transaction =
                 fetch(() -> loanTransactionsApi.retrieveTransaction(loanId, transactionId, null));
         return toTransactionData(transaction);
@@ -139,7 +143,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     @Override
     @Query
     public List<LoanChargeQueryData> getCharges(Jwt jwt, Long loanId) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
+                LoanQueryAccessDeniedException::new);
         List<GetLoansLoanIdChargesChargeIdResponse> charges =
                 fetch(() -> loanChargesApi.retrieveAllLoanCharges(loanId));
         if (charges == null) {
@@ -151,7 +156,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     @Override
     @Query
     public LoanChargeQueryData getCharge(Jwt jwt, Long loanId, Long chargeId) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
+                LoanQueryAccessDeniedException::new);
         GetLoansLoanIdChargesChargeIdResponse charge =
                 fetch(() -> loanChargesApi.retrieveLoanCharge(loanId, chargeId));
         return toChargeData(charge);
@@ -160,7 +166,8 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     @Override
     @Query
     public List<LoanGuarantorQueryData> getGuarantors(Jwt jwt, Long loanId) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId);
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
+                LoanQueryAccessDeniedException::new);
         List<GuarantorData> guarantors = fetch(() -> guarantorsApi.retrieveGuarantorDetails(loanId));
         if (guarantors == null) {
             return List.of();

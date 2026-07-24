@@ -47,7 +47,7 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
     TranslatePipe,
   ],
   template: `
-    <mat-card class="forgot-card">
+    <mat-card class="page-card">
       <mat-card-header>
         <mat-card-title>{{ 'auth.forgotPassword.title' | translate }}</mat-card-title>
       </mat-card-header>
@@ -79,6 +79,7 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
               <mat-label>{{ 'common.otp.codeLabel' | translate }}</mat-label>
               <input
                 matInput
+                class="otp-input"
                 formControlName="otp"
                 autocomplete="one-time-code"
                 autocapitalize="characters"
@@ -106,40 +107,13 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
             </button>
           </form>
         }
-        <p class="login-prompt">
+        <p class="prompt">
           <a routerLink="/login">{{ 'auth.forgotPassword.backToLogin' | translate }}</a>
         </p>
       </mat-card-content>
     </mat-card>
   `,
-  styles: `
-    :host {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100dvh;
-      padding: 2rem 1rem;
-    }
-    .forgot-card {
-      width: 100%;
-      max-width: 24rem;
-    }
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    input {
-      text-transform: none;
-    }
-    input[formControlName='otp'] {
-      text-transform: uppercase;
-    }
-    .login-prompt {
-      margin: 1rem 0 0;
-      text-align: center;
-    }
-  `,
+  styleUrls: ['../../shared/css/centered-page.scss', '../../shared/css/form.scss'],
 })
 export class ForgotPasswordComponent {
   private readonly fb = inject(NonNullableFormBuilder);

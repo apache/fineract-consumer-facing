@@ -30,7 +30,7 @@ import feign.jackson.JacksonEncoder;
 import feign.okhttp.OkHttpClient;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
 import org.springframework.http.MediaType;
 

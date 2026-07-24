@@ -25,7 +25,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.exception.ConsumerApiError;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;

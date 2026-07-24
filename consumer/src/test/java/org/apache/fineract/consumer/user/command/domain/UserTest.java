@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
+import org.apache.fineract.consumer.user.command.data.UserStatus;
 import org.apache.fineract.consumer.user.command.exception.InvalidBindingStateException;
 import org.junit.jupiter.api.Test;
 

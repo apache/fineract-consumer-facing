@@ -34,7 +34,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.fineract.consumer.authentication.command.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.authentication.command.exception.InvalidCredentialsException;
 import org.apache.fineract.consumer.authentication.command.exception.RefreshTokenInvalidException;
 import org.apache.fineract.consumer.authentication.command.exception.TwoFactorInvalidException;

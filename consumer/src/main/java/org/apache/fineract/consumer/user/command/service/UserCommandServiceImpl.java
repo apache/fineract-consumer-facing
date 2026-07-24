@@ -33,7 +33,6 @@ import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
 import org.apache.fineract.consumer.user.command.data.ConfirmPasswordChangeCommand;
 import org.apache.fineract.consumer.user.command.data.CreateUserCommand;
@@ -45,7 +44,7 @@ import org.apache.fineract.consumer.user.command.data.UserCreatedCommandData;
 import org.apache.fineract.consumer.user.command.data.UserPasswordChangeChallengeCommandData;
 import org.apache.fineract.consumer.user.command.domain.User;
 import org.apache.fineract.consumer.user.command.exception.UserAlreadyExistsException;
-import org.apache.fineract.consumer.user.command.exception.UserNotFoundException;
+import org.apache.fineract.consumer.user.command.exception.UserCommandNotFoundException;
 import org.apache.fineract.consumer.user.command.exception.UserPasswordInvalidException;
 import org.apache.fineract.consumer.user.command.exception.UserPasswordResetInvalidException;
 import org.apache.fineract.consumer.user.command.exception.UserStepUpInvalidException;
@@ -99,7 +98,7 @@ public class UserCommandServiceImpl implements UserCommandService {
     @Override
     @Command
     public void markOtpVerified(Long userId) {
-        User user = repository.findById(userId).orElseThrow(UserNotFoundException::new);
+        User user = repository.findById(userId).orElseThrow(UserCommandNotFoundException::new);
         user.markOtpVerified();
         repository.save(user);
     }
@@ -109,7 +108,7 @@ public class UserCommandServiceImpl implements UserCommandService {
     public UserPasswordChangeChallengeCommandData initiatePasswordChange(
             Jwt jwt, InitiatePasswordChangeCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_PASSWORD_CHANGE);
-        User user = repository.findByPublicId(publicId(jwt)).orElseThrow(UserNotFoundException::new);
+        User user = repository.findByPublicId(publicId(jwt)).orElseThrow(UserCommandNotFoundException::new);
         if (!passwordEncoder.matches(command.getCurrentPassword(), user.getPasswordHash())) {
             log.warn("password change initiate rejected: current password mismatch for user {}", user.getPublicId());
             throw new UserPasswordInvalidException();
@@ -136,13 +135,9 @@ public class UserCommandServiceImpl implements UserCommandService {
                 passwordChangeActionFingerprint(publicId))) {
             throw new UserStepUpInvalidException();
         }
-        try {
-            otpCommandService.validateOtp(publicId, command.getOtp());
-        } catch (OtpTokenInvalidException e) {
-            throw new UserStepUpInvalidException();
-        }
+        otpCommandService.validateOtp(publicId, command.getOtp(), UserStepUpInvalidException::new);
 
-        User user = repository.findByPublicId(publicId).orElseThrow(UserNotFoundException::new);
+        User user = repository.findByPublicId(publicId).orElseThrow(UserCommandNotFoundException::new);
         user.changePassword(passwordEncoder.encode(command.getNewPassword()));
         repository.save(user);
         return authenticationCommandService.revokeAllSessionsAndReissue(
@@ -170,12 +165,10 @@ public class UserCommandServiceImpl implements UserCommandService {
             log.warn("password.reset.failed: unknown email");
             return new UserPasswordResetInvalidException();
         });
-        try {
-            otpCommandService.validateOtp(user.getPublicId(), command.getOtp());
-        } catch (OtpTokenInvalidException e) {
+        otpCommandService.validateOtp(user.getPublicId(), command.getOtp(), () -> {
             log.warn("password.reset.failed: invalid otp for user {}", user.getPublicId());
-            throw new UserPasswordResetInvalidException();
-        }
+            return new UserPasswordResetInvalidException();
+        });
         user.changePassword(passwordEncoder.encode(command.getNewPassword()));
         repository.save(user);
         authenticationCommandService.revokeAllSessions(user.getId(), user.getPublicId());

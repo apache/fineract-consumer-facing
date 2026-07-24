@@ -48,8 +48,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetObligeeData;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
-import org.apache.fineract.consumer.user.query.domain.UserStatus;
-import org.apache.fineract.consumer.user.command.exception.UserNotFoundException;
+import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserChargeQueryData;
 import org.apache.fineract.consumer.user.query.data.UserChargesQuery;
 import org.apache.fineract.consumer.user.query.data.UserChargesQueryResponse;
@@ -60,6 +59,7 @@ import org.apache.fineract.consumer.user.query.data.UserProfileQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.exception.UserChargeStatusInvalidException;
 import org.apache.fineract.consumer.user.query.exception.UserImageNotFoundException;
+import org.apache.fineract.consumer.user.query.exception.UserQueryNotFoundException;
 import org.apache.fineract.consumer.user.query.exception.UserUpstreamUnavailableException;
 import org.apache.fineract.consumer.user.query.repository.UserQueryRepository;
 import org.junit.jupiter.api.Test;
@@ -172,7 +172,7 @@ class UserQueryServiceImplTest {
         when(repository.findByPublicId(PUBLIC_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findByPublicId(PUBLIC_ID))
-                .isInstanceOf(UserNotFoundException.class);
+                .isInstanceOf(UserQueryNotFoundException.class);
     }
 
     @Test
@@ -188,7 +188,7 @@ class UserQueryServiceImplTest {
         when(repository.findById(USER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findById(USER_ID))
-                .isInstanceOf(UserNotFoundException.class);
+                .isInstanceOf(UserQueryNotFoundException.class);
     }
 
     @Test

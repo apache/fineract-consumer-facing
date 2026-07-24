@@ -69,7 +69,7 @@ const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
           />
           <mat-hint>{{ 'registration.identity.passwordHint' | translate }}</mat-hint>
         </mat-form-field>
-        <div class="actions">
+        <div class="actions-end">
           <button
             mat-flat-button
             color="primary"
@@ -89,16 +89,10 @@ const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
       />
     }
   `,
+  styleUrls: ['../../shared/css/form.scss', '../../shared/css/actions.scss'],
   styles: `
     form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
       max-width: 24rem;
-    }
-    .actions {
-      display: flex;
-      justify-content: flex-end;
     }
   `,
 })

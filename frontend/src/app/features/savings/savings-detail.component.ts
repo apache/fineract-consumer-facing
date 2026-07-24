@@ -181,27 +181,11 @@ function toIsoDate(value: Date | null): string | undefined {
       </mat-card-content>
     </mat-card>
   `,
-  styles: `
-    :host {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      padding: 2rem;
-    }
-    table {
-      width: 100%;
-    }
-    .filter {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-    .clickable {
-      cursor: pointer;
-    }
-  `,
+  styleUrls: [
+    '../../shared/css/detail-page.scss',
+    '../../shared/css/table.scss',
+    '../../shared/css/filter-bar.scss',
+  ],
 })
 export class SavingsDetailComponent {
   private readonly fb = inject(NonNullableFormBuilder);

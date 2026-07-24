@@ -19,12 +19,14 @@
 
 package org.apache.fineract.consumer.beneficiaries.command.service;
 
+import static org.apache.fineract.consumer.testsupport.ExceptionSupplierAnswers.throwsCallerSuppliedException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -40,13 +42,13 @@ import java.util.Set;
 import java.util.UUID;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryChallengeCommandData;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryCommandData;
+import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryConstants;
 import org.apache.fineract.consumer.beneficiaries.command.data.ConfirmAddBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.data.ConfirmUpdateBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.data.InitiateAddBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.data.InitiateUpdateBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
-import org.apache.fineract.consumer.beneficiaries.command.domain.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
@@ -71,9 +73,8 @@ import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
-import org.apache.fineract.consumer.user.query.domain.UserStatus;
+import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;
@@ -414,10 +415,11 @@ class BeneficiariesCommandServiceImplTest {
         stubAddFingerprint(BeneficiaryAccountType.SAVINGS);
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT))
                 .thenReturn(true);
-        doThrow(new OtpTokenInvalidException()).when(otpCommandService).validateOtp(PUBLIC_ID, OTP);
+        doAnswer(throwsCallerSuppliedException(2)).when(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
 
         assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddSavingsCommand()))
-                .isInstanceOf(BeneficiaryStepUpInvalidException.class);
+                .isInstanceOf(BeneficiaryStepUpInvalidException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiaryStepUpInvalidException.CODE);
 
         verify(beneficiaryCommandRepository, never()).saveAndFlush(any());
     }

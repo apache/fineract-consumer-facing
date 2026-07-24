@@ -137,7 +137,7 @@ import { BeneficiariesStore } from './beneficiaries.store';
               </tr>
             </table>
 
-            <div class="actions">
+            <div class="actions-end">
               <button mat-flat-button color="primary" (click)="startAdd()">
                 <mat-icon>person_add</mat-icon>
                 {{ 'beneficiaries.list.addCta' | translate }}
@@ -176,7 +176,7 @@ import { BeneficiariesStore } from './beneficiaries.store';
                 <mat-label>{{ 'beneficiaries.form.transferLimitLabel' | translate }}</mat-label>
                 <input matInput type="number" step="0.01" formControlName="transferLimit" />
               </mat-form-field>
-              <div class="actions">
+              <div class="actions-end">
                 <button mat-button type="button" [disabled]="loading()" (click)="backToList()">
                   {{ 'beneficiaries.form.cancelCta' | translate }}
                 </button>
@@ -202,7 +202,7 @@ import { BeneficiariesStore } from './beneficiaries.store';
                 <mat-label>{{ 'beneficiaries.form.transferLimitLabel' | translate }}</mat-label>
                 <input matInput type="number" step="0.01" formControlName="transferLimit" />
               </mat-form-field>
-              <div class="actions">
+              <div class="actions-end">
                 <button mat-button type="button" [disabled]="loading()" (click)="backToList()">
                   {{ 'beneficiaries.form.cancelCta' | translate }}
                 </button>
@@ -231,27 +231,20 @@ import { BeneficiariesStore } from './beneficiaries.store';
       </mat-card-content>
     </mat-card>
   `,
+  styleUrls: [
+    '../../shared/css/form.scss',
+    '../../shared/css/table.scss',
+    '../../shared/css/actions.scss',
+  ],
   styles: `
-    table {
-      width: 100%;
-    }
     .row-actions {
       white-space: nowrap;
     }
     form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
       max-width: 28rem;
     }
-    .actions {
-      display: flex;
-      gap: 0.5rem;
-      justify-content: flex-end;
+    .actions-end {
       margin-top: 1rem;
-    }
-    .empty-row td {
-      padding: 1rem 0;
     }
     .otp-container {
       max-width: 24rem;

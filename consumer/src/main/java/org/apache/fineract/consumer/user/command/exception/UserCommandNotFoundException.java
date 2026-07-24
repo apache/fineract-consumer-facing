@@ -17,16 +17,16 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.registration.query.exception;
+package org.apache.fineract.consumer.user.command.exception;
 
 import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
 import org.springframework.http.HttpStatus;
 
-public class IdentityVerificationException extends AbstractConsumerException {
+public class UserCommandNotFoundException extends AbstractConsumerException {
 
-    public static final String CODE = "error.msg.consumer.identity.verification.unavailable";
+    public static final String CODE = "error.msg.consumer.user.not.found";
 
-    public IdentityVerificationException(Throwable cause) {
-        super(HttpStatus.BAD_GATEWAY, CODE, "identity verification temporarily unavailable", cause);
+    public UserCommandNotFoundException() {
+        super(HttpStatus.NOT_FOUND, CODE, "user not found");
     }
 }

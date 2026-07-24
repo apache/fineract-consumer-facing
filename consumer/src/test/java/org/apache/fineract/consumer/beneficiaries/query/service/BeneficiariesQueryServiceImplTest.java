@@ -33,7 +33,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryAccountType;
+import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryQueryEntity;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryTemplateQueryData;

@@ -39,7 +39,6 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.query.Query;
 import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
-import org.apache.fineract.consumer.user.command.exception.UserNotFoundException;
 import org.apache.fineract.consumer.user.query.data.UserChargeQueryData;
 import org.apache.fineract.consumer.user.query.data.UserChargesQuery;
 import org.apache.fineract.consumer.user.query.data.UserChargesQueryResponse;
@@ -50,6 +49,7 @@ import org.apache.fineract.consumer.user.query.data.UserProfileQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.exception.UserChargeStatusInvalidException;
 import org.apache.fineract.consumer.user.query.exception.UserImageNotFoundException;
+import org.apache.fineract.consumer.user.query.exception.UserQueryNotFoundException;
 import org.apache.fineract.consumer.user.query.exception.UserUpstreamUnavailableException;
 import org.apache.fineract.consumer.user.query.repository.UserQueryRepository;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -74,14 +74,14 @@ public class UserQueryServiceImpl implements UserQueryService {
     @Query
     public UserQueryData findByPublicId(UUID publicId) {
         return repository.findByPublicId(publicId)
-                .orElseThrow(UserNotFoundException::new);
+                .orElseThrow(UserQueryNotFoundException::new);
     }
 
     @Override
     @Query
     public UserQueryData findById(Long id) {
         return repository.findById(id)
-                .orElseThrow(UserNotFoundException::new);
+                .orElseThrow(UserQueryNotFoundException::new);
     }
 
     @Override
