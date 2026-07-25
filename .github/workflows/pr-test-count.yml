@@ -1,0 +1,129 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: PR Test Count
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test-count:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Count tests at base and head and build table
+        id: table
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'EOF'
+          import os, subprocess
+
+          JUNIT_TEST_ANNOTATION = r'@(Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)([^A-Za-z]|$)'
+          CUCUMBER_SCENARIO_LINE = r'^[[:space:]]*Scenario( Outline)?:'
+          IT_OR_TEST_CALL = r'^[[:space:]]*(it|test)(\.(each|only|skip|fixme|todo))*\('
+
+          SUITES = [
+              ('JUnit',      JUNIT_TEST_ANNOTATION, ':(glob)consumer/src/test/**/*.java'),
+              ('Cucumber',   CUCUMBER_SCENARIO_LINE, ':(glob)consumer/src/test/resources/features/**/*.feature'),
+              ('Vitest',     IT_OR_TEST_CALL, ':(glob)frontend/src/**/*.spec.ts'),
+              ('Playwright', IT_OR_TEST_CALL, ':(glob)frontend/playwright/tests/**/*.spec.ts'),
+          ]
+
+          def count_matches_at_ref(git_ref, pattern, files):
+              result = subprocess.run(
+                  ['git', 'grep', '--count', '--extended-regexp', pattern, git_ref, '--', files],
+                  capture_output=True, text=True)
+              if result.returncode > 1:  # exit 1 just means no matches
+                  raise RuntimeError(result.stderr)
+              return sum(int(line.rsplit(':', 1)[1]) for line in result.stdout.splitlines())
+
+          merge_base = subprocess.run(
+              ['git', 'merge-base', os.environ['BASE_SHA'], os.environ['HEAD_SHA']],
+              capture_output=True, text=True, check=True).stdout.strip()
+          head = os.environ['HEAD_SHA']
+
+          rows = []
+          for suite, pattern, files in SUITES:
+              base_count = count_matches_at_ref(merge_base, pattern, files)
+              head_count = count_matches_at_ref(head, pattern, files)
+              delta = head_count - base_count
+              delta_display = f'+{delta}' if delta > 0 else str(delta)
+              rows.append(f'| {suite} | {base_count} | {head_count} | {delta_display} |')
+
+          table = '\n'.join(['## Test count', '| Suite | Base | PR | Δ |', '|---|---|---|---|', *rows])
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('markdown<<TABLE_END\n' + table + '\nTABLE_END\n')
+          print(table)
+          EOF
+
+      - name: Post or update sticky comment
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TABLE_MARKDOWN: ${{ steps.table.outputs.markdown }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, subprocess
+
+          marker = '<!-- ci-testcount -->'
+          body = marker + '\n' + os.environ['TABLE_MARKDOWN']
+          repo, pr_number = os.environ['REPO'], os.environ['PR_NUMBER']
+
+          def gh_api(*args):
+              return subprocess.run(['gh', 'api', *args],
+                                    capture_output=True, text=True, check=True).stdout
+
+          # --jq emits one JSON object per line, across all pages
+          comment_lines = gh_api('--paginate', '--jq', '.[] | {id: .id, body: .body}',
+                                 f'repos/{repo}/issues/{pr_number}/comments')
+          comments = [json.loads(line) for line in comment_lines.splitlines() if line]
+          existing = next((c for c in comments if marker in c['body']), None)
+
+          if existing:
+              gh_api('--method', 'PATCH', f"repos/{repo}/issues/comments/{existing['id']}",
+                     '-f', f'body={body}')
+          else:
+              gh_api('--method', 'POST', f'repos/{repo}/issues/{pr_number}/comments',
+                     '-f', f'body={body}')
+          EOF
+
+      - name: Write job summary (fork fallback)
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          TABLE_MARKDOWN: ${{ steps.table.outputs.markdown }}
+        run: echo "$TABLE_MARKDOWN" >> "$GITHUB_STEP_SUMMARY"

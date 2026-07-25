@@ -1,0 +1,241 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: Category X Dependency License Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend-licenses:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: consumer
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - name: Setup Gradle and Validate Wrapper
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+        with:
+          validate-wrappers: true
+
+      # Category A passes, including when a Category A and Category B/X are available
+      # Category X by itself fails
+      - name: Check dependency licenses against allowlist
+        run: ./gradlew --no-daemon checkLicense
+
+      # Category B is ASF permitted with no code allowed (binary only), so it deserves visibility
+      - name: Warn on Category B dependencies
+        run: |
+          python3 - <<'EOF'
+          import json, os, re
+
+          # checkLicense treats moduleLicense entries as regexes (full match) — mirror that here
+          with open('allowed-licenses.json') as f:
+              allowlist = json.load(f)['allowedLicenses']
+          category_a = [re.compile(e['moduleLicense']) for e in allowlist if e['category'] == 'A']
+          category_b = [re.compile(e['moduleLicense']) for e in allowlist if e['category'] == 'B']
+
+          def matches_any(patterns, license_name):
+              return any(p.fullmatch(license_name) for p in patterns)
+
+          report = 'build/reports/dependency-license/project-licenses-for-check-license-task.json'
+          with open(report) as f:
+              dependencies = json.load(f)['dependencies']
+
+          rows = []
+          for dep in dependencies:
+              licenses = [m['moduleLicense'] for m in dep.get('moduleLicenses', [])
+                          if m.get('moduleLicense')]
+              # dual-licensed A-or-B passes silently via A
+              if (any(matches_any(category_b, l) for l in licenses)
+                      and not any(matches_any(category_a, l) for l in licenses)):
+                  rows.append((f"{dep['moduleName']}:{dep['moduleVersion']}", ', '.join(licenses)))
+
+          if rows:
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+                  f.write('## Category B dependencies (allowed binary-only)\n')
+                  f.write('| Dependency | Licenses |\n|---|---|\n')
+                  for module, licenses in rows:
+                      print(f'::warning::Category B dependency: {module} ({licenses})')
+                      f.write(f'| {module} | {licenses} |\n')
+          EOF
+
+      # Write job summary to Github Step Summary Table
+      - name: List offending dependencies in job summary
+        if: failure()
+        run: |
+          python3 - <<'EOF'
+          import json, os
+
+          offenders_file = 'build/reports/dependency-license/dependencies-without-allowed-license.json'
+          if os.path.exists(offenders_file):
+              with open(offenders_file) as f:
+                  offenders = json.load(f)['dependenciesWithoutAllowedLicenses']
+
+              # one entry per (dependency, disallowed license) — group licenses per dependency
+              licenses_by_module = {}
+              for entry in offenders:
+                  module = f"{entry['moduleName']}:{entry['moduleVersion']}"
+                  licenses_by_module.setdefault(module, []).append(entry.get('moduleLicense') or 'unknown')
+
+              if licenses_by_module:
+                  rows = [f"| {module} | {', '.join(licenses)} |"
+                          for module, licenses in sorted(licenses_by_module.items())]
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+                      f.write('## Category X license gate failed\n'
+                              'Dependencies without an allowed license (see consumer/allowed-licenses.json):\n'
+                              + '\n'.join(['| Dependency | Licenses |', '|---|---|', *rows]) + '\n')
+          EOF
+
+      - name: Upload license report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-license-report
+          path: consumer/build/reports/dependency-license/
+          retention-days: 30
+
+  frontend-licenses:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate npm license report
+        run: >-
+          npx --yes license-checker-rseidelsohn@5.0.1
+          --production
+          --excludePrivatePackages
+          --json
+          --out "$RUNNER_TEMP/npm-licenses.json"
+
+      # Category A passes, including when a Category A and Category B/X are available
+      # Category X by itself fails
+      # Write job summary to Github Step Summary Table
+      - name: Check npm licenses against allowlist
+        run: |
+          python3 - <<'EOF'
+          import json, os, sys
+          
+          with open('allowed-licenses.json') as f:
+              category_by_license = {
+                  entry['moduleLicense']: entry['category']
+                  for entry in json.load(f)['allowedLicenses']
+              }
+          with open(os.path.join(os.environ['RUNNER_TEMP'], 'npm-licenses.json')) as f:
+              dependencies = json.load(f)
+
+          # classify a license expression as 'A', 'B', or None (forbidden)
+          RANK = {None: 0, 'B': 1, 'A': 2}
+
+          def lookup(name):
+              # trailing "*" = license-checker guessed from package files, not package.json
+              return category_by_license.get(name.strip().rstrip('*').strip())
+
+          def expression_category(raw):
+              if not raw:
+                  return None
+              if isinstance(raw, list):  # npm legacy "licenses" array = dual-licensed, choose one
+                  return max((expression_category(part) for part in raw), key=RANK.get)
+              text = str(raw).strip()
+              if text.startswith('(') and text.endswith(')'):
+                  text = text[1:-1].strip()
+              if ' OR ' in text and ' AND ' in text:
+                  return None  # mixed expression: fail closed, allowlist manually
+              if ' OR ' in text:
+                  return max((lookup(name) for name in text.split(' OR ')), key=RANK.get)
+              if ' AND ' in text:
+                  return min((lookup(name) for name in text.split(' AND ')), key=RANK.get)
+              return lookup(text)
+
+          # output helpers
+          def display(raw):
+              return ', '.join(raw) if isinstance(raw, list) else str(raw)
+
+          def table(rows):
+              return '\n'.join(['| Dependency | License |', '|---|---|',
+                                *(f'| {dep} | {display(lic)} |' for dep, lic in rows)])
+
+          def summarize(text):
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+                  f.write(text + '\n')
+
+          # A passes, B warns, anything else fails
+          category_b, forbidden = [], []
+          for dependency, info in dependencies.items():
+              category = expression_category(info.get('licenses'))
+              if category == 'A':
+                  continue
+              (category_b if category == 'B' else forbidden).append((dependency, info.get('licenses')))
+
+          for dependency, licenses in category_b:
+              print(f'::warning::Category B npm dependency: {dependency} ({display(licenses)})')
+          if category_b:
+              summarize('## Category B npm dependencies (allowed binary-only)\n' + table(category_b))
+
+          if forbidden:
+              summarize('## Category X license gate failed (npm)\n'
+                        'Dependencies without an allowed license (see frontend/allowed-licenses.json):\n'
+                        + table(forbidden))
+              print(f'{len(forbidden)} npm dependencies without an allowed license:', file=sys.stderr)
+              for dependency, licenses in forbidden:
+                  print(f'  {dependency}: {display(licenses)}', file=sys.stderr)
+              sys.exit(1)
+
+          print(f'All {len(dependencies)} npm dependencies carry allowed licenses ({len(category_b)} Category B).')
+          EOF
