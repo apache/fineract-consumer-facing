@@ -20,6 +20,7 @@
 import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
+import com.github.jk1.license.filter.LicenseBundleNormalizer
 
 plugins {
 	id 'java'
@@ -27,6 +28,7 @@ plugins {
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'se.thinkcode.cucumber-runner' version '0.0.11'
 	id 'org.openapi.generator' version '7.13.0'
+	id 'com.github.jk1.dependency-license-report' version '3.1.4'
 }
 
 group = 'org.apache.fineract'
@@ -84,6 +86,12 @@ dependencyManagement {
 	imports {
 		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
 	}
+}
+
+licenseReport {
+	configurations = ['runtimeClasspath']
+	filters = [new LicenseBundleNormalizer(createDefaultTransformationRules: true)]
+	allowedLicensesFile = file("$projectDir/allowed-licenses.json")
 }
 
 sourceSets {
