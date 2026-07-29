@@ -19,6 +19,7 @@
 
 import {
   ApplicationConfig,
+  ErrorHandler,
   inject,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
@@ -33,6 +34,7 @@ import { firstValueFrom } from 'rxjs';
 import { Configuration } from '@bff/client';
 
 import { routes } from './app.routes';
+import { AuditErrorHandler } from './core/audit/audit-error-handler';
 import { AuthService } from './core/auth/auth.service';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
@@ -40,6 +42,7 @@ import { errorInterceptor } from './core/interceptors/error.interceptor';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    { provide: ErrorHandler, useClass: AuditErrorHandler },
     provideZonelessChangeDetection(),
     provideRouter(routes),
     provideHttpClient(withInterceptors([errorInterceptor, authInterceptor])),

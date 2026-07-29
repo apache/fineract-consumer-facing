@@ -68,6 +68,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -114,12 +115,16 @@ class AuthenticationCommandServiceImplTest {
     @Mock
     private RefreshTokenCommandRepository refreshTokenCommandRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private AuthenticationCommandServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AuthenticationCommandServiceImpl(principalUserAuthLookup, otpCommandService, passwordEncoder,
-                jwtIssuer, jwtDecoder, jwtDenylist, refreshTokenCommandRepository, PROPERTIES, FINERACT_PROPERTIES);
+                jwtIssuer, jwtDecoder, jwtDenylist, refreshTokenCommandRepository, PROPERTIES, FINERACT_PROPERTIES,
+                eventPublisher);
     }
 
     private static PrincipalUserAuthCredentialsData credentials(boolean bound) {

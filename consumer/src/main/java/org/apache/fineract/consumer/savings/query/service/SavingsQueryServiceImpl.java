@@ -41,7 +41,6 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionsSearchResponse;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.query.Query;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountQueryData;
@@ -77,7 +76,6 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Query
     public List<SavingsAccountListItemQueryData> listAccounts(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_LIST);
         Long clientId = userClientResolver.resolveClientId(jwt);
@@ -89,7 +87,6 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     }
 
     @Override
-    @Query
     public SavingsAccountQueryData getAccount(Jwt jwt, Long savingsId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
                 SavingsQueryAccessDeniedException::new);
@@ -98,7 +95,6 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     }
 
     @Override
-    @Query
     public List<SavingsChargeQueryData> getCharges(Jwt jwt, Long savingsId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
                 SavingsQueryAccessDeniedException::new);
@@ -111,7 +107,6 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     }
 
     @Override
-    @Query
     public List<SavingsTransactionQueryData> searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, query.getSavingsId(),
                 SavingsQueryAccessDeniedException::new);
@@ -135,7 +130,6 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     }
 
     @Override
-    @Query
     public SavingsTransactionQueryData getTransaction(Jwt jwt, Long savingsId, Long transactionId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
                 SavingsQueryAccessDeniedException::new);
@@ -145,7 +139,6 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     }
 
     @Override
-    @Query
     public SavingsApplicationTemplateQueryData getApplicationTemplate(Jwt jwt, Long productId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_APPLICATION_TEMPLATE_VIEW);
         if (productId == null) {

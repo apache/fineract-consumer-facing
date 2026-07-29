@@ -31,12 +31,14 @@ import {
   InitiateAddBeneficiaryCommandRequest,
   InitiateUpdateBeneficiaryCommandRequest,
 } from '@bff/client';
+import { AuditService } from '../../core/audit/audit.service';
 import { deviceFingerprint } from '../../core/auth/device-fingerprint';
 
 @Injectable({ providedIn: 'root' })
 export class BeneficiariesStore {
   private readonly query = inject(BeneficiariesQueryControllerService);
   private readonly command = inject(BeneficiariesCommandControllerService);
+  private readonly audit = inject(AuditService);
 
   readonly beneficiaries = signal<BeneficiaryQueryData[]>([]);
   readonly accountTypeOptions = signal<string[]>([]);
@@ -53,6 +55,7 @@ export class BeneficiariesStore {
   }
 
   initiateAdd(request: InitiateAddBeneficiaryCommandRequest): Observable<BeneficiaryChallengeCommandData> {
+    this.audit.record('SENSITIVE_ACTION', { action: 'BENEFICIARY_ADD' });
     return this.command
       .initiateAddBeneficiary(deviceFingerprint(), request)
       .pipe(tap(challenge => this.challenge.set(challenge)));

@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.user.command.service;
 
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +27,9 @@ import org.apache.fineract.consumer.authentication.command.data.EstablishedSessi
 import org.apache.fineract.consumer.authentication.command.service.AuthenticationCommandService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.audit.data.TransactionalAuditEvent;
+import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
+import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
@@ -49,6 +52,7 @@ import org.apache.fineract.consumer.user.command.exception.UserPasswordInvalidEx
 import org.apache.fineract.consumer.user.command.exception.UserPasswordResetInvalidException;
 import org.apache.fineract.consumer.user.command.exception.UserStepUpInvalidException;
 import org.apache.fineract.consumer.user.command.repository.UserCommandRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -61,16 +65,20 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class UserCommandServiceImpl implements UserCommandService {
 
+    private static final String DETAIL_FLOW = "flow";
+    private static final String FLOW_CHANGE = "change";
+    private static final String FLOW_RESET = "reset";
+
     private final UserCommandRepository repository;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final PasswordEncoder passwordEncoder;
     private final OtpCommandService otpCommandService;
     private final StepUpTokenService stepUpTokenService;
     private final AuthenticationCommandService authenticationCommandService;
-    private final AsyncTaskExecutor taskExecutor;
+    private final AsyncTaskExecutor applicationTaskExecutor;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    @Command
     public UserCreatedCommandData create(CreateUserCommand command) {
         repository.findByEmail(command.getEmail()).ifPresent(u -> {
             throw new UserAlreadyExistsException();
@@ -96,7 +104,6 @@ public class UserCommandServiceImpl implements UserCommandService {
     }
 
     @Override
-    @Command
     public void markOtpVerified(Long userId) {
         User user = repository.findById(userId).orElseThrow(UserCommandNotFoundException::new);
         user.markOtpVerified();
@@ -104,7 +111,6 @@ public class UserCommandServiceImpl implements UserCommandService {
     }
 
     @Override
-    @Command
     public UserPasswordChangeChallengeCommandData initiatePasswordChange(
             Jwt jwt, InitiatePasswordChangeCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_PASSWORD_CHANGE);
@@ -117,6 +123,8 @@ public class UserCommandServiceImpl implements UserCommandService {
         sendOtp(user);
         IssuedJwt issued = stepUpTokenService.issue(user.getPublicId(), command.getDeviceFingerprint(),
                 passwordChangeActionFingerprint(user.getPublicId()), StepUpConstants.STEPUP_TTL);
+        eventPublisher.publishEvent(NonTransactionalAuditEvent.of(AuditEventType.PASSWORD_CHANGE_INITIATED,
+                user.getId(), false, command.getDeviceFingerprint(), Map.of(DETAIL_FLOW, FLOW_CHANGE)));
 
         return UserPasswordChangeChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
@@ -126,7 +134,6 @@ public class UserCommandServiceImpl implements UserCommandService {
     }
 
     @Override
-    @Command
     @Transactional
     public EstablishedSessionCommandData confirmPasswordChange(Jwt jwt, ConfirmPasswordChangeCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_PASSWORD_CHANGE);
@@ -140,17 +147,20 @@ public class UserCommandServiceImpl implements UserCommandService {
         User user = repository.findByPublicId(publicId).orElseThrow(UserCommandNotFoundException::new);
         user.changePassword(passwordEncoder.encode(command.getNewPassword()));
         repository.save(user);
+        eventPublisher.publishEvent(TransactionalAuditEvent.of(AuditEventType.PASSWORD_CHANGE_CONFIRMED,
+                user.getId(), false, command.getDeviceFingerprint(), Map.of(DETAIL_FLOW, FLOW_CHANGE)));
         return authenticationCommandService.revokeAllSessionsAndReissue(
                 user.getId(), user.getPublicId(), command.getDeviceFingerprint());
     }
 
     @Override
-    @Command
     public void forgotPassword(ForgotPasswordCommand command) {
         log.info("password.forgot.requested");
-        repository.findByEmail(command.getEmail()).ifPresent(user -> taskExecutor.execute(() -> {
+        repository.findByEmail(command.getEmail()).ifPresent(user -> applicationTaskExecutor.execute(() -> {
             try {
                 sendOtp(user);
+                eventPublisher.publishEvent(NonTransactionalAuditEvent.of(AuditEventType.PASSWORD_CHANGE_INITIATED,
+                        user.getId(), false, null, Map.of(DETAIL_FLOW, FLOW_RESET)));
             } catch (RuntimeException e) {
                 log.error("password.forgot otp delivery failed for user {}", user.getPublicId(), e);
             }
@@ -158,7 +168,6 @@ public class UserCommandServiceImpl implements UserCommandService {
     }
 
     @Override
-    @Command
     @Transactional
     public void resetPassword(ResetPasswordCommand command) {
         User user = repository.findByEmail(command.getEmail()).orElseThrow(() -> {
@@ -172,6 +181,8 @@ public class UserCommandServiceImpl implements UserCommandService {
         user.changePassword(passwordEncoder.encode(command.getNewPassword()));
         repository.save(user);
         authenticationCommandService.revokeAllSessions(user.getId(), user.getPublicId());
+        eventPublisher.publishEvent(TransactionalAuditEvent.of(AuditEventType.PASSWORD_CHANGE_CONFIRMED,
+                user.getId(), false, null, Map.of(DETAIL_FLOW, FLOW_RESET)));
         log.info("password.reset.completed for user {}", user.getPublicId());
     }
 

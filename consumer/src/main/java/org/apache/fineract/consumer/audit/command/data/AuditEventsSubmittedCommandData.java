@@ -16,15 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.apache.fineract.consumer.audit.command.data;
 
-package org.apache.fineract.consumer.infrastructure.query;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+@Getter
+@RequiredArgsConstructor
+@Builder
+@EqualsAndHashCode
+@ToString
+public final class AuditEventsSubmittedCommandData {
 
+    private final int accepted;
 
-@Target(ElementType.METHOD)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface Query {}
+    private final int rejected;
+}

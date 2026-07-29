@@ -19,6 +19,8 @@
 
 package org.apache.fineract.consumer.cucumber.helpers;
 
+import feign.FeignException;
+import feign.Retryer;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.client.ApiClient;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
@@ -32,8 +34,7 @@ public final class ConsumerApiClientFactory {
     }
 
     public static <T extends ApiClient.Api> T authenticated(Class<T> apiType, String accessToken, String deviceFingerprint) {
-        ApiClient apiClient = new ApiClient();
-        apiClient.setBasePath(BFF_BASE_URL);
+        ApiClient apiClient = newApiClient();
         apiClient.getFeignBuilder().requestInterceptor(template -> {
             template.header(HttpHeaders.COOKIE,
                     AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME + "=" + accessToken);
@@ -45,8 +46,15 @@ public final class ConsumerApiClientFactory {
     }
 
     public static <T extends ApiClient.Api> T unauthenticated(Class<T> apiType) {
+        return newApiClient().buildClient(apiType);
+    }
+
+    private static ApiClient newApiClient() {
         ApiClient apiClient = new ApiClient();
         apiClient.setBasePath(BFF_BASE_URL);
-        return apiClient.buildClient(apiType);
+        apiClient.getFeignBuilder()
+                .errorDecoder((methodKey, response) -> FeignException.errorStatus(methodKey, response))
+                .retryer(Retryer.NEVER_RETRY);
+        return apiClient;
     }
 }

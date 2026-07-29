@@ -24,11 +24,15 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
+import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.exception.ConsumerApiError;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
@@ -43,10 +47,15 @@ public class DeviceFingerprintFilter extends OncePerRequestFilter {
 
     public static final String CODE = "error.msg.consumer.auth.device.fingerprint.mismatch";
     public static final String MISMATCH_CODE = "error.msg.consumer.auth.device.fingerprint.forbidden";
+    public static final String INVALID_CODE = "error.msg.consumer.auth.device.fingerprint.invalid";
     private static final String DEFAULT_MESSAGE = "device fingerprint does not match the session";
     private static final String MISMATCH_MESSAGE = "device fingerprint is not accepted for this session";
+    private static final String INVALID_MESSAGE = "device fingerprint is not valid";
+    private static final String DETAIL_USER_PUBLIC_ID = "userPublicId";
+    private static final int MAX_FINGERPRINT_LENGTH = 100;
 
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     private enum BindingFailure {
         NONE,
@@ -57,6 +66,11 @@ public class DeviceFingerprintFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
+        String headerFingerprint = request.getHeader(ConsumerHeaders.DEVICE_FINGERPRINT);
+        if (headerFingerprint != null && headerFingerprint.length() > MAX_FINGERPRINT_LENGTH) {
+            reject(response, HttpStatus.BAD_REQUEST, INVALID_CODE, INVALID_MESSAGE);
+            return;
+        }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication)) {
             filterChain.doFilter(request, response);
@@ -68,6 +82,7 @@ public class DeviceFingerprintFilter extends OncePerRequestFilter {
             return;
         }
         if (failure == BindingFailure.FORBIDDEN) {
+            publishMismatch(jwtAuthentication.getToken(), request);
             reject(response, HttpStatus.FORBIDDEN, MISMATCH_CODE, MISMATCH_MESSAGE);
             return;
         }
@@ -90,6 +105,12 @@ public class DeviceFingerprintFilter extends OncePerRequestFilter {
             return BindingFailure.FORBIDDEN;
         }
         return BindingFailure.NONE;
+    }
+
+    private void publishMismatch(Jwt jwt, HttpServletRequest request) {
+        eventPublisher.publishEvent(NonTransactionalAuditEvent.of(AuditEventType.DEVICE_FINGERPRINT_MISMATCH,
+                null, false, request.getHeader(ConsumerHeaders.DEVICE_FINGERPRINT),
+                Map.of(DETAIL_USER_PUBLIC_ID, jwt.getSubject())));
     }
 
     private void reject(HttpServletResponse response, HttpStatus status, String code, String message)

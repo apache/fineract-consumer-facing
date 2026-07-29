@@ -46,6 +46,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
@@ -62,11 +63,14 @@ class OtpCommandServiceImplTest {
     @Mock
     private OtpEmailDeliveryService otpEmailDeliveryService;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private OtpCommandServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new OtpCommandServiceImpl(otpCommandRepository, otpEmailDeliveryService);
+        service = new OtpCommandServiceImpl(otpCommandRepository, otpEmailDeliveryService, eventPublisher);
     }
 
     @Test

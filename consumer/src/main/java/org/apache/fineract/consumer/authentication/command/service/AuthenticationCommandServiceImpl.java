@@ -28,8 +28,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsData;
 import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthData;
@@ -45,7 +47,9 @@ import org.apache.fineract.consumer.authentication.command.exception.RefreshToke
 import org.apache.fineract.consumer.authentication.command.exception.TwoFactorInvalidException;
 import org.apache.fineract.consumer.authentication.command.repository.RefreshTokenCommandRepository;
 import org.apache.fineract.consumer.infrastructure.access.service.JwtDenylist;
-import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.audit.data.TransactionalAuditEvent;
+import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
+import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.configs.AuthenticationProperties;
 import org.apache.fineract.consumer.infrastructure.fineractclient.configs.FineractClientProperties;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
@@ -55,6 +59,7 @@ import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -62,6 +67,7 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthenticationCommandServiceImpl implements AuthenticationCommandService {
@@ -69,6 +75,12 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int REFRESH_TOKEN_BYTE_LENGTH = 32;
     private static final String REFRESH_TOKEN_HASH_ALGORITHM = "SHA-256";
+    private static final String DETAIL_REASON = "reason";
+    private static final String REFRESH_REASON_TOKEN_UNKNOWN = "token_unknown";
+    private static final String REFRESH_REASON_ROTATED_REPLAY = "rotated_token_replayed";
+    private static final String REFRESH_REASON_REVOKED = "revoked";
+    private static final String REFRESH_REASON_EXPIRED = "expired";
+    private static final String REFRESH_REASON_DEVICE_MISMATCH = "device_mismatch";
 
     private final PrincipalUserAuthLookup principalUserAuthLookup;
     private final OtpCommandService otpCommandService;
@@ -79,14 +91,18 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     private final RefreshTokenCommandRepository refreshTokenCommandRepository;
     private final AuthenticationProperties authenticationProperties;
     private final FineractClientProperties fineractClientProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    @Command
     public LoginChallengeCommandData login(LoginCommand command) {
-        PrincipalUserAuthCredentialsData user = principalUserAuthLookup.findCredentialsByEmail(command.getEmail())
+        Optional<PrincipalUserAuthCredentialsData> candidate = principalUserAuthLookup.findCredentialsByEmail(command.getEmail());
+        PrincipalUserAuthCredentialsData user = candidate
                 .filter(PrincipalUserAuthCredentialsData::isBound)
-                .filter(candidate -> passwordEncoder.matches(command.getPassword(), candidate.getPasswordHash()))
-                .orElseThrow(InvalidCredentialsException::new);
+                .filter(match -> passwordEncoder.matches(command.getPassword(), match.getPasswordHash()))
+                .orElseThrow(() -> {
+                    publishLoginFailure(candidate.orElse(null), command.getDeviceFingerprint());
+                    return new InvalidCredentialsException();
+                });
 
         OtpDestination destination = OtpDestination.builder()
                 .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
@@ -109,7 +125,6 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     }
 
     @Override
-    @Command
     @Transactional
     public EstablishedSessionCommandData verifyTwoFactor(VerifyTwoFactorCommand command) {
         Jwt challenge = decodeChallengeToken(command.getChallengeToken());
@@ -125,16 +140,21 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         otpCommandService.validateOtp(publicId, command.getToken(), TwoFactorInvalidException::new);
 
         PrincipalUserAuthData user = principalUserAuthLookup.findByPublicId(publicId);
-        return establishSession(user.getId(), publicId, user.isBound(),
+        EstablishedSessionCommandData session = establishSession(user.getId(), publicId, user.isBound(),
                 command.getDeviceFingerprint(), null);
+        eventPublisher.publishEvent(TransactionalAuditEvent.of(AuditEventType.LOGIN_SUCCESS,
+                user.getId(), false, command.getDeviceFingerprint(), null));
+        return session;
     }
 
     @Override
-    @Command
     @Transactional(noRollbackFor = RefreshTokenInvalidException.class)
     public EstablishedSessionCommandData refresh(RefreshSessionCommand command) {
         RefreshToken current = refreshTokenCommandRepository.findByTokenHash(sha256Hex(command.getRefreshToken()))
-                .orElseThrow(RefreshTokenInvalidException::new);
+                .orElseThrow(() -> {
+                    publishRefreshRejected(null, command.getDeviceFingerprint(), REFRESH_REASON_TOKEN_UNKNOWN);
+                    return new RefreshTokenInvalidException();
+                });
 
         boolean expired = current.getExpiresAt().isBefore(Instant.now());
         boolean deviceMismatch = !current.getDeviceFingerprint().equals(command.getDeviceFingerprint());
@@ -143,12 +163,17 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         if (current.getRotatedTo() != null) {
             if (expired || deviceMismatch || !withinRotationGrace(current)) {
                 revokeAllActiveTokens(current.getUserId());
+                publishRefreshRejected(current.getUserId(), command.getDeviceFingerprint(),
+                        REFRESH_REASON_ROTATED_REPLAY);
                 throw new RefreshTokenInvalidException();
             }
             predecessor = null;
         } else {
             boolean revoked = current.getRevokedAt() != null;
             if (revoked || expired || deviceMismatch) {
+                String reason = revoked ? REFRESH_REASON_REVOKED
+                        : expired ? REFRESH_REASON_EXPIRED : REFRESH_REASON_DEVICE_MISMATCH;
+                publishRefreshRejected(current.getUserId(), command.getDeviceFingerprint(), reason);
                 throw new RefreshTokenInvalidException();
             }
             predecessor = current;
@@ -160,7 +185,6 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     }
 
     @Override
-    @Command
     @Transactional
     public void logout(LogoutCommand command) {
         if (command.getAccessTokenId() != null && command.getAccessTokenExpiresAt() != null) {
@@ -176,7 +200,6 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     }
 
     @Override
-    @Command
     @Transactional
     public void revokeAllSessions(Long userId, UUID publicId) {
         revokeAllActiveTokens(userId);
@@ -184,7 +207,6 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     }
 
     @Override
-    @Command
     @Transactional
     public EstablishedSessionCommandData revokeAllSessionsAndReissue(Long userId, UUID publicId,
             String deviceFingerprint) {
@@ -222,6 +244,24 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
                 .refreshToken(refreshTokenValue)
                 .refreshTokenExpiresAt(refreshExpiresAt)
                 .build();
+    }
+
+    private void publishLoginFailure(PrincipalUserAuthCredentialsData knownUser, String deviceFingerprint) {
+        Long userId = null;
+        if (knownUser != null) {
+            try {
+                userId = principalUserAuthLookup.findByPublicId(knownUser.getPublicId()).getId();
+            } catch (RuntimeException e) {
+                log.warn("login-failure audit could not resolve user id; recording without identity link", e);
+            }
+        }
+        eventPublisher.publishEvent(NonTransactionalAuditEvent.of(AuditEventType.LOGIN_FAILURE,
+                userId, knownUser == null, deviceFingerprint, null));
+    }
+
+    private void publishRefreshRejected(Long userId, String deviceFingerprint, String reason) {
+        eventPublisher.publishEvent(NonTransactionalAuditEvent.of(AuditEventType.REFRESH_TOKEN_REJECTED,
+                userId, userId == null, deviceFingerprint, Map.of(DETAIL_REASON, reason)));
     }
 
     private Jwt decodeChallengeToken(String challengeToken) {

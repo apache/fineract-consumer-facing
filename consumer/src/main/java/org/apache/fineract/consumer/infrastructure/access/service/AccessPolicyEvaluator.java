@@ -19,6 +19,8 @@
 
 package org.apache.fineract.consumer.infrastructure.access.service;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.ActionPolicies;
@@ -28,8 +30,11 @@ import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessKycRequiredException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessPolicyMissingException;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
+import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
+import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
@@ -37,8 +42,18 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AccessPolicyEvaluator {
 
+    private static final String DETAIL_ACTION = "action";
+    private static final String DETAIL_RESOURCE_ID = "resourceId";
+    private static final String DETAIL_REASON = "reason";
+    private static final String DETAIL_USER_PUBLIC_ID = "userPublicId";
+    private static final String REASON_POLICY_MISSING = "policy_missing";
+    private static final String REASON_SCOPE_INSUFFICIENT = "scope_insufficient";
+    private static final String REASON_KYC_REQUIRED = "kyc_required";
+    private static final String REASON_OWNERSHIP_DENIED = "ownership_denied";
+
     private final OwnedAccountsCache ownedAccountsCache;
     private final UserClientResolver userClientResolver;
+    private final ApplicationEventPublisher eventPublisher;
 
     public void authorize(Jwt jwt, ConsumerAction action) {
         authorize(jwt, action, null, AccessPolicyMissingException::new);
@@ -47,17 +62,35 @@ public class AccessPolicyEvaluator {
     public void authorize(Jwt jwt, ConsumerAction action, Long resourceId,
             Supplier<? extends AbstractConsumerException> onDenied) {
         ActionPolicy policy = ActionPolicies.forAction(action)
-                .orElseThrow(AccessPolicyMissingException::new);
+                .orElseThrow(() -> {
+                    publishAccessDenied(jwt, action, resourceId, REASON_POLICY_MISSING);
+                    return new AccessPolicyMissingException();
+                });
         if (!policy.getRequiredScope().equals(jwt.getClaimAsString(JwtClaims.SCOPE))) {
+            publishAccessDenied(jwt, action, resourceId, REASON_SCOPE_INSUFFICIENT);
             throw new AccessScopeInsufficientException();
         }
         if (policy.isRequiresKycVerified()
                 && !Boolean.TRUE.equals(jwt.getClaimAsBoolean(JwtClaims.KYC_VERIFIED))) {
+            publishAccessDenied(jwt, action, resourceId, REASON_KYC_REQUIRED);
             throw new AccessKycRequiredException();
         }
         if (policy.getOwnership() != null && !ownsResource(jwt, policy.getOwnership(), resourceId)) {
+            publishAccessDenied(jwt, action, resourceId, REASON_OWNERSHIP_DENIED);
             throw onDenied.get();
         }
+    }
+
+    private void publishAccessDenied(Jwt jwt, ConsumerAction action, Long resourceId, String reason) {
+        Map<String, Object> details = new HashMap<>();
+        details.put(DETAIL_ACTION, action.name());
+        details.put(DETAIL_REASON, reason);
+        details.put(DETAIL_USER_PUBLIC_ID, jwt.getSubject());
+        if (resourceId != null) {
+            details.put(DETAIL_RESOURCE_ID, resourceId);
+        }
+        eventPublisher.publishEvent(NonTransactionalAuditEvent.of(AuditEventType.ACCESS_DENIED,
+                null, false, null, details));
     }
 
     public boolean ownsResource(Jwt jwt, ResourceType resourceType, Long resourceId) {

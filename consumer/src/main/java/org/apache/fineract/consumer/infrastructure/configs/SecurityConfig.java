@@ -23,7 +23,11 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.access.filter.DeviceFingerprintFilter;
+import org.apache.fineract.consumer.infrastructure.access.filter.RateLimitFilter;
+import org.apache.fineract.consumer.infrastructure.access.service.RateLimitCounter;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -38,6 +42,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableWebSecurity
+@EnableConfigurationProperties(RateLimitProperties.class)
 public class SecurityConfig {
 
     private static final String REGISTRATION_PATH_PREFIX = "/api/v1/registration/";
@@ -52,7 +57,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
             @Qualifier("accessTokenJwtDecoder") JwtDecoder accessTokenJwtDecoder,
-            ObjectMapper objectMapper) throws Exception {
+            ObjectMapper objectMapper, ApplicationEventPublisher eventPublisher,
+            RateLimitProperties rateLimitProperties, RateLimitCounter rateLimitCounter) throws Exception {
         return http
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers(
@@ -72,7 +78,10 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(SecurityConfig::resolveAccessTokenCookie)
                         .jwt(jwt -> jwt.decoder(accessTokenJwtDecoder)))
-                .addFilterAfter(new DeviceFingerprintFilter(objectMapper), BearerTokenAuthenticationFilter.class)
+                .addFilterAfter(new RateLimitFilter(rateLimitProperties, rateLimitCounter, objectMapper),
+                        BearerTokenAuthenticationFilter.class)
+                .addFilterAfter(new DeviceFingerprintFilter(objectMapper, eventPublisher),
+                        RateLimitFilter.class)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
                 .build();
