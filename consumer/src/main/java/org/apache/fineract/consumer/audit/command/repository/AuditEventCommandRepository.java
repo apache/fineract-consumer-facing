@@ -31,8 +31,16 @@ public interface AuditEventCommandRepository extends JpaRepository<AuditEvent, L
 
     @Transactional
     @Modifying
-    @Query(nativeQuery = true, value = "DELETE FROM audit_events WHERE id IN "
-            + "(SELECT id FROM audit_events WHERE source = :source AND received_at < :cutoff LIMIT :batchSize)")
+    @Query(nativeQuery = true, value = """
+            DELETE FROM audit_events
+            WHERE id IN (
+                SELECT id
+                FROM audit_events
+                WHERE source = :source
+                  AND received_at < :cutoff
+                LIMIT :batchSize
+            )
+            """)
     int deleteChunkBySourceReceivedBefore(@Param("source") String source, @Param("cutoff") Instant cutoff,
             @Param("batchSize") int batchSize);
 }
