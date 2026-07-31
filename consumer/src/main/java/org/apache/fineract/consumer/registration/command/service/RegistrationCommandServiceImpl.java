@@ -21,7 +21,6 @@ package org.apache.fineract.consumer.registration.command.service;
 
 import java.time.ZonedDateTime;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.command.Command;
 import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.data.PendingOtp;
@@ -57,7 +56,6 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    @Command
     @Transactional
     public SubmitRegistrationCommandData submit(SubmitRegistrationCommand command) {
         IdentityVerificationQuery verification = IdentityVerificationQuery.builder()
@@ -86,7 +84,6 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
     }
 
     @Override
-    @Command
     public SendOtpCommandData sendOtp(SendOtpCommand command) {
         UserQueryData user = userQueryService.findByPublicId(command.getRegistrationId());
         OtpDestination destination = OtpDestination.builder()
@@ -104,7 +101,6 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
     }
 
     @Override
-    @Command
     @Transactional
     public VerifyOtpCommandData verifyOtp(VerifyOtpCommand command) {
         UserQueryData user = userQueryService.findByPublicId(command.getRegistrationId());

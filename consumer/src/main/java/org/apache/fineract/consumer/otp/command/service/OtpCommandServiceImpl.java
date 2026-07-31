@@ -25,10 +25,12 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.command.Command;
+import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
+import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
@@ -36,6 +38,7 @@ import org.apache.fineract.consumer.otp.command.data.PendingOtp;
 import org.apache.fineract.consumer.otp.command.exception.OtpDestinationInvalidException;
 import org.apache.fineract.consumer.otp.command.exception.OtpTokenInvalidException;
 import org.apache.fineract.consumer.otp.command.repository.OtpCommandRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -46,42 +49,54 @@ public class OtpCommandServiceImpl implements OtpCommandService {
     private static final String ALLOWED_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private static final String HASH_ALGORITHM = "SHA-256";
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String DETAIL_USER_PUBLIC_ID = "userPublicId";
 
     private final OtpCommandRepository otpCommandRepository;
     private final OtpEmailDeliveryService otpEmailDeliveryService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    @Command
     public PendingOtp createOtp(UUID publicId, OtpDestination destination) {
         if (OtpConstants.EMAIL_DELIVERY_METHOD_NAME.equalsIgnoreCase(destination.getDeliveryMethod())) {
             PendingOtp request = generateNewToken(destination);
             otpEmailDeliveryService.deliver(destination.getTarget(), request.getToken());
             otpCommandRepository.savePendingOtp(publicId, hashToken(request.getToken()));
+            publishOtpEvent(AuditEventType.OTP_CHALLENGE_ISSUED, publicId);
             return request;
         }
         throw new OtpDestinationInvalidException();
     }
 
     @Override
-    @Command
     public void validateOtp(UUID publicId, String token) {
         validateOtp(publicId, token, OtpTokenInvalidException::new);
     }
 
     @Override
-    @Command
     public void validateOtp(UUID publicId, String token, Supplier<? extends AbstractConsumerException> onInvalid) {
         String storedHash = otpCommandRepository.getPendingTokenHash(publicId);
         if (token == null || storedHash == null || !storedHash.equals(hashToken(token))) {
+            boolean attemptsExceeded = false;
             if (storedHash != null) {
                 long failedAttempts = otpCommandRepository.recordFailedValidationAttempt(publicId);
                 if (failedAttempts >= OtpConstants.MAX_OTP_VALIDATION_ATTEMPTS) {
                     otpCommandRepository.deletePendingOtp(publicId);
+                    attemptsExceeded = true;
                 }
+            }
+            if (attemptsExceeded) {
+                publishOtpEvent(AuditEventType.OTP_ATTEMPTS_EXCEEDED, publicId);
+            } else {
+                publishOtpEvent(AuditEventType.OTP_VALIDATION_FAILED, publicId);
             }
             throw onInvalid.get();
         }
         otpCommandRepository.deletePendingOtp(publicId);
+    }
+
+    private void publishOtpEvent(AuditEventType eventType, UUID publicId) {
+        eventPublisher.publishEvent(NonTransactionalAuditEvent.of(eventType, null, false, null,
+                Map.of(DETAIL_USER_PUBLIC_ID, publicId.toString())));
     }
 
     private PendingOtp generateNewToken(OtpDestination destination) {

@@ -29,7 +29,6 @@ import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryDat
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
-import org.apache.fineract.consumer.infrastructure.command.Command;
 import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.AccountTransfersApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
@@ -75,7 +74,6 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
     private final AccountTransfersApi accountTransfersApi;
 
     @Override
-    @Command
     public TransferChallengeCommandData initiate(Jwt jwt, InitiateTransferCommand command) {
         boolean toLoan = resolveToLoan(command.getToAccountType());
 
@@ -108,7 +106,6 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
     }
 
     @Override
-    @Command
     public TransferCommandData confirm(Jwt jwt, ConfirmTransferCommand command) {
         boolean toLoan = resolveToLoan(command.getToAccountType());
 

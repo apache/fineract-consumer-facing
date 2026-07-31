@@ -32,7 +32,6 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
-import org.apache.fineract.consumer.infrastructure.query.Query;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.summary.query.data.AccountsSummaryQueryData;
 import org.apache.fineract.consumer.summary.query.data.LoanSummaryItemQueryData;
@@ -50,7 +49,6 @@ public class SummaryQueryServiceImpl implements SummaryQueryService {
     private final UserClientResolver userClientResolver;
 
     @Override
-    @Query
     public AccountsSummaryQueryData getAccountsSummary(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SUMMARY_VIEW);
         Long clientId = userClientResolver.resolveClientId(jwt);

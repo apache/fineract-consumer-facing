@@ -1,0 +1,111 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+databaseChangeLog:
+  - logicalFilePath: db/changelog/changes/004-create-audit-events.yaml
+  - changeSet:
+      id: 004-create-audit-events
+      author: fineract-consumer-facing
+      changes:
+        - createTable:
+            tableName: audit_events
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: event_uuid
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: source
+                  type: VARCHAR(10)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: severity
+                  type: VARCHAR(10)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    foreignKeyName: fk_audit_events_user_id
+                    references: users(id)
+              - column:
+                  name: unknown_principal
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: device_fingerprint
+                  type: VARCHAR(100)
+              - column:
+                  name: correlation_id
+                  type: VARCHAR(64)
+              - column:
+                  name: idempotency_key
+                  type: VARCHAR(64)
+              - column:
+                  name: occurred_at_claimed
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: received_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: details
+                  type: JSONB
+        - createIndex:
+            tableName: audit_events
+            indexName: idx_audit_events_user_id_received_at
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: received_at
+        - createIndex:
+            tableName: audit_events
+            indexName: idx_audit_events_event_type_received_at
+            columns:
+              - column:
+                  name: event_type
+              - column:
+                  name: received_at
+        - createIndex:
+            tableName: audit_events
+            indexName: idx_audit_events_received_at
+            columns:
+              - column:
+                  name: received_at
+      rollback:
+        - dropTable:
+            tableName: audit_events

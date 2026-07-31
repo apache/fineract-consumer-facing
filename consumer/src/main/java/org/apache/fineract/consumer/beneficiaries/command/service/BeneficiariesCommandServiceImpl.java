@@ -42,7 +42,6 @@ import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryU
 import org.apache.fineract.consumer.beneficiaries.command.repository.BeneficiaryCommandRepository;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.command.Command;
 import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
@@ -90,7 +89,6 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     private final ClientApi clientApi;
 
     @Override
-    @Command
     @Transactional(readOnly = true)
     public BeneficiaryChallengeCommandData initiateAdd(Jwt jwt, InitiateAddBeneficiaryCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_ADD);
@@ -110,7 +108,6 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     }
 
     @Override
-    @Command
     @Transactional
     public BeneficiaryCommandData confirmAdd(Jwt jwt, ConfirmAddBeneficiaryCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_ADD);
@@ -137,7 +134,6 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     }
 
     @Override
-    @Command
     @Transactional(readOnly = true)
     public BeneficiaryChallengeCommandData initiateUpdate(Jwt jwt, InitiateUpdateBeneficiaryCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_MODIFY);
@@ -154,7 +150,6 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     }
 
     @Override
-    @Command
     @Transactional
     public BeneficiaryCommandData confirmUpdate(Jwt jwt, ConfirmUpdateBeneficiaryCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_MODIFY);
@@ -177,7 +172,6 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     }
 
     @Override
-    @Command
     @Transactional
     public void delete(Jwt jwt, UUID publicId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_DELETE);

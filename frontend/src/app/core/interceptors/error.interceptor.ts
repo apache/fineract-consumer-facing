@@ -24,26 +24,35 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import { catchError, switchMap, throwError } from 'rxjs';
 import { ConsumerApiError } from '../../api/consumer-api-error';
+import { AUDIT_EVENTS_PATH, AuditService } from '../audit/audit.service';
+import { buildDetails } from '../audit/pii-scrub';
 import { AuthService } from '../auth/auth.service';
 
 const REFRESH_URL = '/api/v1/authentication/refresh';
 const GENERIC_ERROR_KEY = 'common.error.generic';
 const DISMISS_KEY = 'common.action.dismiss';
 const DEVICE_MISMATCH_CODE = 'error.msg.consumer.auth.device.fingerprint.forbidden';
+const RATE_LIMITED_KEY = 'common.error.rateLimited';
 
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const snackBar = inject(MatSnackBar);
   const auth = inject(AuthService);
+  const audit = inject(AuditService);
   const router = inject(Router);
   const translate = inject(TranslateService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
+      if (req.url.includes(AUDIT_EVENTS_PATH)) {
+        return throwError(() => error);
+      }
+
       if (req.url.includes(REFRESH_URL)) {
         return throwError(() => error);
       }
 
       if (error.status === 403 && (error.error as ConsumerApiError | null)?.code === DEVICE_MISMATCH_CODE) {
+        recordApiFailure(audit, req.url, error.status);
         auth.clearSession();
         router.navigate(['/login']);
         return throwError(() => error);
@@ -52,19 +61,47 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       if (error.status === 401) {
         return auth.refresh().pipe(
           switchMap(() => next(req)),
-          catchError(() => {
-            auth.clearSession();
-            router.navigate(['/login']);
-            return throwError(() => error);
+          catchError((retryError: HttpErrorResponse) => {
+            recordApiFailure(audit, req.url, error.status);
+            if (retryError.status === 401 || retryError.status === 403) {
+              auth.clearSession();
+              router.navigate(['/login']);
+              return throwError(() => error);
+            }
+            if (retryError.status === 429) {
+              snackBar.open(translate.instant(RATE_LIMITED_KEY), translate.instant(DISMISS_KEY), { duration: 5000 });
+            }
+            return throwError(() => retryError);
           }),
         );
       }
 
+      if (error.status === 429) {
+        recordApiFailure(audit, req.url, error.status);
+        snackBar.open(translate.instant(RATE_LIMITED_KEY), translate.instant(DISMISS_KEY), { duration: 5000 });
+        return throwError(() => error);
+      }
+
+      recordApiFailure(audit, req.url, error.status);
       notify(snackBar, translate, error);
       return throwError(() => error);
     }),
   );
 };
+
+function recordApiFailure(audit: AuditService, url: string, status: number): void {
+  audit.record('API_FAILURE', buildDetails({ endpoint: endpointTemplate(url), status }));
+}
+
+const UUID_SEGMENT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function endpointTemplate(url: string): string {
+  const path = url.split('?')[0].replace(/^https?:\/\/[^/]+/, '');
+  return path
+    .split('/')
+    .map(segment => (/^\d+$/.test(segment) || UUID_SEGMENT.test(segment) ? ':id' : segment))
+    .join('/');
+}
 
 function notify(snackBar: MatSnackBar, translate: TranslateService, error: HttpErrorResponse): void {
   const body = error.error as ConsumerApiError | null;

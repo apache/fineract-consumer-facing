@@ -37,7 +37,6 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetObligeeData;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
-import org.apache.fineract.consumer.infrastructure.query.Query;
 import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
 import org.apache.fineract.consumer.user.query.data.UserChargeQueryData;
 import org.apache.fineract.consumer.user.query.data.UserChargesQuery;
@@ -71,27 +70,23 @@ public class UserQueryServiceImpl implements UserQueryService {
     private final UserClientResolver userClientResolver;
 
     @Override
-    @Query
     public UserQueryData findByPublicId(UUID publicId) {
         return repository.findByPublicId(publicId)
                 .orElseThrow(UserQueryNotFoundException::new);
     }
 
     @Override
-    @Query
     public UserQueryData findById(Long id) {
         return repository.findById(id)
                 .orElseThrow(UserQueryNotFoundException::new);
     }
 
     @Override
-    @Query
     public Optional<UserCredentialsQueryData> findCredentialsByEmail(String email) {
         return repository.findCredentialsByEmail(email);
     }
 
     @Override
-    @Query
     public UserProfileQueryData getProfile(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_PROFILE_VIEW);
         Long clientId = userClientResolver.resolveClientId(jwt);
@@ -109,7 +104,6 @@ public class UserQueryServiceImpl implements UserQueryService {
     }
 
     @Override
-    @Query
     public UserChargesQueryResponse getCharges(Jwt jwt, UserChargesQuery query) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_CHARGES_LIST);
         if (!VALID_CHARGE_STATUSES.contains(query.getStatus())) {
@@ -130,7 +124,6 @@ public class UserQueryServiceImpl implements UserQueryService {
     }
 
     @Override
-    @Query
     public List<UserObligeeQueryData> getObligees(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_OBLIGEES_VIEW);
         Long clientId = userClientResolver.resolveClientId(jwt);
@@ -142,7 +135,6 @@ public class UserQueryServiceImpl implements UserQueryService {
     }
 
     @Override
-    @Query
     public UserImageQueryData getImage(Jwt jwt, Integer maxWidth, Integer maxHeight) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_IMAGE_VIEW);
         Long clientId = userClientResolver.resolveClientId(jwt);

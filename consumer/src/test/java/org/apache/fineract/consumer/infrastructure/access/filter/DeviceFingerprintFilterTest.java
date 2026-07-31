@@ -36,6 +36,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -47,7 +48,8 @@ class DeviceFingerprintFilterTest {
 
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
-    private final DeviceFingerprintFilter filter = new DeviceFingerprintFilter(JSON);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+    private final DeviceFingerprintFilter filter = new DeviceFingerprintFilter(JSON, eventPublisher);
     private final FilterChain chain = mock(FilterChain.class);
     private final MockHttpServletRequest request = new MockHttpServletRequest();
     private final MockHttpServletResponse response = new MockHttpServletResponse();
@@ -73,6 +75,27 @@ class DeviceFingerprintFilterTest {
         filter.doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    void rejectsOverlongHeaderEvenWhenUnauthenticated() throws Exception {
+        request.addHeader(ConsumerHeaders.DEVICE_FINGERPRINT, "f".repeat(101));
+
+        filter.doFilter(request, response, chain);
+
+        assertRejected(HttpStatus.BAD_REQUEST, DeviceFingerprintFilter.INVALID_CODE);
+    }
+
+    @Test
+    void passesThroughHeaderAtMaximumLength() throws Exception {
+        String maxLengthFingerprint = "f".repeat(100);
+        authenticate(jwt(AuthenticationConstants.SCOPE_CONSUMER_FULL, maxLengthFingerprint));
+        request.addHeader(ConsumerHeaders.DEVICE_FINGERPRINT, maxLengthFingerprint);
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
     }
 
     @Test

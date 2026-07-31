@@ -22,3 +22,7 @@ databaseChangeLog:
       file: db/changelog/authentication/002-create-refresh-tokens.yaml
   - include:
       file: db/changelog/beneficiaries/003-create-beneficiaries.yaml
+  - include:
+      file: db/changelog/audit/004-create-audit-events.yaml
+  - include:
+      file: db/changelog/infrastructure/005-create-event-publication.yaml

@@ -22,7 +22,6 @@ package org.apache.fineract.consumer.loans.command.service;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.command.Command;
 import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdRequest;
@@ -61,7 +60,6 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     private final LoansApi loansApi;
 
     @Override
-    @Command
     public LoanApplicationCommandData submitApplication(Jwt jwt, SubmitLoanApplicationCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_SUBMIT);
         Long clientId = resolveClientId(jwt);
@@ -76,7 +74,6 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     }
 
     @Override
-    @Command
     public LoanApplicationCommandData modifyApplication(Jwt jwt, ModifyLoanApplicationCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_MODIFY, command.getLoanId(),
                 LoanCommandAccessDeniedException::new);
@@ -91,7 +88,6 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     }
 
     @Override
-    @Command
     public LoanApplicationCommandData withdrawApplication(Jwt jwt, WithdrawLoanApplicationCommand command) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_WITHDRAW, command.getLoanId(),
                 LoanCommandAccessDeniedException::new);

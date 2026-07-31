@@ -24,7 +24,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientIdentifierApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.ClientIdentifierData;
-import org.apache.fineract.consumer.infrastructure.query.Query;
 import org.apache.fineract.consumer.identity.query.data.IdentityVerificationQuery;
 import org.apache.fineract.consumer.identity.query.data.IdentityVerificationQueryData;
 import org.apache.fineract.consumer.identity.query.exception.IdentityVerificationException;
@@ -37,7 +36,6 @@ public class IdentityQueryServiceImpl implements IdentityQueryService {
     private final ClientIdentifierApi identifiersClient;
 
     @Override
-    @Query
     public IdentityVerificationQueryData verifyIdentity(IdentityVerificationQuery query) {
         String typeName = query.getDocumentTypeName();
         String normalizedKey = normalize(query.getDocumentKey());

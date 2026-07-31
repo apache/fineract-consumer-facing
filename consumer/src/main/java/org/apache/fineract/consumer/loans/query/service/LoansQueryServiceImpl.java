@@ -47,7 +47,6 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansResponse;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.query.Query;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.loans.query.data.CalculateLoanScheduleQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanAccountListItemQueryData;
@@ -86,7 +85,6 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     private final UserClientResolver userClientResolver;
 
     @Override
-    @Query
     public List<LoanAccountListItemQueryData> listAccounts(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_LIST);
         Long clientId = userClientResolver.resolveClientId(jwt);
@@ -98,7 +96,6 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     @Override
-    @Query
     public LoanScheduleQueryData calculateSchedule(Jwt jwt, CalculateLoanScheduleQuery query) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_SCHEDULE_CALCULATE);
         Long clientId = userClientResolver.resolveClientId(jwt);
@@ -109,7 +106,6 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     @Override
-    @Query
     public LoanAccountQueryData getLoan(Jwt jwt, Long loanId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
                 LoanQueryAccessDeniedException::new);
@@ -118,7 +114,6 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     @Override
-    @Query
     public List<LoanTransactionQueryData> listTransactions(Jwt jwt, LoanTransactionListQuery query) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, query.getLoanId(),
                 LoanQueryAccessDeniedException::new);
@@ -131,7 +126,6 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     @Override
-    @Query
     public LoanTransactionQueryData getTransaction(Jwt jwt, Long loanId, Long transactionId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
                 LoanQueryAccessDeniedException::new);
@@ -141,7 +135,6 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     @Override
-    @Query
     public List<LoanChargeQueryData> getCharges(Jwt jwt, Long loanId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
                 LoanQueryAccessDeniedException::new);
@@ -154,7 +147,6 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     @Override
-    @Query
     public LoanChargeQueryData getCharge(Jwt jwt, Long loanId, Long chargeId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
                 LoanQueryAccessDeniedException::new);
@@ -164,7 +156,6 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     @Override
-    @Query
     public List<LoanGuarantorQueryData> getGuarantors(Jwt jwt, Long loanId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, loanId,
                 LoanQueryAccessDeniedException::new);
@@ -176,7 +167,6 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     @Override
-    @Query
     public LoanApplicationTemplateQueryData getApplicationTemplate(Jwt jwt, Long productId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_TEMPLATE_VIEW);
         if (productId == null) {

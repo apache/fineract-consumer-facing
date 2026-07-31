@@ -30,7 +30,6 @@ import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryTemplate
 import org.apache.fineract.consumer.beneficiaries.query.repository.BeneficiaryQueryRepository;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.query.Query;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -45,7 +44,6 @@ public class BeneficiariesQueryServiceImpl implements BeneficiariesQueryService 
     private final BeneficiaryQueryRepository repository;
 
     @Override
-    @Query
     @Transactional(readOnly = true)
     public List<BeneficiaryQueryData> listBeneficiaries(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_LIST);
@@ -56,7 +54,6 @@ public class BeneficiariesQueryServiceImpl implements BeneficiariesQueryService 
     }
 
     @Override
-    @Query
     public BeneficiaryTemplateQueryData getTemplate(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_LIST);
         return BeneficiaryTemplateQueryData.builder()
@@ -67,7 +64,6 @@ public class BeneficiariesQueryServiceImpl implements BeneficiariesQueryService 
     }
 
     @Override
-    @Query
     @Transactional(readOnly = true)
     public Optional<BeneficiaryQueryData> findActiveByAccount(
             Long userId, Long fineractAccountId, BeneficiaryAccountType accountType) {

@@ -47,6 +47,7 @@ public final class ActionPolicies {
             unownedScopeOnly(ConsumerAction.USER_PROFILE_VIEW),
             unownedScopeOnly(ConsumerAction.USER_IMAGE_VIEW),
             unownedScopeOnly(ConsumerAction.USER_PASSWORD_CHANGE),
+            unownedScopeOnly(ConsumerAction.AUDIT_EVENT_SUBMIT),
             owned(ConsumerAction.SAVINGS_VIEW, ResourceType.SAVINGS),
             owned(ConsumerAction.LOANS_VIEW, ResourceType.LOANS),
             owned(ConsumerAction.LOAN_APPLICATION_MODIFY, ResourceType.LOANS),

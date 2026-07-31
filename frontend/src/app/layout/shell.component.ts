@@ -21,6 +21,7 @@ import { NgOptimizedImage } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
+  ActivatedRouteSnapshot,
   NavigationCancel,
   NavigationEnd,
   NavigationError,
@@ -37,8 +38,21 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { TranslatePipe } from '@ngx-translate/core';
+import { AuditService } from '../core/audit/audit.service';
+import { buildDetails } from '../core/audit/pii-scrub';
 import { AuthService } from '../core/auth/auth.service';
 import { LanguageSwitcherComponent } from '../shared/language-switcher.component';
+
+const SENSITIVE_ROUTE_VIEWS: Record<string, string> = {
+  '/savings/:savingsId': 'BALANCE',
+  '/savings/:savingsId/transactions/:transactionId': 'STATEMENT',
+  '/loans/:loanId': 'LOAN_DETAIL',
+  '/loans/:loanId/transactions/:transactionId': 'LOAN_DETAIL',
+  '/beneficiaries': 'BENEFICIARIES',
+  '/profile': 'PROFILE',
+};
+
+const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
 
 @Component({
   selector: 'app-shell',
@@ -142,6 +156,7 @@ import { LanguageSwitcherComponent } from '../shared/language-switcher.component
 })
 export class ShellComponent {
   private readonly auth = inject(AuthService);
+  private readonly audit = inject(AuditService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -152,11 +167,10 @@ export class ShellComponent {
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((event) => {
       if (event instanceof NavigationStart) {
         this.loading.set(true);
-      } else if (
-        event instanceof NavigationEnd ||
-        event instanceof NavigationCancel ||
-        event instanceof NavigationError
-      ) {
+      } else if (event instanceof NavigationEnd) {
+        this.loading.set(false);
+        this.recordNavigation();
+      } else if (event instanceof NavigationCancel || event instanceof NavigationError) {
         this.loading.set(false);
       }
     });
@@ -167,6 +181,7 @@ export class ShellComponent {
   }
 
   protected logout(): void {
+    this.audit.record('LOGOUT');
     this.auth
       .logout()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -175,4 +190,32 @@ export class ShellComponent {
         error: () => this.router.navigate(['/login']),
       });
   }
+
+  private recordNavigation(): void {
+    const { template, params } = describeRoute(this.router.routerState.snapshot.root);
+    this.audit.record('NAVIGATION', buildDetails({ route: template }));
+    const view = SENSITIVE_ROUTE_VIEWS[template];
+    if (view) {
+      const resourceId = RESOURCE_ID_PARAMS.map((name) => params[name]).find((v) => v);
+      this.audit.record('SENSITIVE_VIEW', buildDetails({ view, resourceId }));
+    }
+  }
+}
+
+function describeRoute(root: ActivatedRouteSnapshot): {
+  template: string;
+  params: Record<string, string>;
+} {
+  const segments: string[] = [];
+  const params: Record<string, string> = {};
+  let node: ActivatedRouteSnapshot | null = root;
+  while (node) {
+    const path = node.routeConfig?.path;
+    if (path) {
+      segments.push(path);
+    }
+    Object.assign(params, node.params);
+    node = node.firstChild;
+  }
+  return { template: '/' + segments.join('/'), params };
 }

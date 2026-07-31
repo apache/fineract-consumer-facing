@@ -16,15 +16,25 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.apache.fineract.consumer.audit.command.data;
 
-package org.apache.fineract.consumer.infrastructure.command;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import java.util.List;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+@Getter
+@RequiredArgsConstructor
+@Builder
+@EqualsAndHashCode
+@ToString(onlyExplicitlyIncluded = true)
+public final class SubmitAuditEventsCommandRequest {
 
-
-@Target(ElementType.METHOD)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface Command {}
+    @NotNull
+    @Valid
+    private final List<AuditEventCommandRequest> events;
+}

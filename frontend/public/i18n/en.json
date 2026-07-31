@@ -10,7 +10,8 @@
       "verify": "Verify"
     },
     "error": {
-      "generic": "Something went wrong. Please try again."
+      "generic": "Something went wrong. Please try again.",
+      "rateLimited": "Too many requests — please wait a moment and try again."
     },
     "field": {
       "email": "Email",
