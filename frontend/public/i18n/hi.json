@@ -1,5 +1,9 @@
 {
   "common": {
+    "accountType": {
+      "savings": "बचत",
+      "loan": "ऋण"
+    },
     "action": {
       "applyFilter": "फ़िल्टर लागू करें",
       "backToAccount": "खाते पर वापस जाएँ",
@@ -170,10 +174,6 @@
       "amountLabel": "राशि",
       "submitCta": "ट्रांसफ़र भेजें"
     },
-    "accountType": {
-      "savings": "बचत",
-      "loan": "ऋण"
-    },
     "done": {
       "complete": "ट्रांसफ़र पूरा हुआ।",
       "reference": "संदर्भ",
@@ -210,10 +210,6 @@
       "added": "लाभार्थी जोड़ा गया।",
       "updated": "लाभार्थी अपडेट किया गया।",
       "deleted": "लाभार्थी हटाया गया।"
-    },
-    "accountType": {
-      "savings": "बचत",
-      "loan": "ऋण"
     }
   },
   "summary": {

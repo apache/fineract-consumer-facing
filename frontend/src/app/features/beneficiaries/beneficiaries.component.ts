@@ -37,6 +37,7 @@ import { addIcons } from 'ionicons';
 import { pencil, personAdd, trash } from 'ionicons/icons';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { BeneficiaryQueryData, InitiateAddBeneficiaryCommandRequest } from '@bff/client';
+import { ACCOUNT_TYPE_LABEL_KEYS } from '../../shared/models/account-types';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { BeneficiariesStore } from './beneficiaries.store';
@@ -282,11 +283,6 @@ import { BeneficiariesStore } from './beneficiaries.store';
   `,
 })
 export class BeneficiariesComponent {
-  private static readonly KNOWN_TYPE_LABEL_KEYS: Record<string, string> = {
-    SAVINGS: 'beneficiaries.accountType.savings',
-    LOAN: 'beneficiaries.accountType.loan',
-  };
-
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly destroyRef = inject(DestroyRef);
   private readonly toastCtrl = inject(ToastController);
@@ -304,7 +300,7 @@ export class BeneficiariesComponent {
   protected readonly typeOptions = computed(() =>
     this.store.accountTypeOptions().map(value => ({
       value,
-      labelKey: BeneficiariesComponent.KNOWN_TYPE_LABEL_KEYS[value] ?? null,
+      labelKey: ACCOUNT_TYPE_LABEL_KEYS[value] ?? null,
     })),
   );
 
@@ -331,7 +327,7 @@ export class BeneficiariesComponent {
     if (!accountType) {
       return null;
     }
-    return BeneficiariesComponent.KNOWN_TYPE_LABEL_KEYS[accountType] ?? null;
+    return ACCOUNT_TYPE_LABEL_KEYS[accountType] ?? null;
   }
 
   protected startAdd(): void {

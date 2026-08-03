@@ -36,6 +36,7 @@ import {
 import { addIcons } from 'ionicons';
 import { swapHorizontal } from 'ionicons/icons';
 import { TranslatePipe } from '@ngx-translate/core';
+import { ACCOUNT_TYPE_LABEL_KEYS } from '../../shared/models/account-types';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { TransfersStore } from './transfers.store';
 
@@ -180,10 +181,9 @@ export class TransferComponent {
   protected readonly step = signal<'form' | 'otp' | 'done'>('form');
   protected readonly loading = signal(false);
 
-  protected readonly accountTypes = [
-    { value: 'SAVINGS', labelKey: 'transfers.accountType.savings' },
-    { value: 'LOAN', labelKey: 'transfers.accountType.loan' },
-  ];
+  protected readonly accountTypes = Object.entries(ACCOUNT_TYPE_LABEL_KEYS).map(
+    ([value, labelKey]) => ({ value, labelKey }),
+  );
 
   protected readonly form = this.fb.group({
     fromAccountId: [null as number | null, [Validators.required]],

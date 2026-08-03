@@ -59,6 +59,7 @@ export class ProfileStore {
   readonly loading = signal(false);
 
   loadProfile(): void {
+    this.profile.set(null);
     this.loading.set(true);
     this.query
       .getUserProfile()
@@ -73,6 +74,8 @@ export class ProfileStore {
   }
 
   loadCharges(filter: ChargesFilter): void {
+    this.charges.set([]);
+    this.totalFilteredRecords.set(0);
     this.query
       .getUserCharges(filter.status, filter.page, filter.size)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -81,30 +84,29 @@ export class ProfileStore {
           this.charges.set(response.charges ?? []);
           this.totalFilteredRecords.set(response.totalFilteredRecords ?? 0);
         },
-        error: () => {
-          this.charges.set([]);
-          this.totalFilteredRecords.set(0);
-        },
+        error: () => {},
       });
   }
 
   loadImage(): void {
+    this.image.set(null);
     this.query
       .getUserImage(IMAGE_MAX_WIDTH, IMAGE_MAX_HEIGHT)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: image => this.image.set(image),
-        error: () => this.image.set(null),
+        error: () => {},
       });
   }
 
   loadObligees(): void {
+    this.obligees.set([]);
     this.query
       .getUserObligees()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: rows => this.obligees.set(rows),
-        error: () => this.obligees.set([]),
+        error: () => {},
       });
   }
 

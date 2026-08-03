@@ -1,5 +1,9 @@
 {
   "common": {
+    "accountType": {
+      "savings": "Savings",
+      "loan": "Loan"
+    },
     "action": {
       "applyFilter": "Apply filter",
       "backToAccount": "Back to account",
@@ -170,10 +174,6 @@
       "amountLabel": "Amount",
       "submitCta": "Send transfer"
     },
-    "accountType": {
-      "savings": "Savings",
-      "loan": "Loan"
-    },
     "done": {
       "complete": "Transfer complete.",
       "reference": "Reference",
@@ -210,10 +210,6 @@
       "added": "Beneficiary added.",
       "updated": "Beneficiary updated.",
       "deleted": "Beneficiary deleted."
-    },
-    "accountType": {
-      "savings": "Savings",
-      "loan": "Loan"
     }
   },
   "summary": {

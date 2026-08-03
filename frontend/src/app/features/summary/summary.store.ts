@@ -47,6 +47,8 @@ export class SummaryStore {
   readonly loading = signal(false);
 
   load(): void {
+    this.savingsCards.set([]);
+    this.loanCards.set([]);
     this.loading.set(true);
     this.summaryApi
       .getAccountsSummary()

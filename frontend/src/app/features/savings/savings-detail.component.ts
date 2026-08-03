@@ -38,11 +38,8 @@ import {
 import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
+import { toIsoDate } from '../../shared/utils/date';
 import { SavingsStore } from './savings.store';
-
-function toIsoDate(value: string | null): string | undefined {
-  return value ? value.slice(0, 10) : undefined;
-}
 
 @Component({
   selector: 'app-savings-detail',
