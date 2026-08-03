@@ -83,6 +83,7 @@
   },
   "registration": {
     "title": "अपना खाता बनाएँ",
+    "backToLogin": "साइन इन पर वापस जाएँ",
     "identity": {
       "clientIdLabel": "Fineract क्लाइंट आईडी",
       "passwordHint": "15–64 अक्षर, जिनमें बड़े, छोटे अक्षर, अंक और विशेष वर्ण हों।",

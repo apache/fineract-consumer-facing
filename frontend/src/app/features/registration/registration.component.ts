@@ -155,6 +155,11 @@ import { RegistrationService } from './registration.service';
             </div>
           }
         }
+        @if (step() !== 'done') {
+          <p class="prompt">
+            <a routerLink="/login">{{ 'registration.backToLogin' | translate }}</a>
+          </p>
+        }
       </ion-card-content>
     </ion-card>
   `,

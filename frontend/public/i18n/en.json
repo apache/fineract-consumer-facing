@@ -83,6 +83,7 @@
   },
   "registration": {
     "title": "Create your account",
+    "backToLogin": "Back to sign in",
     "identity": {
       "clientIdLabel": "Fineract client ID",
       "passwordHint": "15–64 chars, with upper, lower, digit and special character.",
