@@ -114,7 +114,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
           </ion-button>
         </ion-buttons>
         <div class="brand" slot="start">
-          <img ngSrc="/apache-fineract-logo.png" width="32" height="32" alt="" class="brand-icon" priority />
+          <img ngSrc="/apache-fineract-logo.png" width="40" height="40" alt="" class="brand-icon" priority />
           <span>{{ 'layout.shell.brand' | translate }}</span>
         </div>
         <ion-buttons slot="end">
@@ -185,6 +185,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
       --border-color: var(--border);
       --border-style: solid;
       --border-width: 0 0 1px 0;
+      --min-height: 4.5rem;
     }
 
     ion-buttons ion-button {
@@ -194,7 +195,8 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
     .brand {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.625rem;
+      font-size: 1.25rem;
       font-weight: 600;
       color: var(--ink);
     }
@@ -214,9 +216,9 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
     }
 
     ion-split-pane {
-      --side-width: 15rem;
-      --side-min-width: 15rem;
-      --side-max-width: 15rem;
+      --side-width: 17rem;
+      --side-min-width: 17rem;
+      --side-max-width: 17rem;
     }
 
     ion-menu {
@@ -231,7 +233,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
     }
 
     ion-split-pane.nav-collapsed ion-menu {
-      margin-inline-start: -15rem;
+      margin-inline-start: -17rem;
       visibility: hidden;
       transition:
         margin-inline-start var(--dur-slow) var(--ease-out),
@@ -249,13 +251,13 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
       --background-hover-opacity: 1;
       --color: var(--slate-600);
       --border-radius: var(--radius-sm);
-      --min-height: 2.5rem;
+      --min-height: 3rem;
       margin: 0.25rem 0.5rem;
-      font-size: var(--text-base);
+      font-size: var(--text-md);
 
       ion-icon {
         color: var(--slate-400);
-        font-size: var(--text-xl);
+        font-size: var(--text-2xl);
         margin-inline-end: 0.75rem;
       }
 

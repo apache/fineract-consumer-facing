@@ -238,6 +238,10 @@ ion-button[fill='clear'] {
   --background-hover-opacity: 1;
 }
 
+ion-buttons ion-button[fill='clear'].button-clear {
+  --background-hover: var(--page-bg);
+}
+
 ion-input,
 ion-select {
   min-height: 3.5rem;
