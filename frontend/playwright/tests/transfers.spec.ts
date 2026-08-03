@@ -32,11 +32,11 @@ async function mockResumedSession(page: Page): Promise<void> {
 }
 
 async function fillTransferForm(page: Page): Promise<void> {
-  await page.locator('input[formControlName="fromAccountId"]').fill('1');
-  await page.locator('input[formControlName="toAccountId"]').fill('2');
-  await page.locator('mat-select[formControlName="toAccountType"]').click();
-  await page.getByRole('option', { name: 'Savings' }).click();
-  await page.locator('input[formControlName="amount"]').fill('50');
+  await page.locator('ion-input[formControlName="fromAccountId"] input').fill('1');
+  await page.locator('ion-input[formControlName="toAccountId"] input').fill('2');
+  await page.locator('ion-select[formControlName="toAccountType"]').click();
+  await page.getByRole('radio', { name: 'Savings' }).click();
+  await page.locator('ion-input[formControlName="amount"] input').fill('50');
   await page.getByRole('button', { name: 'Send transfer' }).click();
 }
 
@@ -69,7 +69,7 @@ test('logged-in: form -> OTP step-up -> confirm -> success', async ({ page }) =>
 
   await fillTransferForm(page);
 
-  const otpField = page.locator('input[formControlName="otp"]');
+  const otpField = page.locator('ion-input[formControlName="otp"] input');
   await expect(otpField).toBeVisible();
   await otpField.fill('ABC123');
   await page.getByRole('button', { name: 'Verify' }).click();
@@ -99,7 +99,7 @@ test('wrong OTP: surfaces the ConsumerApiError snackbar and stays on the OTP ste
   await page.goto('/transfers');
   await fillTransferForm(page);
 
-  const otpField = page.locator('input[formControlName="otp"]');
+  const otpField = page.locator('ion-input[formControlName="otp"] input');
   await expect(otpField).toBeVisible();
   await otpField.fill('WRONG1');
   await page.getByRole('button', { name: 'Verify' }).click();

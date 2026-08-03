@@ -21,12 +21,16 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardTitle,
+  IonInput,
+  IonProgressBar,
+  ToastController,
+} from '@ionic/angular/standalone';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { ProfileStore } from '../profile/profile.store';
 
@@ -38,80 +42,74 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule,
-    MatCardModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    MatProgressBarModule,
+    IonButton,
+    IonCard,
+    IonCardContent,
+    IonCardHeader,
+    IonCardTitle,
+    IonInput,
+    IonProgressBar,
     RouterLink,
     TranslatePipe,
   ],
   template: `
-    <mat-card class="page-card">
-      <mat-card-header>
-        <mat-card-title>{{ 'auth.forgotPassword.title' | translate }}</mat-card-title>
-      </mat-card-header>
+    <ion-card class="page-card">
+      <ion-card-header>
+        <ion-card-title>{{ 'auth.forgotPassword.title' | translate }}</ion-card-title>
+      </ion-card-header>
 
       @if (loading()) {
-        <mat-progress-bar mode="indeterminate" />
+        <ion-progress-bar type="indeterminate" />
       }
 
-      <mat-card-content>
+      <ion-card-content>
         @if (step() === 'email') {
           <form [formGroup]="emailForm" (ngSubmit)="requestReset()">
-            <mat-form-field appearance="fill">
-              <mat-label>{{ 'common.field.email' | translate }}</mat-label>
-              <input matInput type="email" formControlName="email" autocomplete="username" />
-            </mat-form-field>
-            <button
-              mat-flat-button
-              color="primary"
-              type="submit"
-              [disabled]="loading() || emailForm.invalid"
-            >
+            <ion-input
+              type="email"
+              formControlName="email"
+              fill="outline"
+              labelPlacement="stacked"
+              [label]="'common.field.email' | translate"
+              autocomplete="username"
+            />
+            <ion-button type="submit" [disabled]="loading() || emailForm.invalid">
               {{ 'auth.forgotPassword.sendCta' | translate }}
-            </button>
+            </ion-button>
           </form>
         } @else {
           <p>{{ 'auth.forgotPassword.sentNotice' | translate }}</p>
           <form [formGroup]="resetForm" (ngSubmit)="reset()">
-            <mat-form-field appearance="fill">
-              <mat-label>{{ 'common.otp.codeLabel' | translate }}</mat-label>
-              <input
-                matInput
-                class="otp-input"
-                formControlName="otp"
-                autocomplete="one-time-code"
-                autocapitalize="characters"
-                maxlength="6"
-                (input)="uppercase($event)"
-              />
-            </mat-form-field>
-            <mat-form-field appearance="fill">
-              <mat-label>{{ 'auth.forgotPassword.newPasswordLabel' | translate }}</mat-label>
-              <input
-                matInput
-                type="password"
-                formControlName="newPassword"
-                autocomplete="new-password"
-              />
-              <mat-hint>{{ 'registration.identity.passwordHint' | translate }}</mat-hint>
-            </mat-form-field>
-            <button
-              mat-flat-button
-              color="primary"
-              type="submit"
-              [disabled]="loading() || resetForm.invalid"
-            >
+            <ion-input
+              class="otp-input"
+              formControlName="otp"
+              fill="outline"
+              labelPlacement="stacked"
+              [label]="'common.otp.codeLabel' | translate"
+              autocomplete="one-time-code"
+              autocapitalize="characters"
+              [maxlength]="6"
+              (ionInput)="uppercase($event)"
+            />
+            <ion-input
+              type="password"
+              formControlName="newPassword"
+              fill="outline"
+              labelPlacement="stacked"
+              [label]="'auth.forgotPassword.newPasswordLabel' | translate"
+              [helperText]="'registration.identity.passwordHint' | translate"
+              autocomplete="new-password"
+            />
+            <ion-button type="submit" [disabled]="loading() || resetForm.invalid">
               {{ 'auth.forgotPassword.resetCta' | translate }}
-            </button>
+            </ion-button>
           </form>
         }
         <p class="prompt">
           <a routerLink="/login">{{ 'auth.forgotPassword.backToLogin' | translate }}</a>
         </p>
-      </mat-card-content>
-    </mat-card>
+      </ion-card-content>
+    </ion-card>
   `,
   styleUrls: ['../../shared/css/centered-page.scss', '../../shared/css/form.scss'],
 })
@@ -119,7 +117,7 @@ export class ForgotPasswordComponent {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly store = inject(ProfileStore);
   private readonly router = inject(Router);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toastCtrl = inject(ToastController);
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -171,19 +169,25 @@ export class ForgotPasswordComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          this.snackBar.open(
-            this.translate.instant('auth.forgotPassword.success'),
-            this.translate.instant('common.action.dismiss'),
-            { duration: 5000 },
-          );
+          this.presentSuccessToast();
           this.router.navigate(['/login']);
         },
         error: () => this.loading.set(false),
       });
   }
 
-  protected uppercase(event: Event): void {
-    const value = (event.target as HTMLInputElement).value.toUpperCase();
+  protected uppercase(event: CustomEvent<{ value?: string | null }>): void {
+    const value = (event.detail.value ?? '').toUpperCase();
     this.resetForm.controls.otp.setValue(value);
+  }
+
+  private presentSuccessToast(): void {
+    this.toastCtrl
+      .create({
+        message: this.translate.instant('auth.forgotPassword.success'),
+        duration: 5000,
+        buttons: [{ text: this.translate.instant('common.action.dismiss'), role: 'cancel' }],
+      })
+      .then(toast => toast.present());
   }
 }

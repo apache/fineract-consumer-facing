@@ -223,11 +223,9 @@
       "loans": "Loans"
     },
     "savings": {
-      "availableLabel": "Available:",
       "empty": "No savings accounts."
     },
     "loan": {
-      "outstandingLabel": "Outstanding:",
       "empty": "No loan accounts."
     }
   },

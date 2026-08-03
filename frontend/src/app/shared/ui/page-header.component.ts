@@ -42,18 +42,15 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       justify-content: space-between;
       gap: 1rem;
       flex-wrap: wrap;
-      padding-bottom: 1rem;
-      margin-bottom: 1.5rem;
-      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 2rem;
     }
     h1 {
-      font-size: 1.5rem;
-      font-weight: 600;
       margin: 0;
     }
     p {
       margin: 0.25rem 0 0;
-      color: var(--text-muted);
+      font-size: var(--text-base);
+      color: var(--slate-500);
     }
     .actions {
       display: flex;

@@ -19,11 +19,17 @@
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatTableModule } from '@angular/material/table';
-import { MatIconModule } from '@angular/material/icon';
+import { CdkTableModule } from '@angular/cdk/table';
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonIcon,
+  IonProgressBar,
+  IonRouterLink,
+} from '@ionic/angular/standalone';
+import { addIcons } from 'ionicons';
+import { add } from 'ionicons/icons';
 import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
@@ -33,11 +39,13 @@ import { LoansStore } from './loans.store';
   selector: 'app-loans-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    MatButtonModule,
-    MatCardModule,
-    MatProgressBarModule,
-    MatTableModule,
-    MatIconModule,
+    CdkTableModule,
+    IonButton,
+    IonCard,
+    IonCardContent,
+    IonIcon,
+    IonProgressBar,
+    IonRouterLink,
     RouterLink,
     PageHeaderComponent,
     StatusBadgeComponent,
@@ -45,54 +53,56 @@ import { LoansStore } from './loans.store';
   ],
   template: `
     <app-page-header [title]="'loans.list.title' | translate">
-      <a mat-flat-button color="primary" [routerLink]="['/loans', 'apply']">
-        <mat-icon>add</mat-icon>
+      <ion-button [routerLink]="['/loans', 'apply']">
+        <ion-icon slot="start" name="add" aria-hidden="true" />
         {{ 'loans.list.applyCta' | translate }}
-      </a>
+      </ion-button>
     </app-page-header>
 
-    <mat-card>
+    <ion-card>
       @if (store.loading()) {
-        <mat-progress-bar mode="indeterminate" />
+        <ion-progress-bar type="indeterminate" />
       }
 
-      <mat-card-content>
-        <table mat-table [dataSource]="store.loans()">
-          <ng-container matColumnDef="accountNo">
-            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.account' | translate }}</th>
-            <td mat-cell *matCellDef="let row">{{ row.accountNo }}</td>
+      <ion-card-content>
+        <div class="table-scroll">
+        <table cdk-table [dataSource]="store.loans()">
+          <ng-container cdkColumnDef="accountNo">
+            <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.account' | translate }}</th>
+            <td cdk-cell *cdkCellDef="let row">{{ row.accountNo }}</td>
           </ng-container>
-          <ng-container matColumnDef="productName">
-            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.product' | translate }}</th>
-            <td mat-cell *matCellDef="let row">{{ row.productName }}</td>
+          <ng-container cdkColumnDef="productName">
+            <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.product' | translate }}</th>
+            <td cdk-cell *cdkCellDef="let row">{{ row.productName }}</td>
           </ng-container>
-          <ng-container matColumnDef="status">
-            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.status' | translate }}</th>
-            <td mat-cell *matCellDef="let row">
+          <ng-container cdkColumnDef="status">
+            <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.status' | translate }}</th>
+            <td cdk-cell *cdkCellDef="let row">
               @if (row.status) {
                 <app-status-badge [status]="row.status" />
               }
             </td>
           </ng-container>
-          <ng-container matColumnDef="currency">
-            <th mat-header-cell *matHeaderCellDef>{{ 'common.table.currency' | translate }}</th>
-            <td mat-cell *matCellDef="let row">{{ row.currency }}</td>
+          <ng-container cdkColumnDef="currency">
+            <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.currency' | translate }}</th>
+            <td cdk-cell *cdkCellDef="let row">{{ row.currency }}</td>
           </ng-container>
 
-          <tr mat-header-row *matHeaderRowDef="columns"></tr>
-          <tr mat-row *matRowDef="let row; columns: columns" class="clickable" (click)="open(row.id)"></tr>
-          <tr class="empty-row" *matNoDataRow>
+          <tr cdk-header-row *cdkHeaderRowDef="columns"></tr>
+          <tr cdk-row *cdkRowDef="let row; columns: columns" class="clickable" (click)="open(row.id)"></tr>
+          <tr class="empty-row" *cdkNoDataRow>
             <td [attr.colspan]="columns.length">{{ 'loans.list.empty' | translate }}</td>
           </tr>
         </table>
+        </div>
 
         <div class="actions-row">
-          <button mat-stroked-button color="warn" class="btn-danger" (click)="tryForbiddenLoan()">
+          <ion-button class="btn-danger" (click)="tryForbiddenLoan()">
             {{ 'loans.list.tryForbidden' | translate }}
-          </button>
+          </ion-button>
         </div>
-      </mat-card-content>
-    </mat-card>
+      </ion-card-content>
+    </ion-card>
   `,
   styleUrls: ['../../shared/css/table.scss', '../../shared/css/actions.scss'],
 })
@@ -103,6 +113,7 @@ export class LoansListComponent {
   protected readonly columns = ['accountNo', 'productName', 'status', 'currency'];
 
   constructor() {
+    addIcons({ add });
     this.store.loadLoans();
   }
 

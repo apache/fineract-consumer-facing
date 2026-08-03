@@ -27,7 +27,6 @@ export interface SavingsCard {
   productName?: string;
   currency?: string;
   balance?: number;
-  availableBalance?: number;
 }
 
 export interface LoanCard {
@@ -63,7 +62,6 @@ export class SummaryStore {
                 productName: item.productName,
                 currency: item.currency,
                 balance: item.accountBalance ?? 0,
-                availableBalance: item.availableBalance ?? 0,
               })),
           );
           this.loanCards.set(

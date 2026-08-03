@@ -21,11 +21,15 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardTitle,
+  IonInput,
+  IonProgressBar,
+} from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth/auth.service';
 import { OtpComponent } from '../../shared/otp/otp.component';
@@ -35,49 +39,49 @@ import { OtpComponent } from '../../shared/otp/otp.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule,
-    MatCardModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    MatProgressBarModule,
+    IonButton,
+    IonCard,
+    IonCardContent,
+    IonCardHeader,
+    IonCardTitle,
+    IonInput,
+    IonProgressBar,
     OtpComponent,
     RouterLink,
     TranslatePipe,
   ],
   template: `
-    <mat-card class="page-card">
-      <mat-card-header>
-        <mat-card-title>{{ 'auth.login.title' | translate }}</mat-card-title>
-      </mat-card-header>
+    <ion-card class="page-card">
+      <ion-card-header>
+        <ion-card-title>{{ 'auth.login.title' | translate }}</ion-card-title>
+      </ion-card-header>
 
       @if (loading()) {
-        <mat-progress-bar mode="indeterminate" />
+        <ion-progress-bar type="indeterminate" />
       }
 
-      <mat-card-content>
+      <ion-card-content>
         @if (step() === 'credentials') {
           <form [formGroup]="credentialsForm" (ngSubmit)="submitCredentials()">
-            <mat-form-field appearance="fill">
-              <mat-label>{{ 'common.field.email' | translate }}</mat-label>
-              <input matInput type="email" formControlName="email" autocomplete="username" />
-            </mat-form-field>
-            <mat-form-field appearance="fill">
-              <mat-label>{{ 'common.field.password' | translate }}</mat-label>
-              <input
-                matInput
-                type="password"
-                formControlName="password"
-                autocomplete="current-password"
-              />
-            </mat-form-field>
-            <button
-              mat-flat-button
-              color="primary"
-              type="submit"
-              [disabled]="loading() || credentialsForm.invalid"
-            >
+            <ion-input
+              type="email"
+              formControlName="email"
+              fill="outline"
+              labelPlacement="stacked"
+              [label]="'common.field.email' | translate"
+              autocomplete="username"
+            />
+            <ion-input
+              type="password"
+              formControlName="password"
+              fill="outline"
+              labelPlacement="stacked"
+              [label]="'common.field.password' | translate"
+              autocomplete="current-password"
+            />
+            <ion-button type="submit" [disabled]="loading() || credentialsForm.invalid">
               {{ 'common.action.continue' | translate }}
-            </button>
+            </ion-button>
           </form>
           <p class="prompt">
             {{ 'auth.login.registerPrompt' | translate }}
@@ -94,8 +98,8 @@ import { OtpComponent } from '../../shared/otp/otp.component';
             (submitted)="submitOtp($event)"
           />
         }
-      </mat-card-content>
-    </mat-card>
+      </ion-card-content>
+    </ion-card>
   `,
   styleUrls: ['../../shared/css/centered-page.scss', '../../shared/css/form.scss'],
 })

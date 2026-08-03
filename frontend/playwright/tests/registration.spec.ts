@@ -51,15 +51,15 @@ test('registration walks identity -> OTP -> success and never persists the OTP o
 
   await page.goto('/register');
 
-  await page.locator('input[formControlName="fineractClientId"]').fill('42');
-  await page.locator('input[formControlName="email"]').fill('jane@example.com');
-  await page.locator('input[formControlName="password"]').fill('Sup3rSecret!Passw0rd');
-  await page.locator('mat-select[formControlName="documentTypeName"]').click();
-  await page.getByRole('option', { name: 'SSN' }).click();
-  await page.locator('input[formControlName="documentKey"]').fill(DOCUMENT_KEY);
+  await page.locator('ion-input[formControlName="fineractClientId"] input').fill('42');
+  await page.locator('ion-input[formControlName="email"] input').fill('jane@example.com');
+  await page.locator('ion-input[formControlName="password"] input').fill('Sup3rSecret!Passw0rd');
+  await page.locator('ion-select[formControlName="documentTypeName"]').click();
+  await page.getByRole('radio', { name: 'SSN' }).click();
+  await page.locator('ion-input[formControlName="documentKey"] input').fill(DOCUMENT_KEY);
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  const otpField = page.locator('input[formControlName="otp"]');
+  const otpField = page.locator('ion-input[formControlName="otp"] input');
   await expect(otpField).toBeVisible();
   await otpField.fill(OTP_CODE);
   await page.getByRole('button', { name: 'Verify' }).click();

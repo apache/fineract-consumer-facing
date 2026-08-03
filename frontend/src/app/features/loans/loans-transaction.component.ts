@@ -20,34 +20,62 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardSubtitle,
+  IonCardTitle,
+  IonRouterLink,
+} from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 import { LoansStore } from './loans.store';
 
 @Component({
   selector: 'app-loans-transaction',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatCardModule, RouterLink, CurrencyPipe, DatePipe, TranslatePipe],
+  imports: [
+    IonButton,
+    IonCard,
+    IonCardContent,
+    IonCardHeader,
+    IonCardSubtitle,
+    IonCardTitle,
+    IonRouterLink,
+    RouterLink,
+    CurrencyPipe,
+    DatePipe,
+    TranslatePipe,
+  ],
   template: `
     @if (store.selectedTransaction(); as tx) {
-      <mat-card>
-        <mat-card-header>
-          <mat-card-title>{{ 'common.transaction.title' | translate: { id: tx.id } }}</mat-card-title>
-          <mat-card-subtitle>{{ tx.date | date: 'mediumDate' }}</mat-card-subtitle>
-        </mat-card-header>
-        <mat-card-content>
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>{{ 'common.transaction.title' | translate: { id: tx.id } }}</ion-card-title>
+          <ion-card-subtitle>{{ tx.date | date: 'mediumDate' }}</ion-card-subtitle>
+        </ion-card-header>
+        <ion-card-content>
           <p>{{ 'loans.transaction.typeLabel' | translate }} {{ tx.type }}</p>
           <p>{{ 'loans.transaction.amountLabel' | translate }} {{ tx.amount | currency: tx.currency }}</p>
           <p>{{ 'loans.transaction.outstandingLabel' | translate }} {{ tx.outstandingLoanBalance | currency: tx.currency }}</p>
-        </mat-card-content>
-        <mat-card-actions>
-          <a mat-button [routerLink]="['/loans', loanId]">{{ 'loans.transaction.backToLoan' | translate }}</a>
-        </mat-card-actions>
-      </mat-card>
+        </ion-card-content>
+        <div class="card-actions">
+          <ion-button fill="clear" [routerLink]="['/loans', loanId]">
+            {{ 'loans.transaction.backToLoan' | translate }}
+          </ion-button>
+        </div>
+      </ion-card>
     }
   `,
   styleUrls: ['../../shared/css/transaction-page.scss'],
+  styles: `
+    .card-actions {
+      display: flex;
+      gap: 0.75rem;
+      padding: 0 1.25rem 1.25rem;
+    }
+  `,
 })
 export class LoansTransactionComponent {
   private readonly route = inject(ActivatedRoute);

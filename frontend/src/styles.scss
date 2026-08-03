@@ -17,8 +17,6 @@
  * under the License.
  */
 
-@use '@angular/material' as mat;
-
 *,
 *::before,
 *::after {
@@ -28,7 +26,7 @@
 }
 
 :focus-visible {
-  outline: 2px solid var(--primary-color);
+  outline: 2px solid var(--cobalt-400);
   outline-offset: 2px;
 }
 
@@ -47,41 +45,103 @@
 html {
   height: 100%;
   font-size: 125%;
-  @include mat.theme((
-    color: (
-      primary: mat.$azure-palette,
-      tertiary: mat.$blue-palette,
-    ),
-    typography: Inter,
-    density: 0,
-  ));
 }
 
 body {
-
   color-scheme: light;
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  font: var(--mat-sys-body-medium);
+  background-color: var(--page-bg);
+  color: var(--ink);
+  font: 400 0.875rem/1.5 'Inter', sans-serif;
   margin: 0;
   height: 100%;
 }
 
 :root {
-  --primary-color: #3498db;
-  --primary-dark: #2980b9;
-  --secondary-color: #2c3e50;
-  --bg-color: #f0f2f5;
-  --card-bg: #ffffff;
-  --text-color: #333333;
-  --text-muted: #666666;
-  --error-color: #e74c3c;
-  --success-color: #2ecc71;
-  --warning-color: #f39c12;
-  --border-color: #dddddd;
-  --border-radius: 8px;
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --cobalt-50:  #eef4ff;  --cobalt-100: #dbe6ff;  --cobalt-200: #bdd1ff;
+  --cobalt-300: #93b4ff;  --cobalt-400: #608dff;  --cobalt-500: #3b6bff;
+  --cobalt-600: #2563eb;  --cobalt-700: #1d4ed8;  --cobalt-800: #1e40af;
+
+  --page-bg: #f8fafc;  --surface: #ffffff;  --ink: #0f172a;
+  --slate-600: #475569; --slate-500: #64748b; --slate-450: #7c899c; --slate-400: #94a3b8;
+  --border: #e2e8f0;
+
+  --success-tint: #ecfdf5; --success: #047857;
+  --warning-tint: #fffbeb; --warning: #b45309;
+  --danger-tint:  #fff1f2; --danger:  #be123c;
+  --info-tint:    #f5f3ff; --info:    #6d28d9;
+  --neutral-tint: #f1f5f9; --neutral: #475569;
+
+  --radius-sm: 6px; --radius-md: 10px; --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+
+  --text-2xs:  0.6875rem;
+  --text-xs:   0.75rem;
+  --text-sm:   0.8125rem;
+  --text-base: 0.875rem;
+  --text-md:   1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  1.875rem;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug:  -0.01em;
+  --tracking-wide:   0.06em;
+
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 225ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+
+  --field-sm: 9rem;
+  --field-md: 12rem;
+  --field-lg: 14rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:root {
+  --ion-background-color: var(--page-bg);
+  --ion-background-color-rgb: 248, 250, 252;
+  --ion-text-color: var(--ink);
+  --ion-text-color-rgb: 15, 23, 42;
+  --ion-border-color: var(--border);
+  --ion-font-family: 'Inter', sans-serif;
+
+  --ion-color-primary: var(--cobalt-600);
+  --ion-color-primary-rgb: 37, 99, 235;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: var(--cobalt-700);
+  --ion-color-primary-tint: var(--cobalt-500);
+
+  --ion-color-success: var(--success);
+  --ion-color-success-rgb: 4, 120, 87;
+  --ion-color-success-contrast: #ffffff;
+  --ion-color-success-contrast-rgb: 255, 255, 255;
+  --ion-color-success-shade: #046a4d;
+  --ion-color-success-tint: #1d8668;
+
+  --ion-color-warning: var(--warning);
+  --ion-color-warning-rgb: 180, 83, 9;
+  --ion-color-warning-contrast: #ffffff;
+  --ion-color-warning-contrast-rgb: 255, 255, 255;
+  --ion-color-warning-shade: #9e4908;
+  --ion-color-warning-tint: #bc6422;
+
+  --ion-color-danger: var(--danger);
+  --ion-color-danger-rgb: 190, 18, 60;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #a71035;
+  --ion-color-danger-tint: #c52a50;
 }
 
 h1,
@@ -90,99 +150,109 @@ h3,
 h4,
 h5,
 h6 {
-  color: var(--secondary-color);
+  color: var(--ink);
 }
 
+h1 { font-size: var(--text-2xl); font-weight: 600; letter-spacing: var(--tracking-tight); }
+h2 { font-size: var(--text-lg);  font-weight: 600; letter-spacing: var(--tracking-snug); }
+h3 { font-size: var(--text-md);  font-weight: 600; }
+
 a {
-  color: var(--primary-color);
+  color: var(--cobalt-600);
   text-decoration: none;
 }
 
-.mat-toolbar {
-  background-color: var(--secondary-color);
-  color: #fff;
-
-  .mat-mdc-button {
-    color: #fff;
-  }
-}
-
-.mat-sidenav {
-  background-color: var(--secondary-color);
-
-  .mat-mdc-list-item {
-    --mdc-list-list-item-label-text-color: rgba(255, 255, 255, 0.85);
-    --mdc-list-list-item-leading-icon-color: rgba(255, 255, 255, 0.85);
-    --mdc-list-list-item-hover-label-text-color: #fff;
-    --mdc-list-list-item-hover-leading-icon-color: #fff;
-  }
-
-  .mat-mdc-list-item:hover:not(.active-link) {
-    background-color: rgba(255, 255, 255, 0.08);
-  }
-}
-
-.mat-drawer-content {
-  background-color: var(--bg-color);
-}
-
-.active-link {
-  --mdc-list-list-item-label-text-color: #fff;
-  --mdc-list-list-item-leading-icon-color: #fff;
-  --mdc-list-list-item-hover-label-text-color: #fff;
-  background-color: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-weight: 600;
-}
-
-.mat-mdc-card {
-  border-radius: var(--border-radius);
+ion-card {
+  margin: 0;
+  --background: var(--surface);
+  --color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
-  padding: 1.5rem;
+  overflow: hidden;
 }
 
-.mat-mdc-card-header {
-  padding: 0;
-  margin-bottom: 1rem;
+ion-card-header {
+  padding: 1.25rem 1.25rem 0;
 }
 
-.mat-mdc-card-title {
-  line-height: 1.4;
+ion-card-content.card-content-md {
+  padding: 1.25rem;
 }
 
-.mat-mdc-card-content {
-  padding: 0;
+ion-card-header ~ ion-card-content.card-content-md {
+  padding-top: 0.875rem;
 }
 
-.mat-mdc-table {
-  background: transparent;
+ion-card-title {
+  --color: var(--ink);
+  color: var(--ink);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
 
-  .mat-mdc-header-cell {
-    background-color: var(--bg-color);
-    color: var(--text-muted);
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-  }
+ion-card-subtitle {
+  --color: var(--slate-500);
+  color: var(--slate-500);
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
 
-  .mat-mdc-row:hover {
-    background-color: rgba(0, 0, 0, 0.03);
-  }
+ion-button {
+  min-height: 2.25rem;
+  height: auto;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  --border-radius: var(--radius-sm);
+  --padding-top: 0.5rem;
+  --padding-bottom: 0.5rem;
+  --padding-start: 0.875rem;
+  --padding-end: 0.875rem;
+  --box-shadow: none;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
 
-  .mat-mdc-header-cell,
-  .mat-mdc-cell {
-    padding: 0.75rem 1rem;
-  }
+ion-button:active {
+  transform: scale(0.98);
+}
 
-  .num {
-    text-align: right;
-  }
+ion-button[fill='outline'] {
+  --background: var(--surface);
+  --color: var(--ink);
+  --border-color: var(--border);
+  --border-width: 1px;
+  --background-hover: var(--page-bg);
+  --background-hover-opacity: 1;
+}
 
-  .empty-row td {
-    padding: 1.5rem 1rem;
-    text-align: center;
-    color: var(--text-muted);
-  }
+ion-button[fill='clear'] {
+  --color: var(--slate-600);
+  --background-hover: var(--page-bg);
+  --background-hover-opacity: 1;
+}
+
+ion-input,
+ion-select {
+  min-height: 3.5rem;
+  font-size: 0.875rem;
+  --background: var(--surface);
+  --color: var(--ink);
+  --placeholder-color: var(--slate-400);
+  --border-color: var(--border);
+  --border-radius: var(--radius-sm);
+  --border-width: 1px;
+  --padding-start: 0.75rem;
+  --padding-end: 0.75rem;
+  --padding-top: 0.5rem;
+  --padding-bottom: 0.5rem;
+  --highlight-color-focused: var(--cobalt-600);
+  --highlight-color-valid: var(--cobalt-600);
+  --highlight-color-invalid: var(--danger);
 }

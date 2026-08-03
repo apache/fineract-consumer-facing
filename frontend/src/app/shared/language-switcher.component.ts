@@ -18,9 +18,9 @@
  */
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatMenuModule } from '@angular/material/menu';
+import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonPopover } from '@ionic/angular/standalone';
+import { addIcons } from 'ionicons';
+import { globeOutline } from 'ionicons/icons';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 const STORAGE_KEY = 'app.lang';
@@ -34,21 +34,56 @@ interface LanguageOption {
 @Component({
   selector: 'app-language-switcher',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, TranslatePipe],
+  imports: [IonButton, IonIcon, IonItem, IonLabel, IonList, IonPopover, TranslatePipe],
   template: `
-    <button mat-icon-button class="icon-button-lg" [matMenuTriggerFor]="menu" [attr.aria-label]="'common.action.changeLanguage' | translate">
-      <mat-icon>language</mat-icon>
-    </button>
-    <mat-menu #menu="matMenu">
-      @for (lang of languages; track lang.code) {
-        <button mat-menu-item (click)="use(lang.code)">
-          {{ lang.endonym
-          }}{{ (lang.nameKey | translate) === lang.endonym ? '' : ' (' + (lang.nameKey | translate) + ')' }}
-        </button>
-      }
-    </mat-menu>
+    <ion-button
+      id="language-trigger"
+      fill="clear"
+      class="icon-button-lg"
+      [attr.aria-label]="'common.action.changeLanguage' | translate"
+    >
+      <ion-icon slot="icon-only" name="globe-outline" aria-hidden="true" />
+    </ion-button>
+    <ion-popover trigger="language-trigger" [dismissOnSelect]="true" [showBackdrop]="false">
+      <ng-template>
+        <ion-list lines="none">
+          @for (lang of languages; track lang.code) {
+            <ion-item [button]="true" [detail]="false" (click)="use(lang.code)">
+              <ion-label>
+                {{ lang.endonym
+                }}{{ (lang.nameKey | translate) === lang.endonym ? '' : ' (' + (lang.nameKey | translate) + ')' }}
+              </ion-label>
+            </ion-item>
+          }
+        </ion-list>
+      </ng-template>
+    </ion-popover>
   `,
   styleUrls: ['./css/icon-button.scss'],
+  styles: `
+    ion-button {
+      --color: var(--slate-600);
+    }
+
+    ion-popover {
+      --background: var(--surface);
+      --box-shadow: var(--shadow-md);
+    }
+
+    ion-list {
+      background: var(--surface);
+      padding: 0.25rem 0;
+    }
+
+    ion-item {
+      --background: var(--surface);
+      --background-hover: var(--page-bg);
+      --background-hover-opacity: 1;
+      --color: var(--ink);
+      --min-height: 2.5rem;
+      font-size: var(--text-base);
+    }
+  `,
 })
 export class LanguageSwitcherComponent {
   private readonly translate = inject(TranslateService);
@@ -59,6 +94,7 @@ export class LanguageSwitcherComponent {
   ];
 
   constructor() {
+    addIcons({ globeOutline });
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       this.translate.use(stored);

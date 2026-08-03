@@ -223,11 +223,9 @@
       "loans": "ऋण"
     },
     "savings": {
-      "availableLabel": "उपलब्ध:",
       "empty": "कोई बचत खाता नहीं।"
     },
     "loan": {
-      "outstandingLabel": "बकाया:",
       "empty": "कोई ऋण खाता नहीं।"
     }
   },

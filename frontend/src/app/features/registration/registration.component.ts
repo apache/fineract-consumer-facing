@@ -21,12 +21,18 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSelectModule } from '@angular/material/select';
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardTitle,
+  IonInput,
+  IonProgressBar,
+  IonRouterLink,
+  IonSelect,
+  IonSelectOption,
+} from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 import { VerifyOtpCommandData } from '@bff/client';
 import { OtpComponent } from '../../shared/otp/otp.component';
@@ -38,73 +44,81 @@ import { RegistrationService } from './registration.service';
   imports: [
     ReactiveFormsModule,
     RouterLink,
-    MatCardModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    MatProgressBarModule,
-    MatSelectModule,
+    IonButton,
+    IonCard,
+    IonCardContent,
+    IonCardHeader,
+    IonCardTitle,
+    IonInput,
+    IonProgressBar,
+    IonRouterLink,
+    IonSelect,
+    IonSelectOption,
     OtpComponent,
     TranslatePipe,
   ],
   template: `
-    <mat-card class="page-card">
+    <ion-card class="page-card">
       @if (step() !== 'done') {
-        <mat-card-header>
-          <mat-card-title>{{ 'registration.title' | translate }}</mat-card-title>
-        </mat-card-header>
+        <ion-card-header>
+          <ion-card-title>{{ 'registration.title' | translate }}</ion-card-title>
+        </ion-card-header>
       }
 
       @if (loading()) {
-        <mat-progress-bar mode="indeterminate" />
+        <ion-progress-bar type="indeterminate" />
       }
 
-      <mat-card-content>
+      <ion-card-content>
         @switch (step()) {
           @case ('identity') {
             <form [formGroup]="identityForm" (ngSubmit)="submitIdentity()">
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'registration.identity.clientIdLabel' | translate }}</mat-label>
-                <input matInput type="number" formControlName="fineractClientId" min="1" />
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'common.field.email' | translate }}</mat-label>
-                <input matInput type="email" formControlName="email" autocomplete="username" />
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'common.field.password' | translate }}</mat-label>
-                <input
-                  matInput
-                  type="password"
-                  formControlName="password"
-                  autocomplete="new-password"
-                />
-                <mat-hint>{{ 'registration.identity.passwordHint' | translate }}</mat-hint>
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'registration.identity.documentTypeLabel' | translate }}</mat-label>
-                <mat-select formControlName="documentTypeName">
-                  <mat-option value="SSN">SSN</mat-option>
-                  <mat-option value="Aadhaar">Aadhaar</mat-option>
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'registration.identity.documentNumberLabel' | translate }}</mat-label>
-                <input
-                  matInput
-                  type="password"
-                  formControlName="documentKey"
-                  autocomplete="off"
-                />
-              </mat-form-field>
-              <button
-                mat-flat-button
-                color="primary"
-                type="submit"
-                [disabled]="loading() || identityForm.invalid"
+              <ion-input
+                type="number"
+                formControlName="fineractClientId"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'registration.identity.clientIdLabel' | translate"
+                min="1"
+              />
+              <ion-input
+                type="email"
+                formControlName="email"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'common.field.email' | translate"
+                autocomplete="username"
+              />
+              <ion-input
+                type="password"
+                formControlName="password"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'common.field.password' | translate"
+                [helperText]="'registration.identity.passwordHint' | translate"
+                autocomplete="new-password"
+              />
+              <ion-select
+                formControlName="documentTypeName"
+                fill="outline"
+                labelPlacement="stacked"
+                interface="popover"
+                [label]="'registration.identity.documentTypeLabel' | translate"
               >
+                <ion-select-option value="SSN">SSN</ion-select-option>
+                <ion-select-option value="Aadhaar">Aadhaar</ion-select-option>
+              </ion-select>
+              <ion-input
+                type="password"
+                formControlName="documentKey"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'registration.identity.documentNumberLabel' | translate"
+                autocomplete="off"
+              />
+              <ion-button type="submit" [disabled]="loading() || identityForm.invalid">
                 {{ 'common.action.continue' | translate }}
-              </button>
+              </ion-button>
             </form>
           }
           @case ('otp') {
@@ -114,8 +128,8 @@ import { RegistrationService } from './registration.service';
               (submitted)="verifyOtp($event)"
               (cancelled)="backToIdentity()"
             />
-            <button
-              mat-button
+            <ion-button
+              fill="clear"
               type="button"
               [disabled]="loading() || resendCooldown() > 0"
               (click)="resend()"
@@ -125,7 +139,7 @@ import { RegistrationService } from './registration.service';
               } @else {
                 {{ 'registration.otp.resend' | translate }}
               }
-            </button>
+            </ion-button>
           }
           @case ('done') {
             <div class="done">
@@ -135,14 +149,14 @@ import { RegistrationService } from './registration.service';
                   {{ 'registration.done.idEnding' | translate: { lastFour: maskedLastFour() } }}
                 </p>
               }
-              <a mat-flat-button color="primary" routerLink="/login">{{
+              <ion-button routerLink="/login">{{
                 'registration.done.continueToLogin' | translate
-              }}</a>
+              }}</ion-button>
             </div>
           }
         }
-      </mat-card-content>
-    </mat-card>
+      </ion-card-content>
+    </ion-card>
   `,
   styleUrls: ['../../shared/css/centered-page.scss', '../../shared/css/form.scss'],
   styles: `
@@ -156,12 +170,11 @@ import { RegistrationService } from './registration.service';
     }
     .done-title {
       margin: 0;
-      font-size: 1.5rem;
-      font-weight: 500;
+      color: var(--ink);
     }
     .done-sub {
       margin: 0;
-      color: var(--text-muted);
+      color: var(--slate-500);
     }
   `,
 })

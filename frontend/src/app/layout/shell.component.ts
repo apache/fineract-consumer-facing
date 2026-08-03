@@ -31,12 +31,31 @@ import {
   RouterLinkActive,
   RouterOutlet,
 } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatListModule } from '@angular/material/list';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSidenavModule } from '@angular/material/sidenav';
-import { MatToolbarModule } from '@angular/material/toolbar';
+import {
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonMenu,
+  IonProgressBar,
+  IonSplitPane,
+  IonToolbar,
+} from '@ionic/angular/standalone';
+import { addIcons } from 'ionicons';
+import {
+  cashOutline,
+  gridOutline,
+  logOutOutline,
+  menuOutline,
+  peopleOutline,
+  personOutline,
+  swapHorizontalOutline,
+  walletOutline,
+} from 'ionicons/icons';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AuditService } from '../core/audit/audit.service';
 import { buildDetails } from '../core/audit/pii-scrub';
@@ -62,95 +81,208 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
     RouterLink,
     RouterLinkActive,
     RouterOutlet,
-    MatButtonModule,
-    MatIconModule,
-    MatListModule,
-    MatProgressBarModule,
-    MatSidenavModule,
-    MatToolbarModule,
+    IonButton,
+    IonButtons,
+    IonContent,
+    IonHeader,
+    IonIcon,
+    IonItem,
+    IonLabel,
+    IonList,
+    IonMenu,
+    IonProgressBar,
+    IonSplitPane,
+    IonToolbar,
     TranslatePipe,
     LanguageSwitcherComponent,
   ],
   template: `
     @if (loading()) {
-      <mat-progress-bar mode="indeterminate" />
+      <ion-progress-bar type="indeterminate" />
     }
 
-    <mat-toolbar>
-      <button
-        mat-icon-button
-        class="icon-button-lg nav-toggle-btn"
-        [attr.aria-label]="'layout.shell.toggleNav' | translate"
-        (click)="toggleSidenav()"
-      >
-        <mat-icon>menu</mat-icon>
-      </button>
-      <img ngSrc="/apache-fineract-logo.png" width="32" height="32" alt="" class="brand-icon" priority />
-      <span>{{ 'layout.shell.brand' | translate }}</span>
-      <span class="spacer"></span>
-      <app-language-switcher />
-      <button
-        mat-icon-button
-        class="icon-button-lg logout-btn"
-        [attr.aria-label]="'layout.shell.logout' | translate"
-        (click)="logout()"
-      >
-        <mat-icon>logout</mat-icon>
-      </button>
-    </mat-toolbar>
+    <ion-header class="ion-no-border">
+      <ion-toolbar>
+        <ion-buttons slot="start">
+          <ion-button
+            fill="clear"
+            class="icon-button-lg nav-toggle-btn"
+            [attr.aria-label]="'layout.shell.toggleNav' | translate"
+            (click)="toggleSidenav()"
+          >
+            <ion-icon slot="icon-only" name="menu-outline" aria-hidden="true" />
+          </ion-button>
+        </ion-buttons>
+        <div class="brand" slot="start">
+          <img ngSrc="/apache-fineract-logo.png" width="32" height="32" alt="" class="brand-icon" priority />
+          <span>{{ 'layout.shell.brand' | translate }}</span>
+        </div>
+        <ion-buttons slot="end">
+          <app-language-switcher />
+          <ion-button
+            fill="clear"
+            class="icon-button-lg logout-btn"
+            [attr.aria-label]="'layout.shell.logout' | translate"
+            (click)="logout()"
+          >
+            <ion-icon slot="icon-only" name="log-out-outline" aria-hidden="true" />
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
 
-    <mat-sidenav-container>
-      <mat-sidenav mode="side" [opened]="sidenavOpened()">
-        <mat-nav-list>
-          <a mat-list-item routerLink="/summary" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>dashboard</mat-icon>{{ 'layout.nav.summary' | translate }}
-          </a>
-          <a mat-list-item routerLink="/savings" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>savings</mat-icon>{{ 'layout.nav.savings' | translate }}
-          </a>
-          <a mat-list-item routerLink="/loans" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>request_quote</mat-icon>{{ 'layout.nav.loans' | translate }}
-          </a>
-          <a mat-list-item routerLink="/transfers" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>swap_horiz</mat-icon>{{ 'layout.nav.transfers' | translate }}
-          </a>
-          <a mat-list-item routerLink="/beneficiaries" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>group</mat-icon>{{ 'layout.nav.beneficiaries' | translate }}
-          </a>
-          <a mat-list-item routerLink="/profile" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>person</mat-icon>{{ 'layout.nav.profile' | translate }}
-          </a>
-        </mat-nav-list>
-      </mat-sidenav>
-      <mat-sidenav-content>
-        <main>
-          <router-outlet />
-        </main>
-      </mat-sidenav-content>
-    </mat-sidenav-container>
+    <div class="pane-host">
+      <ion-split-pane contentId="shell-content" when="xs" [class.nav-collapsed]="!sidenavOpened()">
+        <ion-menu contentId="shell-content" menuId="shell-nav">
+          <ion-content>
+            <ion-list lines="none">
+              <ion-item [button]="true" [detail]="false" routerLink="/summary" routerLinkActive="active-link">
+                <ion-icon slot="start" name="grid-outline" aria-hidden="true" />
+                <ion-label>{{ 'layout.nav.summary' | translate }}</ion-label>
+              </ion-item>
+              <ion-item [button]="true" [detail]="false" routerLink="/savings" routerLinkActive="active-link">
+                <ion-icon slot="start" name="wallet-outline" aria-hidden="true" />
+                <ion-label>{{ 'layout.nav.savings' | translate }}</ion-label>
+              </ion-item>
+              <ion-item [button]="true" [detail]="false" routerLink="/loans" routerLinkActive="active-link">
+                <ion-icon slot="start" name="cash-outline" aria-hidden="true" />
+                <ion-label>{{ 'layout.nav.loans' | translate }}</ion-label>
+              </ion-item>
+              <ion-item [button]="true" [detail]="false" routerLink="/transfers" routerLinkActive="active-link">
+                <ion-icon slot="start" name="swap-horizontal-outline" aria-hidden="true" />
+                <ion-label>{{ 'layout.nav.transfers' | translate }}</ion-label>
+              </ion-item>
+              <ion-item [button]="true" [detail]="false" routerLink="/beneficiaries" routerLinkActive="active-link">
+                <ion-icon slot="start" name="people-outline" aria-hidden="true" />
+                <ion-label>{{ 'layout.nav.beneficiaries' | translate }}</ion-label>
+              </ion-item>
+              <ion-item [button]="true" [detail]="false" routerLink="/profile" routerLinkActive="active-link">
+                <ion-icon slot="start" name="person-outline" aria-hidden="true" />
+                <ion-label>{{ 'layout.nav.profile' | translate }}</ion-label>
+              </ion-item>
+            </ion-list>
+          </ion-content>
+        </ion-menu>
+        <div class="shell-content" id="shell-content">
+          <main>
+            <router-outlet />
+          </main>
+        </div>
+      </ion-split-pane>
+    </div>
   `,
   styleUrls: ['../shared/css/icon-button.scss'],
   styles: `
-    .brand-icon {
-      margin-right: 0.5rem;
+    :host {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
     }
+
+    ion-toolbar {
+      --background: var(--surface);
+      --color: var(--ink);
+      --border-color: var(--border);
+      --border-style: solid;
+      --border-width: 0 0 1px 0;
+    }
+
+    ion-buttons ion-button {
+      --color: var(--slate-600);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
     .nav-toggle-btn {
-      margin-right: 0.5rem;
+      margin-right: 0.25rem;
     }
+
     .logout-btn {
-      margin-left: 0.75rem;
+      margin-left: 0.5rem;
     }
-    .spacer {
-      flex: 1 1 auto;
+
+    .pane-host {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
     }
-    mat-sidenav-container {
-      height: calc(100vh - 64px);
+
+    ion-split-pane {
+      --side-width: 15rem;
+      --side-min-width: 15rem;
+      --side-max-width: 15rem;
     }
-    mat-sidenav {
-      width: 15rem;
+
+    ion-menu {
+      --border: 1px solid var(--ion-border-color);
+      transition:
+        margin-inline-start var(--dur-slow) var(--ease-out),
+        visibility 0s;
+
+      ion-content {
+        --background: var(--surface);
+      }
     }
+
+    ion-split-pane.nav-collapsed ion-menu {
+      margin-inline-start: -15rem;
+      visibility: hidden;
+      transition:
+        margin-inline-start var(--dur-slow) var(--ease-out),
+        visibility 0s var(--dur-slow);
+    }
+
+    ion-list {
+      background: transparent;
+      padding: 0.5rem 0;
+    }
+
+    ion-item {
+      --background: transparent;
+      --background-hover: var(--page-bg);
+      --background-hover-opacity: 1;
+      --color: var(--slate-600);
+      --border-radius: var(--radius-sm);
+      --min-height: 2.5rem;
+      margin: 0.25rem 0.5rem;
+      font-size: var(--text-base);
+
+      ion-icon {
+        color: var(--slate-400);
+        font-size: var(--text-xl);
+        margin-inline-end: 0.75rem;
+      }
+
+      &.active-link {
+        --background: var(--cobalt-50);
+        --color: var(--cobalt-800);
+        font-weight: 600;
+
+        ion-icon {
+          color: var(--cobalt-800);
+        }
+      }
+    }
+
+    .shell-content {
+      --border: var(--ion-border-color);
+      position: relative;
+      flex: 1;
+      overflow-y: auto;
+      background: var(--page-bg);
+    }
+
     main {
-      padding: 2rem;
+      padding: 1.5rem;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
     }
   `,
 })
@@ -164,6 +296,16 @@ export class ShellComponent {
   protected readonly sidenavOpened = signal(true);
 
   constructor() {
+    addIcons({
+      cashOutline,
+      gridOutline,
+      logOutOutline,
+      menuOutline,
+      peopleOutline,
+      personOutline,
+      swapHorizontalOutline,
+      walletOutline,
+    });
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((event) => {
       if (event instanceof NavigationStart) {
         this.loading.set(true);

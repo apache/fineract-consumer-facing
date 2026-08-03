@@ -22,26 +22,28 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { ToastController } from '@ionic/angular/standalone';
 import { TranslateService } from '@ngx-translate/core';
 import { ConsumerApiError } from '../../api/consumer-api-error';
 import { AuthService } from '../auth/auth.service';
 import { errorInterceptor } from './error.interceptor';
 
 describe('errorInterceptor', () => {
-  const open = vi.fn();
+  const present = vi.fn(() => Promise.resolve());
+  const create = vi.fn(() => Promise.resolve({ present }));
   let http: HttpClient;
   let controller: HttpTestingController;
 
   beforeEach(() => {
-    open.mockClear();
+    present.mockClear();
+    create.mockClear();
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([]),
         provideHttpClient(withInterceptors([errorInterceptor])),
         provideHttpClientTesting(),
-        { provide: MatSnackBar, useValue: { open } },
+        { provide: ToastController, useValue: { create } },
         { provide: AuthService, useValue: {} },
         {
           provide: TranslateService,
@@ -57,7 +59,7 @@ describe('errorInterceptor', () => {
 
   afterEach(() => controller.verify());
 
-  it('renders a ConsumerApiError envelope as a snackbar with defaultMessage', () => {
+  it('renders a ConsumerApiError envelope as a toast with defaultMessage', () => {
     const envelope: ConsumerApiError = {
       code: 'savings.account.not.owned',
       defaultMessage: 'You are not allowed to view this account.',
@@ -70,6 +72,11 @@ describe('errorInterceptor', () => {
       statusText: 'Forbidden',
     });
 
-    expect(open).toHaveBeenCalledWith(envelope.defaultMessage, 'Dismiss', { duration: 5000 });
+    expect(create).toHaveBeenCalledWith({
+      message: envelope.defaultMessage,
+      duration: 5000,
+      position: 'bottom',
+      buttons: [{ text: 'Dismiss', role: 'cancel' }],
+    });
   });
 });

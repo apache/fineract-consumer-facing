@@ -20,11 +20,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { IonButton, IonInput, IonProgressBar, ToastController } from '@ionic/angular/standalone';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { ProfileStore } from './profile.store';
@@ -36,48 +32,40 @@ const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule,
-    MatButtonModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatProgressBarModule,
+    IonButton,
+    IonInput,
+    IonProgressBar,
     TranslatePipe,
     OtpComponent,
   ],
   template: `
     @if (loading()) {
-      <mat-progress-bar mode="indeterminate" />
+      <ion-progress-bar type="indeterminate" />
     }
 
     @if (step() === 'form') {
       <form [formGroup]="form" (ngSubmit)="initiate()">
-        <mat-form-field appearance="fill">
-          <mat-label>{{ 'profile.changePassword.currentLabel' | translate }}</mat-label>
-          <input
-            matInput
-            type="password"
-            formControlName="currentPassword"
-            autocomplete="current-password"
-          />
-        </mat-form-field>
-        <mat-form-field appearance="fill">
-          <mat-label>{{ 'profile.changePassword.newLabel' | translate }}</mat-label>
-          <input
-            matInput
-            type="password"
-            formControlName="newPassword"
-            autocomplete="new-password"
-          />
-          <mat-hint>{{ 'registration.identity.passwordHint' | translate }}</mat-hint>
-        </mat-form-field>
+        <ion-input
+          type="password"
+          formControlName="currentPassword"
+          fill="outline"
+          labelPlacement="stacked"
+          [label]="'profile.changePassword.currentLabel' | translate"
+          autocomplete="current-password"
+        />
+        <ion-input
+          type="password"
+          formControlName="newPassword"
+          fill="outline"
+          labelPlacement="stacked"
+          [label]="'profile.changePassword.newLabel' | translate"
+          [helperText]="'registration.identity.passwordHint' | translate"
+          autocomplete="new-password"
+        />
         <div class="actions-end">
-          <button
-            mat-flat-button
-            color="primary"
-            type="submit"
-            [disabled]="loading() || form.invalid"
-          >
+          <ion-button type="submit" [disabled]="loading() || form.invalid">
             {{ 'profile.changePassword.submitCta' | translate }}
-          </button>
+          </ion-button>
         </div>
       </form>
     } @else {
@@ -98,7 +86,7 @@ const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
 })
 export class ChangePasswordComponent {
   private readonly fb = inject(NonNullableFormBuilder);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toastCtrl = inject(ToastController);
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly store = inject(ProfileStore);
@@ -147,11 +135,7 @@ export class ChangePasswordComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          this.snackBar.open(
-            this.translate.instant('profile.changePassword.success'),
-            this.translate.instant('common.action.dismiss'),
-            { duration: 5000 },
-          );
+          this.presentSuccessToast();
           this.form.reset();
           this.step.set('form');
           this.loading.set(false);
@@ -162,5 +146,15 @@ export class ChangePasswordComponent {
 
   protected backToForm(): void {
     this.step.set('form');
+  }
+
+  private presentSuccessToast(): void {
+    this.toastCtrl
+      .create({
+        message: this.translate.instant('profile.changePassword.success'),
+        duration: 5000,
+        buttons: [{ text: this.translate.instant('common.action.dismiss'), role: 'cancel' }],
+      })
+      .then(toast => toast.present());
   }
 }

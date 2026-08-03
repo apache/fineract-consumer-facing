@@ -21,6 +21,27 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  align-items: center;
+  align-items: flex-end;
   margin-bottom: 1rem;
+}
+
+.filter ion-input,
+.filter ion-select {
+  flex: 1 1 var(--field-sm);
+  min-width: var(--field-sm);
+}
+
+.filter ion-select { flex-basis: var(--field-md); min-width: var(--field-md); }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.field-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--slate-600);
 }

@@ -21,13 +21,19 @@ import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, signal 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSelectModule } from '@angular/material/select';
-import { MatTableModule } from '@angular/material/table';
+import { CdkTableModule } from '@angular/cdk/table';
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardSubtitle,
+  IonCardTitle,
+  IonInput,
+  IonProgressBar,
+  IonSelect,
+  IonSelectOption,
+} from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 import { SubmitLoanApplicationCommandRequest } from '@bff/client';
 import { LoansStore } from './loans.store';
@@ -37,135 +43,167 @@ import { LoansStore } from './loans.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule,
-    MatButtonModule,
-    MatCardModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatProgressBarModule,
-    MatSelectModule,
-    MatTableModule,
+    CdkTableModule,
+    IonButton,
+    IonCard,
+    IonCardContent,
+    IonCardHeader,
+    IonCardSubtitle,
+    IonCardTitle,
+    IonInput,
+    IonProgressBar,
+    IonSelect,
+    IonSelectOption,
     TranslatePipe,
   ],
   template: `
-    <mat-card>
-      <mat-card-header>
-        <mat-card-title>{{ 'loans.apply.title' | translate }}</mat-card-title>
-      </mat-card-header>
+    <ion-card>
+      <ion-card-header>
+        <ion-card-title>{{ 'loans.apply.title' | translate }}</ion-card-title>
+      </ion-card-header>
 
       @if (loading()) {
-        <mat-progress-bar mode="indeterminate" />
+        <ion-progress-bar type="indeterminate" />
       }
 
-      <mat-card-content>
+      <ion-card-content>
         <form [formGroup]="form" class="terms">
-          <mat-form-field appearance="fill">
-            <mat-label>{{ 'loans.apply.productLabel' | translate }}</mat-label>
-            <mat-select formControlName="productId" (selectionChange)="onProductChange($event.value)">
-              @for (option of store.template()?.productOptions ?? []; track option.id) {
-                <mat-option [value]="option.id">{{ option.name }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
+          <ion-select
+            formControlName="productId"
+            fill="outline"
+            labelPlacement="stacked"
+            interface="popover"
+            [label]="'loans.apply.productLabel' | translate"
+            (ionChange)="onProductChange($event)"
+          >
+            @for (option of store.template()?.productOptions ?? []; track option.id) {
+              <ion-select-option [value]="option.id">{{ option.name }}</ion-select-option>
+            }
+          </ion-select>
 
-          <mat-form-field appearance="fill">
-            <mat-label>{{ 'loans.apply.principalLabel' | translate }}</mat-label>
-            <input matInput type="number" formControlName="principal" />
-          </mat-form-field>
-          <mat-form-field appearance="fill">
-            <mat-label>{{ 'loans.apply.numberOfRepaymentsLabel' | translate }}</mat-label>
-            <input matInput type="number" formControlName="numberOfRepayments" />
-          </mat-form-field>
-          <mat-form-field appearance="fill">
-            <mat-label>{{ 'loans.apply.repaymentEveryLabel' | translate }}</mat-label>
-            <input matInput type="number" formControlName="repaymentEvery" />
-          </mat-form-field>
-          <mat-form-field appearance="fill">
-            <mat-label>{{ 'loans.apply.loanTermFrequencyLabel' | translate }}</mat-label>
-            <input matInput type="number" formControlName="loanTermFrequency" />
-          </mat-form-field>
-          <mat-form-field appearance="fill">
-            <mat-label>{{ 'loans.apply.interestRateLabel' | translate }}</mat-label>
-            <input matInput type="number" step="0.01" formControlName="interestRatePerPeriod" />
-          </mat-form-field>
-          <mat-form-field appearance="fill">
-            <mat-label>{{ 'loans.apply.expectedDisbursementDateLabel' | translate }}</mat-label>
-            <input matInput [placeholder]="'common.placeholder.date' | translate" formControlName="expectedDisbursementDate" />
-          </mat-form-field>
-          <mat-form-field appearance="fill">
-            <mat-label>{{ 'loans.apply.submittedOnDateLabel' | translate }}</mat-label>
-            <input matInput [placeholder]="'common.placeholder.date' | translate" formControlName="submittedOnDate" />
-          </mat-form-field>
+          <ion-input
+            type="number"
+            formControlName="principal"
+            fill="outline"
+            labelPlacement="stacked"
+            [label]="'loans.apply.principalLabel' | translate"
+          />
+          <ion-input
+            type="number"
+            formControlName="numberOfRepayments"
+            fill="outline"
+            labelPlacement="stacked"
+            [label]="'loans.apply.numberOfRepaymentsLabel' | translate"
+          />
+          <ion-input
+            type="number"
+            formControlName="repaymentEvery"
+            fill="outline"
+            labelPlacement="stacked"
+            [label]="'loans.apply.repaymentEveryLabel' | translate"
+          />
+          <ion-input
+            type="number"
+            formControlName="loanTermFrequency"
+            fill="outline"
+            labelPlacement="stacked"
+            [label]="'loans.apply.loanTermFrequencyLabel' | translate"
+          />
+          <ion-input
+            type="number"
+            step="0.01"
+            formControlName="interestRatePerPeriod"
+            fill="outline"
+            labelPlacement="stacked"
+            [label]="'loans.apply.interestRateLabel' | translate"
+          />
+          <ion-input
+            formControlName="expectedDisbursementDate"
+            fill="outline"
+            labelPlacement="stacked"
+            [label]="'loans.apply.expectedDisbursementDateLabel' | translate"
+            [placeholder]="'common.placeholder.date' | translate"
+          />
+          <ion-input
+            formControlName="submittedOnDate"
+            fill="outline"
+            labelPlacement="stacked"
+            [label]="'loans.apply.submittedOnDateLabel' | translate"
+            [placeholder]="'common.placeholder.date' | translate"
+          />
         </form>
 
         <div class="actions-row">
-          <button mat-stroked-button type="button" [disabled]="loading() || form.invalid" (click)="preview()">
+          <ion-button fill="outline" class="btn-secondary" type="button" [disabled]="loading() || form.invalid" (click)="preview()">
             {{ 'loans.apply.previewCta' | translate }}
-          </button>
-          <button mat-flat-button color="primary" type="button" [disabled]="loading() || form.invalid" (click)="submit()">
+          </ion-button>
+          <ion-button type="button" [disabled]="loading() || form.invalid" (click)="submit()">
             {{ 'loans.apply.submitCta' | translate }}
-          </button>
+          </ion-button>
         </div>
-      </mat-card-content>
-    </mat-card>
+      </ion-card-content>
+    </ion-card>
 
     @if (store.schedulePreview(); as schedule) {
-      <mat-card>
-        <mat-card-header>
-          <mat-card-title>{{ 'loans.apply.scheduleTitle' | translate }}</mat-card-title>
-          <mat-card-subtitle>
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>{{ 'loans.apply.scheduleTitle' | translate }}</ion-card-title>
+          <ion-card-subtitle>
             {{
               'loans.apply.totalRepaymentExpected'
                 | translate: { amount: schedule.totalRepaymentExpected, currency: schedule.currency }
             }}
-          </mat-card-subtitle>
-        </mat-card-header>
-        <mat-card-content>
-          <table mat-table [dataSource]="schedule.periods ?? []">
-            <ng-container matColumnDef="period">
-              <th mat-header-cell *matHeaderCellDef>{{ 'loans.apply.schedule.period' | translate }}</th>
-              <td mat-cell *matCellDef="let row">{{ row.period }}</td>
+          </ion-card-subtitle>
+        </ion-card-header>
+        <ion-card-content>
+          <div class="table-scroll">
+          <table cdk-table [dataSource]="schedule.periods ?? []">
+            <ng-container cdkColumnDef="period">
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'loans.apply.schedule.period' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row">{{ row.period }}</td>
             </ng-container>
-            <ng-container matColumnDef="dueDate">
-              <th mat-header-cell *matHeaderCellDef>{{ 'loans.apply.schedule.dueDate' | translate }}</th>
-              <td mat-cell *matCellDef="let row">{{ row.dueDate }}</td>
+            <ng-container cdkColumnDef="dueDate">
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'loans.apply.schedule.dueDate' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row">{{ row.dueDate }}</td>
             </ng-container>
-            <ng-container matColumnDef="principalDue">
-              <th mat-header-cell *matHeaderCellDef>{{ 'loans.apply.principalLabel' | translate }}</th>
-              <td mat-cell *matCellDef="let row">{{ row.principalDue }}</td>
+            <ng-container cdkColumnDef="principalDue">
+              <th cdk-header-cell *cdkHeaderCellDef class="num">{{ 'loans.apply.principalLabel' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row" class="num">{{ row.principalDue }}</td>
             </ng-container>
-            <ng-container matColumnDef="totalDueForPeriod">
-              <th mat-header-cell *matHeaderCellDef>{{ 'loans.apply.schedule.totalDue' | translate }}</th>
-              <td mat-cell *matCellDef="let row">{{ row.totalDueForPeriod }}</td>
+            <ng-container cdkColumnDef="totalDueForPeriod">
+              <th cdk-header-cell *cdkHeaderCellDef class="num">{{ 'loans.apply.schedule.totalDue' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row" class="num">{{ row.totalDueForPeriod }}</td>
             </ng-container>
-            <ng-container matColumnDef="outstandingBalance">
-              <th mat-header-cell *matHeaderCellDef>{{ 'common.table.balance' | translate }}</th>
-              <td mat-cell *matCellDef="let row">{{ row.outstandingBalance }}</td>
+            <ng-container cdkColumnDef="outstandingBalance">
+              <th cdk-header-cell *cdkHeaderCellDef class="num">{{ 'common.table.balance' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row" class="num">{{ row.outstandingBalance }}</td>
             </ng-container>
 
-            <tr mat-header-row *matHeaderRowDef="scheduleColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: scheduleColumns"></tr>
+            <tr cdk-header-row *cdkHeaderRowDef="scheduleColumns"></tr>
+            <tr cdk-row *cdkRowDef="let row; columns: scheduleColumns"></tr>
           </table>
-        </mat-card-content>
-      </mat-card>
+          </div>
+        </ion-card-content>
+      </ion-card>
     }
 
     @if (store.draft(); as draft) {
-      <mat-card>
-        <mat-card-header>
-          <mat-card-title>{{ 'loans.apply.draftTitle' | translate: { id: draft.loanId } }}</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>{{ 'loans.apply.draftTitle' | translate: { id: draft.loanId } }}</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
           <p>{{ 'loans.apply.draftHint' | translate }}</p>
           <div class="actions-row">
-            <button mat-stroked-button type="button" [disabled]="loading() || form.invalid" (click)="modify(draft.loanId)">
+            <ion-button fill="outline" class="btn-secondary" type="button" [disabled]="loading() || form.invalid" (click)="modify(draft.loanId)">
               {{ 'loans.apply.modifyCta' | translate }}
-            </button>
-            <button mat-stroked-button color="warn" type="button" [disabled]="loading()" (click)="withdraw(draft.loanId)">
+            </ion-button>
+            <ion-button class="btn-danger" type="button" [disabled]="loading()" (click)="withdraw(draft.loanId)">
               {{ 'loans.apply.withdrawCta' | translate }}
-            </button>
+            </ion-button>
           </div>
-        </mat-card-content>
-      </mat-card>
+        </ion-card-content>
+      </ion-card>
     }
   `,
   styleUrls: ['../../shared/css/table.scss', '../../shared/css/actions.scss'],
@@ -176,10 +214,33 @@ import { LoansStore } from './loans.store';
       gap: 1rem;
       padding: 1rem;
     }
+    ion-card:first-of-type {
+      max-width: 48rem;
+      width: 100%;
+      align-self: center;
+    }
     .terms {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.25rem 1rem;
+    }
+    @media (max-width: 40rem) {
+      .terms {
+        grid-template-columns: 1fr;
+      }
+    }
+    .actions-row {
+      margin-top: 1.5rem;
+    }
+    ion-button.btn-secondary {
+      --background: var(--surface);
+      --background-hover: var(--page-bg);
+      --background-hover-opacity: 1;
+      --background-activated: var(--page-bg);
+      --background-activated-opacity: 1;
+      --border-color: var(--border);
+      --border-width: 1px;
+      --color: var(--ink);
     }
   `,
 })
@@ -234,8 +295,11 @@ export class LoanApplyComponent {
     });
   }
 
-  protected onProductChange(productId: number): void {
-    this.store.loadTemplate(productId);
+  protected onProductChange(event: CustomEvent<{ value?: number | null }>): void {
+    const productId = event.detail.value;
+    if (productId != null) {
+      this.store.loadTemplate(productId);
+    }
   }
 
   protected preview(): void {

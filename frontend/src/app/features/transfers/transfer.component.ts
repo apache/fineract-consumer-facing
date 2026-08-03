@@ -21,13 +21,20 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '
 import { DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIconModule } from '@angular/material/icon';
-import { MatInputModule } from '@angular/material/input';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSelectModule } from '@angular/material/select';
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardTitle,
+  IonIcon,
+  IonInput,
+  IonProgressBar,
+  IonSelect,
+  IonSelectOption,
+} from '@ionic/angular/standalone';
+import { addIcons } from 'ionicons';
+import { swapHorizontal } from 'ionicons/icons';
 import { TranslatePipe } from '@ngx-translate/core';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { TransfersStore } from './transfers.store';
@@ -37,61 +44,72 @@ import { TransfersStore } from './transfers.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule,
-    MatButtonModule,
-    MatCardModule,
-    MatFormFieldModule,
-    MatIconModule,
-    MatInputModule,
-    MatProgressBarModule,
-    MatSelectModule,
+    IonButton,
+    IonCard,
+    IonCardContent,
+    IonCardHeader,
+    IonCardTitle,
+    IonIcon,
+    IonInput,
+    IonProgressBar,
+    IonSelect,
+    IonSelectOption,
     DecimalPipe,
     TranslatePipe,
     OtpComponent,
   ],
   template: `
-    <mat-card class="transfer-card">
-      <mat-card-header>
-        <mat-card-title>{{ 'transfers.title' | translate }}</mat-card-title>
-      </mat-card-header>
+    <ion-card class="transfer-card">
+      <ion-card-header>
+        <ion-card-title>{{ 'transfers.title' | translate }}</ion-card-title>
+      </ion-card-header>
 
       @if (loading()) {
-        <mat-progress-bar mode="indeterminate" />
+        <ion-progress-bar type="indeterminate" />
       }
 
-      <mat-card-content>
+      <ion-card-content>
         @switch (step()) {
           @case ('form') {
             <form [formGroup]="form" (ngSubmit)="initiate()">
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'transfers.form.fromAccountLabel' | translate }}</mat-label>
-                <input matInput type="number" formControlName="fromAccountId" />
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'transfers.form.toAccountLabel' | translate }}</mat-label>
-                <input matInput type="number" formControlName="toAccountId" />
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'transfers.form.toAccountTypeLabel' | translate }}</mat-label>
-                <mat-select formControlName="toAccountType">
-                  @for (type of accountTypes; track type.value) {
-                    <mat-option [value]="type.value">{{ type.labelKey | translate }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'transfers.form.amountLabel' | translate }}</mat-label>
-                <input matInput type="number" step="0.01" formControlName="amount" />
-              </mat-form-field>
+              <ion-input
+                type="number"
+                formControlName="fromAccountId"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'transfers.form.fromAccountLabel' | translate"
+              />
+              <ion-input
+                type="number"
+                formControlName="toAccountId"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'transfers.form.toAccountLabel' | translate"
+              />
+              <ion-select
+                formControlName="toAccountType"
+                interface="popover"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'transfers.form.toAccountTypeLabel' | translate"
+              >
+                @for (type of accountTypes; track type.value) {
+                  <ion-select-option [value]="type.value">{{ type.labelKey | translate }}</ion-select-option>
+                }
+              </ion-select>
+              <ion-input
+                type="number"
+                step="0.01"
+                formControlName="amount"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'transfers.form.amountLabel' | translate"
+              />
               <div class="actions-end">
-                <button
-                  mat-flat-button
-                  color="primary"
-                  type="submit"
-                  [disabled]="loading() || form.invalid"
-                >
-                  <mat-icon>swap_horiz</mat-icon>
+                <ion-button type="submit" [disabled]="loading() || form.invalid">
+                  <ion-icon slot="start" name="swap-horizontal" />
                   {{ 'transfers.form.submitCta' | translate }}
-                </button>
+                </ion-button>
               </div>
             </form>
           }
@@ -121,8 +139,8 @@ import { TransfersStore } from './transfers.store';
             </div>
           }
         }
-      </mat-card-content>
-    </mat-card>
+      </ion-card-content>
+    </ion-card>
   `,
   styleUrls: [
     '../../shared/css/centered-page.scss',
@@ -130,6 +148,10 @@ import { TransfersStore } from './transfers.store';
     '../../shared/css/actions.scss',
   ],
   styles: `
+    :host {
+      flex: 1;
+      min-height: 0;
+    }
     .transfer-card {
       width: 100%;
       max-width: 28rem;
@@ -144,6 +166,9 @@ import { TransfersStore } from './transfers.store';
     }
     dd {
       margin: 0;
+    }
+    form {
+      gap: 0.875rem;
     }
   `,
 })
@@ -166,6 +191,10 @@ export class TransferComponent {
     toAccountType: ['SAVINGS', [Validators.required]],
     amount: [null as number | null, [Validators.required, Validators.min(0.01)]],
   });
+
+  constructor() {
+    addIcons({ swapHorizontal });
+  }
 
   protected initiate(): void {
     const { fromAccountId, toAccountId, toAccountType, amount } = this.form.getRawValue();
