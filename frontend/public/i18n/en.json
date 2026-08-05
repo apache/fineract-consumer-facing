@@ -1,5 +1,9 @@
 {
   "common": {
+    "accountType": {
+      "savings": "Savings",
+      "loan": "Loan"
+    },
     "action": {
       "applyFilter": "Apply filter",
       "backToAccount": "Back to account",
@@ -79,6 +83,7 @@
   },
   "registration": {
     "title": "Create your account",
+    "backToLogin": "Back to sign in",
     "identity": {
       "clientIdLabel": "Fineract client ID",
       "passwordHint": "15–64 chars, with upper, lower, digit and special character.",
@@ -170,10 +175,6 @@
       "amountLabel": "Amount",
       "submitCta": "Send transfer"
     },
-    "accountType": {
-      "savings": "Savings",
-      "loan": "Loan"
-    },
     "done": {
       "complete": "Transfer complete.",
       "reference": "Reference",
@@ -210,10 +211,6 @@
       "added": "Beneficiary added.",
       "updated": "Beneficiary updated.",
       "deleted": "Beneficiary deleted."
-    },
-    "accountType": {
-      "savings": "Savings",
-      "loan": "Loan"
     }
   },
   "summary": {
@@ -223,11 +220,9 @@
       "loans": "Loans"
     },
     "savings": {
-      "availableLabel": "Available:",
       "empty": "No savings accounts."
     },
     "loan": {
-      "outstandingLabel": "Outstanding:",
       "empty": "No loan accounts."
     }
   },

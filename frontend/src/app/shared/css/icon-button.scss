@@ -20,10 +20,15 @@
 .icon-button-lg {
   width: 3rem;
   height: 3rem;
+  --padding-start: 0;
+  --padding-end: 0;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 
-.icon-button-lg mat-icon {
-  font-size: 1.75rem;
-  width: 1.75rem;
-  height: 1.75rem;
+.icon-button-lg:active {
+  transform: scale(0.98);
+}
+
+.icon-button-lg ion-icon {
+  font-size: var(--text-2xl);
 }

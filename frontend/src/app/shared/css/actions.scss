@@ -30,6 +30,9 @@
 }
 
 .btn-danger {
-  background-color: #ffd6d6;
-  color: #b00020;
+  --background: var(--danger-tint);
+  --background-hover: var(--danger);
+  --background-hover-opacity: 1;
+  --color: var(--danger);
+  --color-hover: var(--surface);
 }

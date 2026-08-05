@@ -19,15 +19,13 @@
 
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
+import { InputCustomEvent, IonButton, IonInput } from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-otp',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, TranslatePipe],
+  imports: [ReactiveFormsModule, IonButton, IonInput, TranslatePipe],
   template: `
     <p>
       @if (sentTo()) {
@@ -37,31 +35,32 @@ import { TranslatePipe } from '@ngx-translate/core';
       }
     </p>
     <form [formGroup]="form" (ngSubmit)="submit()">
-      <mat-form-field appearance="fill">
-        <mat-label>{{ 'common.otp.codeLabel' | translate }}</mat-label>
-        <input
-          matInput
-          class="otp-input"
-          formControlName="otp"
-          autocomplete="one-time-code"
-          autocapitalize="characters"
-          maxlength="6"
-          (input)="uppercase($event)"
-        />
-      </mat-form-field>
+      <ion-input
+        formControlName="otp"
+        fill="outline"
+        labelPlacement="stacked"
+        [label]="'common.otp.codeLabel' | translate"
+        autocomplete="one-time-code"
+        autocapitalize="characters"
+        [maxlength]="6"
+        (ionInput)="uppercase($event)"
+      />
       <div class="actions-end">
         @if (showCancel()) {
-          <button mat-button type="button" [disabled]="loading()" (click)="cancelled.emit()">
+          <ion-button fill="outline" type="button" [disabled]="loading()" (click)="cancelled.emit()">
             {{ 'common.action.cancel' | translate }}
-          </button>
+          </ion-button>
         }
-        <button mat-flat-button color="primary" type="submit" [disabled]="loading() || form.invalid">
+        <ion-button type="submit" [disabled]="loading() || form.invalid">
           {{ 'common.action.verify' | translate }}
-        </button>
+        </ion-button>
       </div>
     </form>
   `,
   styleUrls: ['../css/form.scss', '../css/actions.scss'],
+  styles: `
+    p { margin-bottom: 1.25rem; }
+  `,
 })
 export class OtpComponent {
   private readonly fb = inject(NonNullableFormBuilder);
@@ -76,8 +75,8 @@ export class OtpComponent {
     otp: ['', [Validators.required, Validators.pattern(/^[A-Z0-9]{6}$/)]],
   });
 
-  protected uppercase(event: Event): void {
-    const value = (event.target as HTMLInputElement).value.toUpperCase();
+  protected uppercase(event: InputCustomEvent): void {
+    const value = (event.detail.value ?? '').toUpperCase();
     this.form.controls.otp.setValue(value);
   }
 

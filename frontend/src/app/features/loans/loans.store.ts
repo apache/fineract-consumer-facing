@@ -55,6 +55,7 @@ export class LoansStore {
   readonly loading = signal(false);
 
   loadLoans(): void {
+    this.loans.set([]);
     this.loading.set(true);
     this.query
       .listLoanAccounts()
@@ -90,7 +91,7 @@ export class LoansStore {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: rows => this.charges.set(rows),
-        error: () => this.charges.set([]),
+        error: () => {},
       });
   }
 
@@ -101,7 +102,7 @@ export class LoansStore {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: rows => this.guarantors.set(rows),
-        error: () => this.guarantors.set([]),
+        error: () => {},
       });
   }
 
@@ -112,22 +113,30 @@ export class LoansStore {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: rows => this.transactions.set(rows),
-        error: () => this.transactions.set([]),
+        error: () => {},
       });
   }
 
   loadTransaction(loanId: number, transactionId: number): void {
+    this.selectedTransaction.set(null);
     this.query
       .getLoanTransaction(loanId, transactionId)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(tx => this.selectedTransaction.set(tx));
+      .subscribe({
+        next: tx => this.selectedTransaction.set(tx),
+        error: () => {},
+      });
   }
 
   loadTemplate(productId?: number): void {
+    this.template.set(null);
     this.query
       .getLoanApplicationTemplate(productId)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(template => this.template.set(template));
+      .subscribe({
+        next: template => this.template.set(template),
+        error: () => {},
+      });
   }
 
   previewSchedule(request: LoanSchedulePreviewQueryRequest): Observable<LoanScheduleQueryData> {

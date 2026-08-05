@@ -21,17 +21,23 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signa
 import { DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIconModule } from '@angular/material/icon';
-import { MatInputModule } from '@angular/material/input';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSelectModule } from '@angular/material/select';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatTableModule } from '@angular/material/table';
+import { CdkTableModule } from '@angular/cdk/table';
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonIcon,
+  IonInput,
+  IonProgressBar,
+  IonSelect,
+  IonSelectOption,
+  ToastController,
+} from '@ionic/angular/standalone';
+import { addIcons } from 'ionicons';
+import { pencil, personAdd, trash } from 'ionicons/icons';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { BeneficiaryQueryData, InitiateAddBeneficiaryCommandRequest } from '@bff/client';
+import { ACCOUNT_TYPE_LABEL_KEYS } from '../../shared/models/account-types';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { BeneficiariesStore } from './beneficiaries.store';
@@ -41,14 +47,15 @@ import { BeneficiariesStore } from './beneficiaries.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule,
-    MatButtonModule,
-    MatCardModule,
-    MatFormFieldModule,
-    MatIconModule,
-    MatInputModule,
-    MatProgressBarModule,
-    MatSelectModule,
-    MatTableModule,
+    CdkTableModule,
+    IonButton,
+    IonCard,
+    IonCardContent,
+    IonIcon,
+    IonInput,
+    IonProgressBar,
+    IonSelect,
+    IonSelectOption,
     DecimalPipe,
     TranslatePipe,
     OtpComponent,
@@ -57,24 +64,25 @@ import { BeneficiariesStore } from './beneficiaries.store';
   template: `
     <app-page-header [title]="'beneficiaries.title' | translate" />
 
-    <mat-card>
+    <ion-card>
       @if (loading()) {
-        <mat-progress-bar mode="indeterminate" />
+        <ion-progress-bar type="indeterminate" />
       }
 
-      <mat-card-content>
+      <ion-card-content>
         @switch (step()) {
           @case ('list') {
-            <table mat-table [dataSource]="store.beneficiaries()">
-              <ng-container matColumnDef="name">
-                <th mat-header-cell *matHeaderCellDef>{{ 'beneficiaries.list.nameColumn' | translate }}</th>
-                <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+            <div class="table-scroll">
+            <table cdk-table [dataSource]="store.beneficiaries()">
+              <ng-container cdkColumnDef="name">
+                <th cdk-header-cell *cdkHeaderCellDef>{{ 'beneficiaries.list.nameColumn' | translate }}</th>
+                <td cdk-cell *cdkCellDef="let row">{{ row.name }}</td>
               </ng-container>
-              <ng-container matColumnDef="accountType">
-                <th mat-header-cell *matHeaderCellDef>
+              <ng-container cdkColumnDef="accountType">
+                <th cdk-header-cell *cdkHeaderCellDef>
                   {{ 'beneficiaries.list.accountTypeColumn' | translate }}
                 </th>
-                <td mat-cell *matCellDef="let row">
+                <td cdk-cell *cdkCellDef="let row">
                   @if (typeLabelKey(row.accountType); as key) {
                     {{ key | translate }}
                   } @else {
@@ -82,11 +90,11 @@ import { BeneficiariesStore } from './beneficiaries.store';
                   }
                 </td>
               </ng-container>
-              <ng-container matColumnDef="transferLimit">
-                <th mat-header-cell *matHeaderCellDef>
+              <ng-container cdkColumnDef="transferLimit">
+                <th cdk-header-cell *cdkHeaderCellDef class="num">
                   {{ 'beneficiaries.list.transferLimitColumn' | translate }}
                 </th>
-                <td mat-cell *matCellDef="let row">
+                <td cdk-cell *cdkCellDef="let row" class="num">
                   @if (row.transferLimit != null) {
                     {{ row.transferLimit | number: '1.2-2' }}
                   } @else {
@@ -94,126 +102,139 @@ import { BeneficiariesStore } from './beneficiaries.store';
                   }
                 </td>
               </ng-container>
-              <ng-container matColumnDef="actions">
-                <th mat-header-cell *matHeaderCellDef>
+              <ng-container cdkColumnDef="actions">
+                <th cdk-header-cell *cdkHeaderCellDef>
                   {{ 'beneficiaries.list.actionsColumn' | translate }}
                 </th>
-                <td mat-cell *matCellDef="let row" class="row-actions">
+                <td cdk-cell *cdkCellDef="let row" class="row-actions">
                   @if (pendingDeleteId() === row.publicId) {
-                    <button
-                      mat-stroked-button
-                      color="warn"
+                    <ion-button
+                      class="btn-danger"
                       [disabled]="loading()"
                       (click)="confirmDelete(row.publicId)"
                     >
                       {{ 'beneficiaries.delete.confirm' | translate }}
-                    </button>
-                    <button mat-button [disabled]="loading()" (click)="cancelDelete()">
+                    </ion-button>
+                    <ion-button fill="clear" [disabled]="loading()" (click)="cancelDelete()">
                       {{ 'beneficiaries.delete.cancel' | translate }}
-                    </button>
+                    </ion-button>
                   } @else {
-                    <button
-                      mat-icon-button
+                    <ion-button
+                      fill="clear"
+                      class="icon-action"
                       [attr.aria-label]="'beneficiaries.edit.title' | translate"
                       (click)="startEdit(row)"
                     >
-                      <mat-icon>edit</mat-icon>
-                    </button>
-                    <button
-                      mat-icon-button
+                      <ion-icon slot="icon-only" name="pencil" />
+                    </ion-button>
+                    <ion-button
+                      fill="clear"
+                      class="icon-action"
                       [attr.aria-label]="'beneficiaries.delete.confirm' | translate"
                       (click)="requestDelete(row.publicId)"
                     >
-                      <mat-icon>delete</mat-icon>
-                    </button>
+                      <ion-icon slot="icon-only" name="trash" />
+                    </ion-button>
                   }
                 </td>
               </ng-container>
 
-              <tr mat-header-row *matHeaderRowDef="columns"></tr>
-              <tr mat-row *matRowDef="let row; columns: columns"></tr>
-              <tr class="empty-row" *matNoDataRow>
+              <tr cdk-header-row *cdkHeaderRowDef="columns"></tr>
+              <tr cdk-row *cdkRowDef="let row; columns: columns"></tr>
+              <tr class="empty-row" *cdkNoDataRow>
                 <td [attr.colspan]="columns.length">{{ 'beneficiaries.list.empty' | translate }}</td>
               </tr>
             </table>
+            </div>
 
             <div class="actions-end">
-              <button mat-flat-button color="primary" (click)="startAdd()">
-                <mat-icon>person_add</mat-icon>
+              <ion-button (click)="startAdd()">
+                <ion-icon slot="start" name="person-add" />
                 {{ 'beneficiaries.list.addCta' | translate }}
-              </button>
+              </ion-button>
             </div>
           }
           @case ('add-form') {
             <form [formGroup]="addForm" (ngSubmit)="submitAdd()">
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'beneficiaries.form.nameLabel' | translate }}</mat-label>
-                <input matInput formControlName="name" maxlength="50" />
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'beneficiaries.form.officeNameLabel' | translate }}</mat-label>
-                <input matInput formControlName="officeName" />
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'beneficiaries.form.accountNumberLabel' | translate }}</mat-label>
-                <input matInput formControlName="accountNumber" />
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'beneficiaries.form.accountTypeLabel' | translate }}</mat-label>
-                <mat-select formControlName="accountType">
-                  @for (option of typeOptions(); track option.value) {
-                    <mat-option [value]="option.value">
-                      @if (option.labelKey) {
-                        {{ option.labelKey | translate }}
-                      } @else {
-                        {{ option.value }}
-                      }
-                    </mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'beneficiaries.form.transferLimitLabel' | translate }}</mat-label>
-                <input matInput type="number" step="0.01" formControlName="transferLimit" />
-              </mat-form-field>
+              <ion-input
+                formControlName="name"
+                [maxlength]="50"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'beneficiaries.form.nameLabel' | translate"
+              />
+              <ion-input
+                formControlName="officeName"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'beneficiaries.form.officeNameLabel' | translate"
+              />
+              <ion-input
+                formControlName="accountNumber"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'beneficiaries.form.accountNumberLabel' | translate"
+              />
+              <ion-select
+                formControlName="accountType"
+                interface="popover"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'beneficiaries.form.accountTypeLabel' | translate"
+              >
+                @for (option of typeOptions(); track option.value) {
+                  <ion-select-option [value]="option.value">
+                    @if (option.labelKey) {
+                      {{ option.labelKey | translate }}
+                    } @else {
+                      {{ option.value }}
+                    }
+                  </ion-select-option>
+                }
+              </ion-select>
+              <ion-input
+                type="number"
+                step="0.01"
+                formControlName="transferLimit"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'beneficiaries.form.transferLimitLabel' | translate"
+              />
               <div class="actions-end">
-                <button mat-button type="button" [disabled]="loading()" (click)="backToList()">
+                <ion-button fill="outline" type="button" [disabled]="loading()" (click)="backToList()">
                   {{ 'beneficiaries.form.cancelCta' | translate }}
-                </button>
-                <button
-                  mat-flat-button
-                  color="primary"
-                  type="submit"
-                  [disabled]="loading() || addForm.invalid"
-                >
+                </ion-button>
+                <ion-button type="submit" [disabled]="loading() || addForm.invalid">
                   {{ 'beneficiaries.form.submitCta' | translate }}
-                </button>
+                </ion-button>
               </div>
             </form>
           }
           @case ('edit-form') {
             <h3>{{ 'beneficiaries.edit.title' | translate }}</h3>
             <form [formGroup]="editForm" (ngSubmit)="submitEdit()">
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'beneficiaries.form.nameLabel' | translate }}</mat-label>
-                <input matInput formControlName="name" maxlength="50" />
-              </mat-form-field>
-              <mat-form-field appearance="fill">
-                <mat-label>{{ 'beneficiaries.form.transferLimitLabel' | translate }}</mat-label>
-                <input matInput type="number" step="0.01" formControlName="transferLimit" />
-              </mat-form-field>
+              <ion-input
+                formControlName="name"
+                [maxlength]="50"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'beneficiaries.form.nameLabel' | translate"
+              />
+              <ion-input
+                type="number"
+                step="0.01"
+                formControlName="transferLimit"
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="'beneficiaries.form.transferLimitLabel' | translate"
+              />
               <div class="actions-end">
-                <button mat-button type="button" [disabled]="loading()" (click)="backToList()">
+                <ion-button fill="outline" type="button" [disabled]="loading()" (click)="backToList()">
                   {{ 'beneficiaries.form.cancelCta' | translate }}
-                </button>
-                <button
-                  mat-flat-button
-                  color="primary"
-                  type="submit"
-                  [disabled]="loading() || editForm.invalid"
-                >
+                </ion-button>
+                <ion-button type="submit" [disabled]="loading() || editForm.invalid">
                   {{ 'beneficiaries.form.submitCta' | translate }}
-                </button>
+                </ion-button>
               </div>
             </form>
           }
@@ -228,8 +249,8 @@ import { BeneficiariesStore } from './beneficiaries.store';
             </div>
           }
         }
-      </mat-card-content>
-    </mat-card>
+      </ion-card-content>
+    </ion-card>
   `,
   styleUrls: [
     '../../shared/css/form.scss',
@@ -242,6 +263,7 @@ import { BeneficiariesStore } from './beneficiaries.store';
     }
     form {
       max-width: 28rem;
+      gap: 0.875rem;
     }
     .actions-end {
       margin-top: 1rem;
@@ -249,17 +271,21 @@ import { BeneficiariesStore } from './beneficiaries.store';
     .otp-container {
       max-width: 24rem;
     }
+    ion-button.icon-action {
+      width: 2rem;
+      height: 2rem;
+      font-size: var(--text-lg);
+      --padding-start: 0;
+      --padding-end: 0;
+      --padding-top: 0;
+      --padding-bottom: 0;
+    }
   `,
 })
 export class BeneficiariesComponent {
-  private static readonly KNOWN_TYPE_LABEL_KEYS: Record<string, string> = {
-    SAVINGS: 'beneficiaries.accountType.savings',
-    LOAN: 'beneficiaries.accountType.loan',
-  };
-
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toastCtrl = inject(ToastController);
   private readonly translate = inject(TranslateService);
   protected readonly store = inject(BeneficiariesStore);
 
@@ -274,7 +300,7 @@ export class BeneficiariesComponent {
   protected readonly typeOptions = computed(() =>
     this.store.accountTypeOptions().map(value => ({
       value,
-      labelKey: BeneficiariesComponent.KNOWN_TYPE_LABEL_KEYS[value] ?? null,
+      labelKey: ACCOUNT_TYPE_LABEL_KEYS[value] ?? null,
     })),
   );
 
@@ -292,6 +318,7 @@ export class BeneficiariesComponent {
   });
 
   constructor() {
+    addIcons({ pencil, personAdd, trash });
     this.refresh();
     this.store.loadTemplate().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
   }
@@ -300,7 +327,7 @@ export class BeneficiariesComponent {
     if (!accountType) {
       return null;
     }
-    return BeneficiariesComponent.KNOWN_TYPE_LABEL_KEYS[accountType] ?? null;
+    return ACCOUNT_TYPE_LABEL_KEYS[accountType] ?? null;
   }
 
   protected startAdd(): void {
@@ -438,8 +465,12 @@ export class BeneficiariesComponent {
   }
 
   private notify(key: string): void {
-    this.snackBar.open(this.translate.instant(key), this.translate.instant('common.action.dismiss'), {
-      duration: 5000,
-    });
+    void this.toastCtrl
+      .create({
+        message: this.translate.instant(key),
+        duration: 5000,
+        buttons: [{ text: this.translate.instant('common.action.dismiss'), role: 'cancel' }],
+      })
+      .then(toast => toast.present());
   }
 }

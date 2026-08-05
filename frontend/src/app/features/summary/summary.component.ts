@@ -20,8 +20,14 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
+import {
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardSubtitle,
+  IonCardTitle,
+  IonProgressBar,
+} from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { SummaryStore } from './summary.store';
@@ -31,8 +37,12 @@ import { SummaryStore } from './summary.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
-    MatCardModule,
-    MatProgressBarModule,
+    IonCard,
+    IonCardContent,
+    IonCardHeader,
+    IonCardSubtitle,
+    IonCardTitle,
+    IonProgressBar,
     CurrencyPipe,
     TranslatePipe,
     PageHeaderComponent,
@@ -41,25 +51,24 @@ import { SummaryStore } from './summary.store';
     <app-page-header [title]="'summary.title' | translate" />
 
     @if (store.loading()) {
-      <mat-progress-bar mode="indeterminate" />
+      <ion-progress-bar type="indeterminate" />
     }
 
     <section>
       <h2>{{ 'summary.section.savings' | translate }}</h2>
       <div class="cards">
         @for (card of store.savingsCards(); track card.id) {
-          <mat-card [routerLink]="['/savings', card.id]" role="link" tabindex="0">
-            <mat-card-header>
-              <mat-card-title>{{ card.productName }}</mat-card-title>
-              <mat-card-subtitle>{{ card.accountNo }}</mat-card-subtitle>
-            </mat-card-header>
-            <mat-card-content>
+          <ion-card [routerLink]="['/savings', card.id]" role="link" tabindex="0">
+            <ion-card-header>
+              <ion-card-title>{{ card.productName }}</ion-card-title>
+              <ion-card-subtitle>{{ card.accountNo }}</ion-card-subtitle>
+            </ion-card-header>
+            <ion-card-content>
               <p class="amount">{{ card.balance | currency: card.currency }}</p>
-              <p>{{ 'summary.savings.availableLabel' | translate }} {{ card.availableBalance | currency: card.currency }}</p>
-            </mat-card-content>
-          </mat-card>
+            </ion-card-content>
+          </ion-card>
         } @empty {
-          <p>{{ 'summary.savings.empty' | translate }}</p>
+          <p class="empty">{{ 'summary.savings.empty' | translate }}</p>
         }
       </div>
     </section>
@@ -68,17 +77,17 @@ import { SummaryStore } from './summary.store';
       <h2>{{ 'summary.section.loans' | translate }}</h2>
       <div class="cards">
         @for (card of store.loanCards(); track card.id) {
-          <mat-card [routerLink]="['/loans', card.id]" role="link" tabindex="0">
-            <mat-card-header>
-              <mat-card-title>{{ card.productName }}</mat-card-title>
-              <mat-card-subtitle>{{ card.accountNo }}</mat-card-subtitle>
-            </mat-card-header>
-            <mat-card-content>
-              <p class="amount">{{ 'summary.loan.outstandingLabel' | translate }} {{ card.totalOutstanding | currency: card.currency }}</p>
-            </mat-card-content>
-          </mat-card>
+          <ion-card [routerLink]="['/loans', card.id]" role="link" tabindex="0">
+            <ion-card-header>
+              <ion-card-title>{{ card.productName }}</ion-card-title>
+              <ion-card-subtitle>{{ card.accountNo }}</ion-card-subtitle>
+            </ion-card-header>
+            <ion-card-content>
+              <p class="amount">{{ card.totalOutstanding | currency: card.currency }}</p>
+            </ion-card-content>
+          </ion-card>
         } @empty {
-          <p>{{ 'summary.loan.empty' | translate }}</p>
+          <p class="empty">{{ 'summary.loan.empty' | translate }}</p>
         }
       </div>
     </section>
@@ -95,25 +104,37 @@ import { SummaryStore } from './summary.store';
       gap: 0.75rem;
     }
     .cards {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
       gap: 1rem;
     }
-    mat-card {
-      width: 16rem;
+    ion-card ion-card-content {
+      padding-top: 1rem;
+      padding-bottom: 1.75rem;
+    }
+    ion-card {
       cursor: pointer;
       transition:
-        box-shadow 0.2s ease,
-        transform 0.2s ease;
+        box-shadow var(--dur-base) var(--ease-out),
+        transform var(--dur-base) var(--ease-out);
     }
-    mat-card:hover,
-    mat-card:focus-visible {
-      box-shadow: var(--mat-sys-level3, 0 4px 12px rgba(0, 0, 0, 0.2));
+    ion-card:hover,
+    ion-card:focus-visible {
+      box-shadow: var(--shadow-md);
       transform: translateY(-2px);
     }
+    .empty {
+      grid-column: 1 / -1;
+      padding: 2rem 1rem;
+      text-align: center;
+      color: var(--slate-400);
+    }
     .amount {
-      font-size: 1.25rem;
+      font-size: var(--text-xl);
       font-weight: 600;
+      letter-spacing: var(--tracking-snug);
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
     }
   `,
 })

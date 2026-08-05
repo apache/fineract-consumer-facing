@@ -17,12 +17,15 @@
  * under the License.
  */
 
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-}
+import { defineConfig } from 'vitest/config';
 
-.otp-input {
-  text-transform: uppercase;
-}
+// Force Ionic/Stencil packages through Vite's resolver
+export default defineConfig({
+  test: {
+    server: {
+      deps: {
+        inline: [/@ionic/, /ionicons/, /@stencil/],
+      },
+    },
+  },
+});

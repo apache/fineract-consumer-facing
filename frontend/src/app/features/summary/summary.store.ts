@@ -27,7 +27,6 @@ export interface SavingsCard {
   productName?: string;
   currency?: string;
   balance?: number;
-  availableBalance?: number;
 }
 
 export interface LoanCard {
@@ -48,6 +47,8 @@ export class SummaryStore {
   readonly loading = signal(false);
 
   load(): void {
+    this.savingsCards.set([]);
+    this.loanCards.set([]);
     this.loading.set(true);
     this.summaryApi
       .getAccountsSummary()
@@ -63,7 +64,6 @@ export class SummaryStore {
                 productName: item.productName,
                 currency: item.currency,
                 balance: item.accountBalance ?? 0,
-                availableBalance: item.availableBalance ?? 0,
               })),
           );
           this.loanCards.set(

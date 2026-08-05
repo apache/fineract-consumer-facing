@@ -23,11 +23,11 @@ import {
   inject,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
-  provideZonelessChangeDetection,
+  provideZoneChangeDetection,
 } from '@angular/core';
+import { provideIonicAngular } from '@ionic/angular/standalone';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideTranslateService } from '@ngx-translate/core';
 import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { firstValueFrom } from 'rxjs';
@@ -43,10 +43,10 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     { provide: ErrorHandler, useClass: AuditErrorHandler },
-    provideZonelessChangeDetection(),
+    provideZoneChangeDetection(),
+    provideIonicAngular({ mode: 'md' }),
     provideRouter(routes),
     provideHttpClient(withInterceptors([errorInterceptor, authInterceptor])),
-    provideAnimationsAsync(),
     provideTranslateService({
       loader: provideTranslateHttpLoader({ prefix: '/i18n/', suffix: '.json', useHttpBackend: true }),
       fallbackLang: 'en',

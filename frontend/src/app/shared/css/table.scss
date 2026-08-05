@@ -17,10 +17,76 @@
  * under the License.
  */
 
+.table-scroll {
+  overflow-x: auto;
+  margin: 0 -1.25rem;
+}
+
 table {
   width: 100%;
+  border-collapse: collapse;
+}
+
+.cdk-table {
+  width: 100%;
+  background: var(--surface);
+}
+
+.cdk-header-row {
+  background-color: var(--page-bg);
+}
+
+.cdk-header-cell {
+  padding: 0.625rem 1rem;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--slate-450);
+  border-bottom: 1px solid var(--border);
+}
+
+.cdk-cell {
+  padding: 0.625rem 1rem;
+  font-size: var(--text-base);
+  color: var(--ink);
+  border-bottom: 1px solid var(--border);
+}
+
+.cdk-header-cell,
+.num {
+  white-space: nowrap;
+}
+
+.cdk-header-cell:first-child,
+.cdk-cell:first-child { padding-left: 1.25rem; }
+
+.cdk-header-cell:last-child,
+.cdk-cell:last-child { padding-right: 1.25rem; }
+
+.cdk-row:last-child .cdk-cell {
+  border-bottom: 0;
+}
+
+.cdk-row:hover {
+  background-color: var(--page-bg);
 }
 
 .clickable {
   cursor: pointer;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.empty-row td,
+.empty-row .cdk-cell {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--slate-400);
+  border-bottom: 0;
 }

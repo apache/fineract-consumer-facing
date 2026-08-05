@@ -17,12 +17,7 @@
  * under the License.
  */
 
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-}
-
-.otp-input {
-  text-transform: uppercase;
-}
+export const ACCOUNT_TYPE_LABEL_KEYS: Record<string, string> = {
+  SAVINGS: 'common.accountType.savings',
+  LOAN: 'common.accountType.loan',
+};

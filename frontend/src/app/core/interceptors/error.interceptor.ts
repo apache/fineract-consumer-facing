@@ -20,7 +20,7 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { ToastController } from '@ionic/angular/standalone';
 import { TranslateService } from '@ngx-translate/core';
 import { catchError, switchMap, throwError } from 'rxjs';
 import { ConsumerApiError } from '../../api/consumer-api-error';
@@ -35,7 +35,7 @@ const DEVICE_MISMATCH_CODE = 'error.msg.consumer.auth.device.fingerprint.forbidd
 const RATE_LIMITED_KEY = 'common.error.rateLimited';
 
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
-  const snackBar = inject(MatSnackBar);
+  const toast = inject(ToastController);
   const auth = inject(AuthService);
   const audit = inject(AuditService);
   const router = inject(Router);
@@ -69,7 +69,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
               return throwError(() => error);
             }
             if (retryError.status === 429) {
-              snackBar.open(translate.instant(RATE_LIMITED_KEY), translate.instant(DISMISS_KEY), { duration: 5000 });
+              showToast(toast, translate, translate.instant(RATE_LIMITED_KEY));
             }
             return throwError(() => retryError);
           }),
@@ -78,12 +78,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
       if (error.status === 429) {
         recordApiFailure(audit, req.url, error.status);
-        snackBar.open(translate.instant(RATE_LIMITED_KEY), translate.instant(DISMISS_KEY), { duration: 5000 });
+        showToast(toast, translate, translate.instant(RATE_LIMITED_KEY));
         return throwError(() => error);
       }
 
       recordApiFailure(audit, req.url, error.status);
-      notify(snackBar, translate, error);
+      notify(toast, translate, error);
       return throwError(() => error);
     }),
   );
@@ -103,10 +103,20 @@ function endpointTemplate(url: string): string {
     .join('/');
 }
 
-function notify(snackBar: MatSnackBar, translate: TranslateService, error: HttpErrorResponse): void {
+function notify(toast: ToastController, translate: TranslateService, error: HttpErrorResponse): void {
   const body = error.error as ConsumerApiError | null;
-  const message = resolveMessage(translate, body);
-  snackBar.open(message, translate.instant(DISMISS_KEY), { duration: 5000 });
+  showToast(toast, translate, resolveMessage(translate, body));
+}
+
+function showToast(toast: ToastController, translate: TranslateService, message: string): void {
+  void toast
+    .create({
+      message,
+      duration: 5000,
+      position: 'bottom',
+      buttons: [{ text: translate.instant(DISMISS_KEY), role: 'cancel' }],
+    })
+    .then((t) => t.present());
 }
 
 function resolveMessage(translate: TranslateService, body: ConsumerApiError | null): string {

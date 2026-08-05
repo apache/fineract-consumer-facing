@@ -71,7 +71,6 @@ describe('SummaryStore', () => {
         productName: 'Passbook',
         currency: 'USD',
         balance: 100,
-        availableBalance: 90,
       },
     ]);
     expect(store.loanCards()).toEqual([
@@ -95,7 +94,6 @@ describe('SummaryStore', () => {
         productName: 'Passbook',
         currency: 'USD',
         balance: 0,
-        availableBalance: 0,
       },
     ]);
     expect(store.loanCards()).toEqual([

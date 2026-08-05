@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   i18n-check:
-    name: Hardcoded user-facing text guard
+    name: Internationalization Scan
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:

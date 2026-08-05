@@ -17,12 +17,6 @@
  * under the License.
  */
 
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-}
-
-.otp-input {
-  text-transform: uppercase;
+export function toIsoDate(value: string | null): string | undefined {
+  return value ? value.slice(0, 10) : undefined;
 }

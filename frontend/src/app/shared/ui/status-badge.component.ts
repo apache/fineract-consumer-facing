@@ -19,7 +19,7 @@
 
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
-type Tone = 'success' | 'warning' | 'error' | 'neutral';
+type Tone = 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
 function classify(status: string): Tone {
   const value = status.toLowerCase();
@@ -37,6 +37,9 @@ function classify(status: string): Tone {
   ) {
     return 'error';
   }
+  if (value.includes('draft')) {
+    return 'info';
+  }
   return 'neutral';
 }
 
@@ -53,26 +56,33 @@ function humanize(status: string): string {
   styles: `
     .badge {
       display: inline-block;
-      padding: 0.15rem 0.6rem;
-      border-radius: 999px;
-      font-size: 0.75rem;
+      padding: 0.125rem 0.5rem;
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
       font-weight: 600;
+      letter-spacing: 0.01em;
       line-height: 1.4;
       white-space: nowrap;
-      color: #fff;
     }
     .success {
-      background-color: var(--success-color);
+      background-color: var(--success-tint);
+      color: var(--success);
     }
     .warning {
-      background-color: var(--warning-color);
+      background-color: var(--warning-tint);
+      color: var(--warning);
     }
     .error {
-      background-color: var(--error-color);
+      background-color: var(--danger-tint);
+      color: var(--danger);
+    }
+    .info {
+      background-color: var(--info-tint);
+      color: var(--info);
     }
     .neutral {
-      background-color: #e0e0e0;
-      color: var(--text-color);
+      background-color: var(--neutral-tint);
+      color: var(--neutral);
     }
   `,
 })

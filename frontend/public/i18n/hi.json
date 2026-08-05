@@ -1,5 +1,9 @@
 {
   "common": {
+    "accountType": {
+      "savings": "बचत",
+      "loan": "ऋण"
+    },
     "action": {
       "applyFilter": "फ़िल्टर लागू करें",
       "backToAccount": "खाते पर वापस जाएँ",
@@ -79,6 +83,7 @@
   },
   "registration": {
     "title": "अपना खाता बनाएँ",
+    "backToLogin": "साइन इन पर वापस जाएँ",
     "identity": {
       "clientIdLabel": "Fineract क्लाइंट आईडी",
       "passwordHint": "15–64 अक्षर, जिनमें बड़े, छोटे अक्षर, अंक और विशेष वर्ण हों।",
@@ -170,10 +175,6 @@
       "amountLabel": "राशि",
       "submitCta": "ट्रांसफ़र भेजें"
     },
-    "accountType": {
-      "savings": "बचत",
-      "loan": "ऋण"
-    },
     "done": {
       "complete": "ट्रांसफ़र पूरा हुआ।",
       "reference": "संदर्भ",
@@ -210,10 +211,6 @@
       "added": "लाभार्थी जोड़ा गया।",
       "updated": "लाभार्थी अपडेट किया गया।",
       "deleted": "लाभार्थी हटाया गया।"
-    },
-    "accountType": {
-      "savings": "बचत",
-      "loan": "ऋण"
     }
   },
   "summary": {
@@ -223,11 +220,9 @@
       "loans": "ऋण"
     },
     "savings": {
-      "availableLabel": "उपलब्ध:",
       "empty": "कोई बचत खाता नहीं।"
     },
     "loan": {
-      "outstandingLabel": "बकाया:",
       "empty": "कोई ऋण खाता नहीं।"
     }
   },
