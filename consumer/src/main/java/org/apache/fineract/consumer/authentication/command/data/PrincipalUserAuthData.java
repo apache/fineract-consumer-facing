@@ -35,5 +35,6 @@ public final class PrincipalUserAuthData {
 
     private final Long id;
     private final UUID publicId;
+    private final Long fineractClientId;
     private final boolean bound;
 }

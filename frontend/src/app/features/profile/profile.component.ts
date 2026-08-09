@@ -17,7 +17,8 @@
  * under the License.
  */
 
-import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { CdkTableModule } from '@angular/cdk/table';
@@ -37,6 +38,7 @@ import {
 import { addIcons } from 'ionicons';
 import { person } from 'ionicons/icons';
 import { TranslatePipe } from '@ngx-translate/core';
+import { OpenBankingUserConsentQueryData } from '@bff/client';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ChangePasswordComponent } from './change-password.component';
 import { ProfileStore } from './profile.store';
@@ -254,6 +256,81 @@ import { ProfileStore } from './profile.store';
 
     <ion-card>
       <ion-card-header>
+        <ion-card-title>{{ 'profile.connectedApps.title' | translate }}</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <div class="table-scroll">
+        <table cdk-table [dataSource]="store.consents()">
+          <ng-container cdkColumnDef="tppClientId">
+            <th cdk-header-cell *cdkHeaderCellDef>{{ 'profile.connectedApps.app' | translate }}</th>
+            <td cdk-cell *cdkCellDef="let row">{{ row.tppClientId }}</td>
+          </ng-container>
+          <ng-container cdkColumnDef="permissions">
+            <th cdk-header-cell *cdkHeaderCellDef>
+              {{ 'profile.connectedApps.permissions' | translate }}
+            </th>
+            <td cdk-cell *cdkCellDef="let row">{{ formatPermissions(row.permissions) }}</td>
+          </ng-container>
+          <ng-container cdkColumnDef="status">
+            <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.status' | translate }}</th>
+            <td cdk-cell *cdkCellDef="let row">
+              <span class="badge" [class]="consentTone(row.status)">
+                {{ 'profile.connectedApps.status.' + row.status | translate }}
+              </span>
+            </td>
+          </ng-container>
+          <ng-container cdkColumnDef="creationDateTime">
+            <th cdk-header-cell *cdkHeaderCellDef>
+              {{ 'profile.connectedApps.granted' | translate }}
+            </th>
+            <td cdk-cell *cdkCellDef="let row">{{ row.creationDateTime | date: 'mediumDate' }}</td>
+          </ng-container>
+          <ng-container cdkColumnDef="expirationDateTime">
+            <th cdk-header-cell *cdkHeaderCellDef>
+              {{ 'profile.connectedApps.expires' | translate }}
+            </th>
+            <td cdk-cell *cdkCellDef="let row">{{ row.expirationDateTime | date: 'mediumDate' }}</td>
+          </ng-container>
+          <ng-container cdkColumnDef="actions">
+            <th cdk-header-cell *cdkHeaderCellDef>
+              {{ 'profile.connectedApps.actions' | translate }}
+            </th>
+            <td cdk-cell *cdkCellDef="let row" class="row-actions">
+              @if (row.status === statusAuthorised) {
+                @if (pendingRevokeId() === row.consentId) {
+                  <ion-button
+                    class="btn-danger"
+                    [disabled]="revoking()"
+                    (click)="confirmRevoke(row.consentId)"
+                  >
+                    {{ 'profile.connectedApps.revokeConfirm' | translate }}
+                  </ion-button>
+                  <ion-button fill="clear" [disabled]="revoking()" (click)="cancelRevoke()">
+                    {{ 'profile.connectedApps.revokeCancel' | translate }}
+                  </ion-button>
+                } @else {
+                  <ion-button class="btn-danger" (click)="requestRevoke(row.consentId)">
+                    {{ 'profile.connectedApps.revoke' | translate }}
+                  </ion-button>
+                }
+              }
+            </td>
+          </ng-container>
+
+          <tr cdk-header-row *cdkHeaderRowDef="consentColumns"></tr>
+          <tr cdk-row *cdkRowDef="let row; columns: consentColumns"></tr>
+          <tr class="empty-row" *cdkNoDataRow>
+            <td [attr.colspan]="consentColumns.length">
+              {{ 'profile.connectedApps.empty' | translate }}
+            </td>
+          </tr>
+        </table>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <ion-card>
+      <ion-card-header>
         <ion-card-title>{{ 'profile.changePassword.title' | translate }}</ion-card-title>
       </ion-card-header>
       <ion-card-content>
@@ -265,6 +342,8 @@ import { ProfileStore } from './profile.store';
     '../../shared/css/detail-page.scss',
     '../../shared/css/table.scss',
     '../../shared/css/filter-bar.scss',
+    '../../shared/css/actions.scss',
+    '../../shared/css/badge.scss',
   ],
   styles: `
     .profile-header {
@@ -293,10 +372,14 @@ import { ProfileStore } from './profile.store';
       margin: 0.75rem 0 0;
       color: var(--slate-500);
     }
+    .row-actions {
+      white-space: nowrap;
+    }
   `,
 })
 export class ProfileComponent {
   private readonly fb = inject(NonNullableFormBuilder);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly store = inject(ProfileStore);
 
   protected readonly chargeColumns = ['name', 'dueDate', 'amount', 'amountOutstanding', 'status'];
@@ -307,6 +390,17 @@ export class ProfileComponent {
     'guaranteeAmount',
     'amountReleased',
   ];
+  protected readonly consentColumns = [
+    'tppClientId',
+    'permissions',
+    'status',
+    'creationDateTime',
+    'expirationDateTime',
+    'actions',
+  ];
+  protected readonly statusAuthorised = OpenBankingUserConsentQueryData.StatusEnum.Authorised;
+  protected readonly pendingRevokeId = signal<string | null>(null);
+  protected readonly revoking = signal(false);
 
   protected readonly chargesForm = this.fb.group({
     status: this.fb.control<'all' | 'active' | 'inactive'>('all'),
@@ -319,6 +413,7 @@ export class ProfileComponent {
     this.store.loadProfile();
     this.store.loadCharges({ status: 'all', page: 0, size: 20 });
     this.store.loadObligees();
+    this.store.loadConsents();
     effect(() => {
       if (this.store.profile()?.hasImage && !this.store.image()) {
         this.store.loadImage();
@@ -329,5 +424,46 @@ export class ProfileComponent {
   protected applyChargesFilter(): void {
     const { status, page, size } = this.chargesForm.getRawValue();
     this.store.loadCharges({ status, page, size });
+  }
+
+  protected formatPermissions(permissions: Set<OpenBankingUserConsentQueryData.PermissionsEnum> | undefined): string {
+    return [...(permissions ?? [])].join(', ');
+  }
+
+  protected consentTone(status: OpenBankingUserConsentQueryData.StatusEnum | undefined): string {
+    switch (status) {
+      case OpenBankingUserConsentQueryData.StatusEnum.Authorised:
+        return 'success';
+      case OpenBankingUserConsentQueryData.StatusEnum.AwaitingAuthorisation:
+        return 'warning';
+      case OpenBankingUserConsentQueryData.StatusEnum.Rejected:
+      case OpenBankingUserConsentQueryData.StatusEnum.Revoked:
+        return 'error';
+      default:
+        return 'neutral';
+    }
+  }
+
+  protected requestRevoke(consentId: string): void {
+    this.pendingRevokeId.set(consentId);
+  }
+
+  protected cancelRevoke(): void {
+    this.pendingRevokeId.set(null);
+  }
+
+  protected confirmRevoke(consentId: string): void {
+    this.revoking.set(true);
+    this.store
+      .revokeConsent(consentId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.pendingRevokeId.set(null);
+          this.revoking.set(false);
+          this.store.loadConsents();
+        },
+        error: () => this.revoking.set(false),
+      });
   }
 }

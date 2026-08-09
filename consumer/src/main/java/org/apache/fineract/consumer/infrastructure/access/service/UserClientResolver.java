@@ -23,7 +23,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.PrincipalUserData;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessUserNotFoundException;
-import org.apache.fineract.consumer.infrastructure.access.repository.PrincipalUserLookup;
+import org.apache.fineract.consumer.infrastructure.access.repository.PrincipalUserLookupPort;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
@@ -31,7 +31,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class UserClientResolver {
 
-    private final PrincipalUserLookup principalUserLookup;
+    private final PrincipalUserLookupPort principalUserLookup;
 
     public Long resolveClientId(Jwt jwt) {
         return findPrincipal(jwt).getFineractClientId();

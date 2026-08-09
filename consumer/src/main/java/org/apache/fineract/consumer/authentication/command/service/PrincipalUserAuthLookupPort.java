@@ -17,13 +17,18 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.access.repository;
+package org.apache.fineract.consumer.authentication.command.service;
 
 import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.infrastructure.access.data.PrincipalUserData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthData;
 
-public interface PrincipalUserLookup {
+public interface PrincipalUserAuthLookupPort {
 
-    Optional<PrincipalUserData> findByPublicId(UUID publicId);
+    Optional<PrincipalUserAuthCredentialsData> findCredentialsByEmail(String email);
+
+    PrincipalUserAuthData findByPublicId(UUID publicId);
+
+    PrincipalUserAuthData findById(Long id);
 }

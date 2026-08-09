@@ -19,9 +19,13 @@
 
 package org.apache.fineract.consumer.infrastructure.access.service;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.ActionPolicies;
 import org.apache.fineract.consumer.infrastructure.access.data.ActionPolicy;
@@ -50,6 +54,7 @@ public class AccessPolicyEvaluator {
     private static final String REASON_SCOPE_INSUFFICIENT = "scope_insufficient";
     private static final String REASON_KYC_REQUIRED = "kyc_required";
     private static final String REASON_OWNERSHIP_DENIED = "ownership_denied";
+    private static final String SCOPE_SEPARATOR = " ";
 
     private final OwnedAccountsCache ownedAccountsCache;
     private final UserClientResolver userClientResolver;
@@ -66,7 +71,7 @@ public class AccessPolicyEvaluator {
                     publishAccessDenied(jwt, action, resourceId, REASON_POLICY_MISSING);
                     return new AccessPolicyMissingException();
                 });
-        if (!policy.getRequiredScope().equals(jwt.getClaimAsString(JwtClaims.SCOPE))) {
+        if (Collections.disjoint(scopesOf(jwt), policy.getAllowedScopes())) {
             publishAccessDenied(jwt, action, resourceId, REASON_SCOPE_INSUFFICIENT);
             throw new AccessScopeInsufficientException();
         }
@@ -91,6 +96,20 @@ public class AccessPolicyEvaluator {
         }
         eventPublisher.publishEvent(NonTransactionalAuditEvent.of(AuditEventType.ACCESS_DENIED,
                 null, false, null, details));
+    }
+
+    public static boolean hasScope(Jwt jwt, String scope) {
+        return scopesOf(jwt).contains(scope);
+    }
+
+    private static Set<String> scopesOf(Jwt jwt) {
+        String scope = jwt.getClaimAsString(JwtClaims.SCOPE);
+        if (scope == null || scope.isBlank()) {
+            return Set.of();
+        }
+        return Arrays.stream(scope.split(SCOPE_SEPARATOR))
+                .filter(token -> !token.isBlank())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public boolean ownsResource(Jwt jwt, ResourceType resourceType, Long resourceId) {

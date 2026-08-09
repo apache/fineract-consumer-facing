@@ -21,6 +21,7 @@ package org.apache.fineract.consumer.infrastructure.access.data;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -30,56 +31,71 @@ public final class ActionPolicies {
     private ActionPolicies() {
     }
 
+    private static final Set<String> CONSUMER_ONLY =
+            Set.of(AuthenticationConstants.SCOPE_CONSUMER_FULL);
+    private static final Set<String> CONSUMER_OR_OPENBANKING =
+            Set.of(AuthenticationConstants.SCOPE_CONSUMER_FULL,
+                    AuthenticationConstants.SCOPE_OPENBANKING_ACCOUNTS_READ);
+    private static final Set<String> OPENBANKING_ONLY =
+            Set.of(AuthenticationConstants.SCOPE_OPENBANKING_ACCOUNTS_READ);
+    private static final Set<String> OPENBANKING_CONSENTS_ONLY =
+            Set.of(AuthenticationConstants.SCOPE_OPENBANKING_CONSENTS);
+
     private static final Map<ConsumerAction, ActionPolicy> POLICIES = Stream.of(
-            unowned(ConsumerAction.SAVINGS_LIST),
-            unowned(ConsumerAction.SAVINGS_APPLICATION_TEMPLATE_VIEW),
-            unowned(ConsumerAction.LOANS_LIST),
-            unowned(ConsumerAction.LOAN_SCHEDULE_CALCULATE),
-            unowned(ConsumerAction.LOAN_APPLICATION_TEMPLATE_VIEW),
-            unowned(ConsumerAction.LOAN_APPLICATION_SUBMIT),
-            unowned(ConsumerAction.BENEFICIARY_LIST),
-            unowned(ConsumerAction.BENEFICIARY_ADD),
-            unowned(ConsumerAction.BENEFICIARY_MODIFY),
-            unowned(ConsumerAction.BENEFICIARY_DELETE),
-            unowned(ConsumerAction.SUMMARY_VIEW),
-            unowned(ConsumerAction.USER_CHARGES_LIST),
-            unowned(ConsumerAction.USER_OBLIGEES_VIEW),
-            unownedScopeOnly(ConsumerAction.USER_PROFILE_VIEW),
-            unownedScopeOnly(ConsumerAction.USER_IMAGE_VIEW),
-            unownedScopeOnly(ConsumerAction.USER_PASSWORD_CHANGE),
-            unownedScopeOnly(ConsumerAction.AUDIT_EVENT_SUBMIT),
-            owned(ConsumerAction.SAVINGS_VIEW, ResourceType.SAVINGS),
-            owned(ConsumerAction.LOANS_VIEW, ResourceType.LOANS),
-            owned(ConsumerAction.LOAN_APPLICATION_MODIFY, ResourceType.LOANS),
-            owned(ConsumerAction.LOAN_APPLICATION_WITHDRAW, ResourceType.LOANS),
-            owned(ConsumerAction.TRANSFER_EXECUTE, ResourceType.SAVINGS))
+            unowned(ConsumerAction.SAVINGS_LIST, CONSUMER_OR_OPENBANKING),
+            unowned(ConsumerAction.SAVINGS_APPLICATION_TEMPLATE_VIEW, CONSUMER_ONLY),
+            unowned(ConsumerAction.LOANS_LIST, CONSUMER_OR_OPENBANKING),
+            unowned(ConsumerAction.LOAN_SCHEDULE_CALCULATE, CONSUMER_ONLY),
+            unowned(ConsumerAction.LOAN_APPLICATION_TEMPLATE_VIEW, CONSUMER_ONLY),
+            unowned(ConsumerAction.LOAN_APPLICATION_SUBMIT, CONSUMER_ONLY),
+            unowned(ConsumerAction.BENEFICIARY_LIST, CONSUMER_ONLY),
+            unowned(ConsumerAction.BENEFICIARY_ADD, CONSUMER_ONLY),
+            unowned(ConsumerAction.BENEFICIARY_MODIFY, CONSUMER_ONLY),
+            unowned(ConsumerAction.BENEFICIARY_DELETE, CONSUMER_ONLY),
+            unowned(ConsumerAction.SUMMARY_VIEW, CONSUMER_ONLY),
+            unowned(ConsumerAction.USER_CHARGES_LIST, CONSUMER_ONLY),
+            unowned(ConsumerAction.USER_OBLIGEES_VIEW, CONSUMER_ONLY),
+            unowned(ConsumerAction.OPENBANKING_CONSENT_VIEW, CONSUMER_ONLY),
+            unowned(ConsumerAction.OPENBANKING_CONSENT_REVOKE, CONSUMER_ONLY),
+            unowned(ConsumerAction.OPENBANKING_ACCOUNTS_VIEW, OPENBANKING_ONLY),
+            unownedKycNonrequired(ConsumerAction.USER_PROFILE_VIEW, CONSUMER_ONLY),
+            unownedKycNonrequired(ConsumerAction.USER_IMAGE_VIEW, CONSUMER_ONLY),
+            unownedKycNonrequired(ConsumerAction.USER_PASSWORD_CHANGE, CONSUMER_ONLY),
+            unownedKycNonrequired(ConsumerAction.AUDIT_EVENT_SUBMIT, CONSUMER_ONLY),
+            unownedKycNonrequired(ConsumerAction.OPENBANKING_TPP_CONSENT_CREATE, OPENBANKING_CONSENTS_ONLY),
+            unownedKycNonrequired(ConsumerAction.OPENBANKING_TPP_CONSENT_VIEW, OPENBANKING_CONSENTS_ONLY),
+            owned(ConsumerAction.SAVINGS_VIEW, ResourceType.SAVINGS, CONSUMER_OR_OPENBANKING),
+            owned(ConsumerAction.LOANS_VIEW, ResourceType.LOANS, CONSUMER_OR_OPENBANKING),
+            owned(ConsumerAction.LOAN_APPLICATION_MODIFY, ResourceType.LOANS, CONSUMER_ONLY),
+            owned(ConsumerAction.LOAN_APPLICATION_WITHDRAW, ResourceType.LOANS, CONSUMER_ONLY),
+            owned(ConsumerAction.TRANSFER_EXECUTE, ResourceType.SAVINGS, CONSUMER_ONLY))
             .collect(Collectors.toUnmodifiableMap(ActionPolicy::getAction, Function.identity()));
 
     public static Optional<ActionPolicy> forAction(ConsumerAction action) {
         return Optional.ofNullable(POLICIES.get(action));
     }
 
-    private static ActionPolicy owned(ConsumerAction action, ResourceType ownership) {
+    private static ActionPolicy owned(ConsumerAction action, ResourceType ownership, Set<String> allowedScopes) {
         return ActionPolicy.builder()
                 .action(action)
-                .requiredScope(AuthenticationConstants.SCOPE_CONSUMER_FULL)
+                .allowedScopes(allowedScopes)
                 .requiresKycVerified(true)
                 .ownership(ownership)
                 .build();
     }
 
-    private static ActionPolicy unowned(ConsumerAction action) {
+    private static ActionPolicy unowned(ConsumerAction action, Set<String> allowedScopes) {
         return ActionPolicy.builder()
                 .action(action)
-                .requiredScope(AuthenticationConstants.SCOPE_CONSUMER_FULL)
+                .allowedScopes(allowedScopes)
                 .requiresKycVerified(true)
                 .build();
     }
 
-    private static ActionPolicy unownedScopeOnly(ConsumerAction action) {
+    private static ActionPolicy unownedKycNonrequired(ConsumerAction action, Set<String> allowedScopes) {
         return ActionPolicy.builder()
                 .action(action)
-                .requiredScope(AuthenticationConstants.SCOPE_CONSUMER_FULL)
+                .allowedScopes(allowedScopes)
                 .requiresKycVerified(false)
                 .build();
     }

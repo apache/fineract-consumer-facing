@@ -16,7 +16,7 @@
 # under the License.
 
 databaseChangeLog:
-  - logicalFilePath: db/changelog/changes/003-create-beneficiaries.yaml
+  - logicalFilePath: db/changelog/beneficiaries/003-create-beneficiaries.yaml
   - changeSet:
       id: 003-create-beneficiaries
       author: fineract-consumer-facing

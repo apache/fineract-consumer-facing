@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
 import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.exception.ConsumerApiError;
@@ -98,7 +99,7 @@ public class DeviceFingerprintFilter extends OncePerRequestFilter {
         if (claimFingerprint == null || claimFingerprint.isBlank()) {
             return BindingFailure.MISSING_PROOF;
         }
-        if (!AuthenticationConstants.SCOPE_CONSUMER_FULL.equals(jwt.getClaimAsString(JwtClaims.SCOPE))) {
+        if (!AccessPolicyEvaluator.hasScope(jwt, AuthenticationConstants.SCOPE_CONSUMER_FULL)) {
             return BindingFailure.FORBIDDEN;
         }
         if (!claimFingerprint.equals(headerFingerprint)) {

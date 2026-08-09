@@ -31,4 +31,5 @@ import lombok.ToString;
 public final class PrincipalUserData {
     private final Long id;
     private final Long fineractClientId;
+    private final boolean bound;
 }

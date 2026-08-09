@@ -48,6 +48,7 @@ import org.apache.fineract.consumer.authentication.command.data.LogoutCommand;
 import org.apache.fineract.consumer.authentication.command.data.RefreshSessionCommand;
 import org.apache.fineract.consumer.authentication.command.data.VerifyTwoFactorCommand;
 import org.apache.fineract.consumer.authentication.command.domain.RefreshToken;
+import org.apache.fineract.consumer.authentication.command.exception.AuthenticationKycRevokedException;
 import org.apache.fineract.consumer.authentication.command.exception.InvalidCredentialsException;
 import org.apache.fineract.consumer.authentication.command.exception.RefreshTokenInvalidException;
 import org.apache.fineract.consumer.authentication.command.exception.TwoFactorInvalidException;
@@ -58,6 +59,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.configs.Finera
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
+import org.apache.fineract.consumer.infrastructure.kyc.service.ClientStandingChecker;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
@@ -79,6 +81,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class AuthenticationCommandServiceImplTest {
 
     private static final Long USER_ID = 7L;
+    private static final Long FINERACT_CLIENT_ID = 11L;
     private static final UUID PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-000000000001");
     private static final String EMAIL = "user@test.com";
     private static final String RAW_PASSWORD = "Correct-password1";
@@ -91,6 +94,7 @@ class AuthenticationCommandServiceImplTest {
     private static final String PRESENTED_REFRESH_TOKEN = "presented-refresh-token";
     private static final String PRESENTED_TOKEN_HASH = "hash-of-presented-token";
     private static final String OTHER_TOKEN_HASH = "other-hash";
+    private static final String ACCESS_TOKEN = "access-token";
     private static final String REISSUED_ACCESS_TOKEN = "reissued-access-token";
     private static final Long NEW_TOKEN_ID = 42L;
     private static final Long SUCCESSOR_ID = 43L;
@@ -101,7 +105,7 @@ class AuthenticationCommandServiceImplTest {
             null, null, null, TENANT_ID);
 
     @Mock
-    private PrincipalUserAuthLookup principalUserAuthLookup;
+    private PrincipalUserAuthLookupPort principalUserAuthLookup;
     @Mock
     private OtpCommandService otpCommandService;
     @Mock
@@ -114,6 +118,8 @@ class AuthenticationCommandServiceImplTest {
     private JwtDenylist jwtDenylist;
     @Mock
     private RefreshTokenCommandRepository refreshTokenCommandRepository;
+    @Mock
+    private ClientStandingChecker clientStandingChecker;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -123,8 +129,8 @@ class AuthenticationCommandServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AuthenticationCommandServiceImpl(principalUserAuthLookup, otpCommandService, passwordEncoder,
-                jwtIssuer, jwtDecoder, jwtDenylist, refreshTokenCommandRepository, PROPERTIES, FINERACT_PROPERTIES,
-                eventPublisher);
+                jwtIssuer, jwtDecoder, jwtDenylist, refreshTokenCommandRepository, clientStandingChecker, PROPERTIES,
+                FINERACT_PROPERTIES, eventPublisher);
     }
 
     private static PrincipalUserAuthCredentialsData credentials(boolean bound) {
@@ -139,7 +145,17 @@ class AuthenticationCommandServiceImplTest {
         return PrincipalUserAuthData.builder()
                 .id(USER_ID)
                 .publicId(PUBLIC_ID)
+                .fineractClientId(FINERACT_CLIENT_ID)
                 .bound(true)
+                .build();
+    }
+
+    private static PrincipalUserAuthData unboundPrincipal() {
+        return PrincipalUserAuthData.builder()
+                .id(USER_ID)
+                .publicId(PUBLIC_ID)
+                .fineractClientId(FINERACT_CLIENT_ID)
+                .bound(false)
                 .build();
     }
 
@@ -240,14 +256,15 @@ class AuthenticationCommandServiceImplTest {
             when(jwtDecoder.decode(CHALLENGE_TOKEN))
                     .thenReturn(challengeJwt(AuthenticationConstants.CHALLENGE_PURPOSE_VALUE, DEVICE_FINGERPRINT));
             when(principalUserAuthLookup.findByPublicId(PUBLIC_ID)).thenReturn(boundPrincipal());
+            when(clientStandingChecker.isActive(FINERACT_CLIENT_ID)).thenReturn(true);
             when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
-                    .thenReturn(issuedJwt("access-token", PROPERTIES.getAccessTokenTtl()));
+                    .thenReturn(issuedJwt(ACCESS_TOKEN, PROPERTIES.getAccessTokenTtl()));
             when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
             EstablishedSessionCommandData session = service.verifyTwoFactor(command());
 
             verify(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP_TOKEN), any());
-            assertThat(session.getAccessToken()).isEqualTo("access-token");
+            assertThat(session.getAccessToken()).isEqualTo(ACCESS_TOKEN);
             assertThat(session.getRefreshToken()).isNotBlank();
 
             @SuppressWarnings("unchecked")
@@ -268,6 +285,39 @@ class AuthenticationCommandServiceImplTest {
                     .isNotEqualTo(session.getRefreshToken())
                     .hasSize(64)
                     .matches("[0-9a-f]+");
+        }
+
+        @Test
+        void boundUserFailingStandingCheckIsDenied() {
+            when(jwtDecoder.decode(CHALLENGE_TOKEN))
+                    .thenReturn(challengeJwt(AuthenticationConstants.CHALLENGE_PURPOSE_VALUE, DEVICE_FINGERPRINT));
+            when(principalUserAuthLookup.findByPublicId(PUBLIC_ID)).thenReturn(boundPrincipal());
+            when(clientStandingChecker.isActive(FINERACT_CLIENT_ID)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.verifyTwoFactor(command()))
+                    .isInstanceOf(AuthenticationKycRevokedException.class)
+                    .hasFieldOrPropertyWithValue("code", AuthenticationKycRevokedException.CODE);
+            verify(jwtIssuer, never()).issue(anyString(), anyMap(), any());
+            verify(refreshTokenCommandRepository, never()).save(any());
+        }
+
+        @Test
+        void unboundUserSkipsStandingCheck() {
+            when(jwtDecoder.decode(CHALLENGE_TOKEN))
+                    .thenReturn(challengeJwt(AuthenticationConstants.CHALLENGE_PURPOSE_VALUE, DEVICE_FINGERPRINT));
+            when(principalUserAuthLookup.findByPublicId(PUBLIC_ID)).thenReturn(unboundPrincipal());
+            when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
+                    .thenReturn(issuedJwt(ACCESS_TOKEN, PROPERTIES.getAccessTokenTtl()));
+            when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            service.verifyTwoFactor(command());
+
+            verify(clientStandingChecker, never()).isActive(any());
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Map<String, Object>> accessClaims = ArgumentCaptor.forClass(Map.class);
+            verify(jwtIssuer).issue(eq(PUBLIC_ID.toString()), accessClaims.capture(),
+                    eq(PROPERTIES.getAccessTokenTtl()));
+            assertThat(accessClaims.getValue()).containsEntry(JwtClaims.KYC_VERIFIED, false);
         }
 
         @Test
@@ -330,6 +380,7 @@ class AuthenticationCommandServiceImplTest {
             RefreshToken predecessor = activeToken();
             when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(predecessor));
             when(principalUserAuthLookup.findById(USER_ID)).thenReturn(boundPrincipal());
+            when(clientStandingChecker.isActive(FINERACT_CLIENT_ID)).thenReturn(true);
             when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
                     .thenReturn(issuedJwt("new-access-token", PROPERTIES.getAccessTokenTtl()));
             when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> {
@@ -364,6 +415,7 @@ class AuthenticationCommandServiceImplTest {
             replayed.rotateTo(SUCCESSOR_ID);
             when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(replayed));
             when(principalUserAuthLookup.findById(USER_ID)).thenReturn(boundPrincipal());
+            when(clientStandingChecker.isActive(FINERACT_CLIENT_ID)).thenReturn(true);
             when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
                     .thenReturn(issuedJwt("forked-access-token", PROPERTIES.getAccessTokenTtl()));
             when(refreshTokenCommandRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -389,6 +441,18 @@ class AuthenticationCommandServiceImplTest {
             assertThatThrownBy(() -> service.refresh(command(DEVICE_FINGERPRINT)))
                     .isInstanceOf(RefreshTokenInvalidException.class);
             assertThat(otherActive.getRevokedAt()).isNotNull();
+            verify(jwtIssuer, never()).issue(anyString(), anyMap(), any());
+        }
+
+        @Test
+        void boundUserFailingStandingCheckIsDenied() {
+            when(refreshTokenCommandRepository.findByTokenHash(anyString())).thenReturn(Optional.of(activeToken()));
+            when(principalUserAuthLookup.findById(USER_ID)).thenReturn(boundPrincipal());
+            when(clientStandingChecker.isActive(FINERACT_CLIENT_ID)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.refresh(command(DEVICE_FINGERPRINT)))
+                    .isInstanceOf(AuthenticationKycRevokedException.class)
+                    .hasFieldOrPropertyWithValue("code", AuthenticationKycRevokedException.CODE);
             verify(jwtIssuer, never()).issue(anyString(), anyMap(), any());
         }
 
@@ -535,6 +599,7 @@ class AuthenticationCommandServiceImplTest {
 
         private void stubSessionEstablishment() {
             when(principalUserAuthLookup.findById(USER_ID)).thenReturn(boundPrincipal());
+            when(clientStandingChecker.isActive(FINERACT_CLIENT_ID)).thenReturn(true);
             when(jwtIssuer.issue(eq(PUBLIC_ID.toString()), anyMap(), eq(PROPERTIES.getAccessTokenTtl())))
                     .thenReturn(issuedJwt(REISSUED_ACCESS_TOKEN, PROPERTIES.getAccessTokenTtl()));
         }

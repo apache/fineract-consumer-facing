@@ -16,7 +16,7 @@
 # under the License.
 
 databaseChangeLog:
-  - logicalFilePath: db/changelog/changes/004-create-audit-events.yaml
+  - logicalFilePath: db/changelog/audit/004-create-audit-events.yaml
   - changeSet:
       id: 004-create-audit-events
       author: fineract-consumer-facing

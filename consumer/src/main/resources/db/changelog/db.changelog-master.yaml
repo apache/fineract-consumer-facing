@@ -26,3 +26,7 @@ databaseChangeLog:
       file: db/changelog/audit/004-create-audit-events.yaml
   - include:
       file: db/changelog/infrastructure/005-create-event-publication.yaml
+  - include:
+      file: db/changelog/openbanking/006-create-open-banking-consents.yaml
+  - include:
+      file: db/changelog/infrastructure/007-create-oauth2-authorization.yaml

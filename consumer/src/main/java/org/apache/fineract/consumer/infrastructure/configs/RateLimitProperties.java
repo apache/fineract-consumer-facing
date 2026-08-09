@@ -35,8 +35,13 @@ public class RateLimitProperties {
     @Min(1)
     private final int perUserPerMinute;
 
-    public RateLimitProperties(boolean enabled, @DefaultValue("300") int perUserPerMinute) {
+    @Min(1)
+    private final int perTppClientPerMinute;
+
+    public RateLimitProperties(boolean enabled, @DefaultValue("300") int perUserPerMinute,
+            @DefaultValue("60") int perTppClientPerMinute) {
         this.enabled = enabled;
         this.perUserPerMinute = perUserPerMinute;
+        this.perTppClientPerMinute = perTppClientPerMinute;
     }
 }

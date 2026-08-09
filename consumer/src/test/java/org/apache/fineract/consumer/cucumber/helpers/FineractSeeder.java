@@ -51,7 +51,9 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetCodeValuesDataResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetCodesResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostClientsClientIdIdentifiersRequest;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostClientsClientIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostClientsRequest;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostCodeValuesDataRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoanProductsRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansRequest;
@@ -70,6 +72,8 @@ public class FineractSeeder {
     private static final String TENANT = System.getenv().getOrDefault("FINERACT_TENANT", "default");
     private static final long HEAD_OFFICE_ID = 1L;
     private static final String CUSTOMER_IDENTIFIER_CODE = "Customer Identifier";
+    private static final String CLIENT_CLOSURE_REASON_CODE = "ClientClosureReason";
+    private static final String CLOSURE_REASON_NAME = "Cucumber closure";
     private static final String PASSPORT_DOCUMENT_TYPE = "Passport";
     private static final String ACTIVE_STATUS = "ACTIVE";
     private static final long LEGAL_FORM_PERSON = 1L;
@@ -78,6 +82,7 @@ public class FineractSeeder {
     public static final String FIXED_DATE = "01 January 2023";
     private static final String USD = "USD";
     private static final String ACTIVATE_COMMAND = "activate";
+    private static final String CLOSE_COMMAND = "close";
     private static final String APPROVE_COMMAND = "approve";
     private static final String DISBURSE_COMMAND = "disburse";
     private static final String DEPOSIT_COMMAND = "deposit";
@@ -110,6 +115,7 @@ public class FineractSeeder {
     private static final LoansApi LOANS = buildFeignClient(LoansApi.class);
 
     private static volatile Long cachedPassportCodeValueId;
+    private static volatile Long cachedClosureReasonCodeValueId;
     private static volatile Long cachedSavingsProductId;
     private static volatile Long cachedLoanProductId;
 
@@ -130,10 +136,20 @@ public class FineractSeeder {
             String officeName) {}
 
     public SeededClient seedClientWithPassport() {
-        long clientId = createClient();
+        long clientId = createActiveClient(null);
         String documentKey = DOCUMENT_KEY_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         attachPassportIdentifier(clientId, documentKey);
         return new SeededClient(clientId, PASSPORT_DOCUMENT_TYPE, documentKey);
+    }
+
+    public void closeClient(long clientId) {
+        CLIENTS.handleCommandClient(clientId,
+                new PostClientsClientIdRequest()
+                        .closureDate(FIXED_DATE)
+                        .closureReasonId(closureReasonCodeValueId())
+                        .locale(LOCALE)
+                        .dateFormat(DATE_FORMAT),
+                CLOSE_COMMAND);
     }
 
     public SeededClientWithAccounts seedActiveClientWithAccounts() {
@@ -327,17 +343,26 @@ public class FineractSeeder {
         CURRENCIES.updateCurrencies(new CurrencyUpdateRequest().currencies(codes));
     }
 
-    private long createClient() {
-        String suffix = UUID.randomUUID().toString().substring(0, 8);
-        PostClientsRequest body = new PostClientsRequest()
-                .officeId(HEAD_OFFICE_ID)
-                .firstname(FIRST_NAME)
-                .lastname(LAST_NAME_PREFIX + suffix)
-                .active(false)
-                .legalFormId(LEGAL_FORM_PERSON)
-                .locale(LOCALE)
-                .dateFormat(DATE_FORMAT);
-        return CLIENTS.createClient(body).getClientId();
+    private long closureReasonCodeValueId() {
+        Long cached = cachedClosureReasonCodeValueId;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (FineractSeeder.class) {
+            if (cachedClosureReasonCodeValueId != null) {
+                return cachedClosureReasonCodeValueId;
+            }
+            long codeId = findIdByName(CODES.retrieveCodes(), GetCodesResponse::getName, GetCodesResponse::getId,
+                    CLIENT_CLOSURE_REASON_CODE);
+            long reasonId = CODE_VALUES.retrieveAllCodeValues(codeId).stream()
+                    .map(GetCodeValuesDataResponse::getId)
+                    .findFirst()
+                    .orElseGet(() -> CODE_VALUES.createCodeValue(codeId, new PostCodeValuesDataRequest()
+                            .name(CLOSURE_REASON_NAME)
+                            .position(1)).getSubResourceId());
+            cachedClosureReasonCodeValueId = reasonId;
+            return reasonId;
+        }
     }
 
     private void attachPassportIdentifier(long clientId, String documentKey) {

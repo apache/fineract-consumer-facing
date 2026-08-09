@@ -81,6 +81,17 @@
       "success": "पासवर्ड रीसेट हो गया। कृपया साइन इन करें।"
     }
   },
+  "consent": {
+    "title": "पहुँच को अधिकृत करें",
+    "intro": "{{tppClientId}} आपके खाते की जानकारी तक पहुँच की अनुमति माँग रहा है।",
+    "permissionsTitle": "यह ऐप्लिकेशन यह कर सकेगा:",
+    "scope": {
+      "accountsRead": "आपके खाते और शेष राशि देखना"
+    },
+    "allowCta": "अनुमति दें",
+    "denyCta": "अस्वीकार करें",
+    "invalid": "यह प्राधिकरण अनुरोध अमान्य या अधूरा है।"
+  },
   "registration": {
     "title": "अपना खाता बनाएँ",
     "backToLogin": "साइन इन पर वापस जाएँ",
@@ -315,6 +326,24 @@
       "amountReleased": "जारी राशि",
       "empty": "कोई गारंटी वाला ऋण नहीं।"
     },
+    "connectedApps": {
+      "title": "जुड़े हुए ऐप्स",
+      "app": "ऐप",
+      "permissions": "अनुमतियाँ",
+      "granted": "प्रदान तिथि",
+      "expires": "समाप्ति तिथि",
+      "actions": "क्रियाएँ",
+      "status": {
+        "AWAITING_AUTHORISATION": "प्राधिकरण लंबित",
+        "AUTHORISED": "प्राधिकृत",
+        "REJECTED": "अस्वीकृत",
+        "REVOKED": "निरस्त"
+      },
+      "revoke": "निरस्त करें",
+      "revokeConfirm": "निरस्तीकरण की पुष्टि करें",
+      "revokeCancel": "रद्द करें",
+      "empty": "कोई जुड़ा हुआ ऐप नहीं।"
+    },
     "changePassword": {
       "title": "पासवर्ड बदलें",
       "currentLabel": "वर्तमान पासवर्ड",
@@ -329,5 +358,11 @@
   "error.msg.consumer.user.upstream.unavailable": "प्रोफ़ाइल सेवा अस्थायी रूप से अनुपलब्ध है।",
   "error.msg.consumer.user.charge.status.invalid": "अमान्य शुल्क स्थिति फ़िल्टर।",
   "error.msg.consumer.user.image.not.found": "कोई प्रोफ़ाइल फ़ोटो उपलब्ध नहीं।",
-  "error.msg.consumer.summary.upstream.unavailable": "खाता सारांश अस्थायी रूप से अनुपलब्ध है।"
+  "error.msg.consumer.summary.upstream.unavailable": "खाता सारांश अस्थायी रूप से अनुपलब्ध है।",
+  "error.msg.consumer.openbanking.consent.not.found": "सहमति नहीं मिली।",
+  "error.msg.consumer.openbanking.consent.not.revocable": "केवल अधिकृत सहमति ही रद्द की जा सकती है।",
+  "error.msg.consumer.openbanking.consent.permissions.invalid": "अनुरोधित अनुमतियाँ मान्य नहीं हैं।",
+  "error.msg.consumer.openbanking.consent.invalid": "यह सहमति उस अनुरोध की अनुमति नहीं देती।",
+  "error.msg.consumer.openbanking.account.not.found": "खाता नहीं मिला।",
+  "error.msg.consumer.authentication.kyc.revoked": "आपका पहचान सत्यापन अब मान्य नहीं है। कृपया सहायता से संपर्क करें।"
 }

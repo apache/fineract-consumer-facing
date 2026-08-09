@@ -42,6 +42,7 @@ import org.apache.fineract.consumer.authentication.command.data.LogoutCommand;
 import org.apache.fineract.consumer.authentication.command.data.RefreshSessionCommand;
 import org.apache.fineract.consumer.authentication.command.data.VerifyTwoFactorCommand;
 import org.apache.fineract.consumer.authentication.command.domain.RefreshToken;
+import org.apache.fineract.consumer.authentication.command.exception.AuthenticationKycRevokedException;
 import org.apache.fineract.consumer.authentication.command.exception.InvalidCredentialsException;
 import org.apache.fineract.consumer.authentication.command.exception.RefreshTokenInvalidException;
 import org.apache.fineract.consumer.authentication.command.exception.TwoFactorInvalidException;
@@ -55,6 +56,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.configs.Finera
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
+import org.apache.fineract.consumer.infrastructure.kyc.service.ClientStandingChecker;
 import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
@@ -82,13 +84,14 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     private static final String REFRESH_REASON_EXPIRED = "expired";
     private static final String REFRESH_REASON_DEVICE_MISMATCH = "device_mismatch";
 
-    private final PrincipalUserAuthLookup principalUserAuthLookup;
+    private final PrincipalUserAuthLookupPort principalUserAuthLookup;
     private final OtpCommandService otpCommandService;
     private final PasswordEncoder passwordEncoder;
     private final JwtIssuer jwtIssuer;
     private final JwtDecoder jwtDecoder;
     private final JwtDenylist jwtDenylist;
     private final RefreshTokenCommandRepository refreshTokenCommandRepository;
+    private final ClientStandingChecker clientStandingChecker;
     private final AuthenticationProperties authenticationProperties;
     private final FineractClientProperties fineractClientProperties;
     private final ApplicationEventPublisher eventPublisher;
@@ -141,7 +144,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
 
         PrincipalUserAuthData user = principalUserAuthLookup.findByPublicId(publicId);
         EstablishedSessionCommandData session = establishSession(user.getId(), publicId, user.isBound(),
-                command.getDeviceFingerprint(), null);
+                user.getFineractClientId(), command.getDeviceFingerprint(), null);
         eventPublisher.publishEvent(TransactionalAuditEvent.of(AuditEventType.LOGIN_SUCCESS,
                 user.getId(), false, command.getDeviceFingerprint(), null));
         return session;
@@ -181,7 +184,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
 
         PrincipalUserAuthData user = principalUserAuthLookup.findById(current.getUserId());
         return establishSession(user.getId(), user.getPublicId(), user.isBound(),
-                command.getDeviceFingerprint(), predecessor);
+                user.getFineractClientId(), command.getDeviceFingerprint(), predecessor);
     }
 
     @Override
@@ -215,11 +218,14 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
                 Instant.now().truncatedTo(ChronoUnit.SECONDS).minusMillis(1));
         PrincipalUserAuthData user = principalUserAuthLookup.findById(userId);
         return establishSession(user.getId(), user.getPublicId(), user.isBound(),
-                deviceFingerprint, null);
+                user.getFineractClientId(), deviceFingerprint, null);
     }
 
     private EstablishedSessionCommandData establishSession(Long userId, UUID publicId, boolean kycVerified,
-            String deviceFingerprint, RefreshToken predecessor) {
+            Long fineractClientId, String deviceFingerprint, RefreshToken predecessor) {
+        if (kycVerified && !clientStandingChecker.isActive(fineractClientId)) {
+            throw new AuthenticationKycRevokedException();
+        }
         IssuedJwt accessToken = jwtIssuer.issue(
                 publicId.toString(),
                 Map.of(

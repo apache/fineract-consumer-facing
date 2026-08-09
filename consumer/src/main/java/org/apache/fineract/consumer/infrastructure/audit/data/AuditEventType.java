@@ -41,7 +41,10 @@ public enum AuditEventType {
     API_FAILURE(AuditSeverity.WARN, true),
     NAVIGATION(AuditSeverity.INFO, true),
     LOGOUT(AuditSeverity.INFO, true),
-    SESSION_TIMEOUT_WARNING_SHOWN(AuditSeverity.INFO, true);
+    CONSENT_CREATED(AuditSeverity.INFO, false),
+    CONSENT_GRANTED(AuditSeverity.INFO, false),
+    CONSENT_DENIED(AuditSeverity.WARN, false),
+    CONSENT_REVOKED(AuditSeverity.INFO, false);
 
     private final AuditSeverity severity;
     private final boolean clientSubmittable;

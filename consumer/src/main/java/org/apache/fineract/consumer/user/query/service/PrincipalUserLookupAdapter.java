@@ -23,19 +23,21 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.PrincipalUserData;
-import org.apache.fineract.consumer.infrastructure.access.repository.PrincipalUserLookup;
+import org.apache.fineract.consumer.infrastructure.access.repository.PrincipalUserLookupPort;
+import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.repository.UserQueryRepository;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class PrincipalUserLookupAdapter implements PrincipalUserLookup {
+public class PrincipalUserLookupAdapter implements PrincipalUserLookupPort {
 
     private final UserQueryRepository userQueryRepository;
 
     @Override
     public Optional<PrincipalUserData> findByPublicId(UUID publicId) {
         return userQueryRepository.findByPublicId(publicId)
-                .map(user -> new PrincipalUserData(user.getId(), user.getFineractClientId()));
+                .map(user -> new PrincipalUserData(user.getId(), user.getFineractClientId(),
+                        user.getStatus() == UserStatus.BOUND));
     }
 }

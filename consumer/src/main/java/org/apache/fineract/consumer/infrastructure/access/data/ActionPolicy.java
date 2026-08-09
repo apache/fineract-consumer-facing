@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.infrastructure.access.data;
 
+import java.util.Set;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -33,7 +34,7 @@ import lombok.ToString;
 public final class ActionPolicy {
 
     private final ConsumerAction action;
-    private final String requiredScope;
+    private final Set<String> allowedScopes;
     private final boolean requiresKycVerified;
     private final ResourceType ownership;
 }
