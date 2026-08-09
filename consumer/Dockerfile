@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /workspace
 
 COPY gradlew gradlew
@@ -26,7 +26,7 @@ RUN chmod +x gradlew && ./gradlew --no-daemon dependencies > /dev/null 2>&1 || t
 COPY src src
 RUN ./gradlew --no-daemon bootJar
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 COPY --from=build /workspace/build/libs/*.jar app.jar
 EXPOSE 8080

@@ -26,17 +26,19 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.0.6'
 	id 'io.spring.dependency-management' version '1.1.7'
-	id 'se.thinkcode.cucumber-runner' version '0.0.11'
-	id 'org.openapi.generator' version '7.13.0'
+	id 'se.thinkcode.cucumber-runner' version '0.0.14'
+	id 'org.openapi.generator' version '7.14.0'
 	id 'com.github.jk1.dependency-license-report' version '3.1.4'
 }
 
 group = 'org.apache.fineract'
 version = '0.0.1-SNAPSHOT'
 
+def buildDirPath = layout.buildDirectory.get().asFile.path
+
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
+		languageVersion = JavaLanguageVersion.of(25)
 	}
 }
 
@@ -99,12 +101,12 @@ licenseReport {
 sourceSets {
 	main {
 		java {
-			srcDir "$buildDir/generated/fineractclient/src/main/java"
+			srcDir "$buildDirPath/generated/fineractclient/src/main/java"
 		}
 	}
 	test {
 		java {
-			srcDir "$buildDir/generated/java-client/src/main/java"
+			srcDir "$buildDirPath/generated/java-client/src/main/java"
 		}
 	}
 }
@@ -127,7 +129,7 @@ task openapi {
 	description = 'Capture OpenAPI spec from the running app at localhost:8080.'
 	group = 'documentation'
 	doLast {
-		def out = file("$buildDir/openapi/openapi.json")
+		def out = file("$buildDirPath/openapi/openapi.json")
 		out.parentFile.mkdirs()
 		new URL("http://localhost:8080/v3/api-docs").withInputStream { input ->
 			out.withOutputStream { it << input }
@@ -141,8 +143,8 @@ task generateJavaClient(type: GenerateTask) {
 	group = 'documentation'
 	generatorName  = 'java'
 	library        = 'feign'
-	inputSpec      = "$buildDir/openapi/openapi.json"
-	outputDir      = "$buildDir/generated/java-client"
+	inputSpec      = "$buildDirPath/openapi/openapi.json"
+	outputDir      = "$buildDirPath/generated/java-client"
 	ignoreFileOverride = "$projectDir/openapi/java.ignore"
 	apiPackage     = 'org.apache.fineract.consumer.client.api'
 	modelPackage   = 'org.apache.fineract.consumer.client.model'
@@ -161,7 +163,7 @@ task generateJavaClient(type: GenerateTask) {
 }
 
 def fineractRawSpec = file("$projectDir/src/main/java/org/apache/fineract/consumer/infrastructure/fineractclient/spec/fineract.json")
-def fineractSanitizedSpec = file("$buildDir/fineract-spec/fineract.sanitized.json")
+def fineractSanitizedSpec = file("$buildDirPath/fineract-spec/fineract.sanitized.json")
 
 def stripNullOnlyEnums(node) {
 	if (node instanceof Map) {
@@ -270,7 +272,7 @@ task generateFineractClient(type: GenerateTask) {
 	library        = 'spring-cloud'
 	skipValidateSpec = true
 	inputSpec      = fineractSanitizedSpec.path
-	outputDir      = "$buildDir/generated/fineractclient"
+	outputDir      = "$buildDirPath/generated/fineractclient"
 	ignoreFileOverride = "$projectDir/src/main/java/org/apache/fineract/consumer/infrastructure/fineractclient/spec/fineract.ignore"
 	apiPackage     = 'org.apache.fineract.consumer.infrastructure.fineractclient.generated.api'
 	modelPackage   = 'org.apache.fineract.consumer.infrastructure.fineractclient.generated.model'
@@ -302,7 +304,7 @@ task generateTypescriptClient(type: GenerateTask) {
 	description = 'Generate TypeScript/Angular client for the frontend.'
 	group = 'documentation'
 	generatorName = 'typescript-angular'
-	inputSpec     = "$buildDir/openapi/openapi.json"
+	inputSpec     = "$buildDirPath/openapi/openapi.json"
 	outputDir     = "$projectDir/../frontend/src/openapi-client"
 	ignoreFileOverride = "$projectDir/openapi/typescript.ignore"
 	configOptions = [
