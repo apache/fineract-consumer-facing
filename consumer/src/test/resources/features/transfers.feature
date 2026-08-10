@@ -24,6 +24,16 @@ Feature: Consumer transfers
     When I transfer money from my savings account to my loan
     Then the transfer is accepted with a transfer id
 
+  Scenario: Retrying a transfer confirmation with the same idempotency key moves money once
+    When I confirm the transfer twice with the same idempotency key
+    Then both confirmations return the same transfer id
+    And my savings account was debited exactly once
+
+  Scenario: Confirming transfers with different idempotency keys moves money each time
+    When I confirm the transfer twice with different idempotency keys
+    Then the confirmations return different transfer ids
+    And my savings account was debited twice
+
   Scenario: Initiating a transfer without a session is rejected
     When I initiate a transfer without a session
     Then the transfer request is rejected as unauthorized

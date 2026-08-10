@@ -29,17 +29,19 @@ import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryDat
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
-import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.AccountTransfersApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.AccountTransferRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostAccountTransfersResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
+import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyDeriver;
+import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyHolder;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
+import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
+import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
@@ -51,6 +53,7 @@ import org.apache.fineract.consumer.transfers.command.data.TransferCommandData;
 import org.apache.fineract.consumer.transfers.command.data.TransferConstants;
 import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferBeneficiaryLimitExceededException;
+import org.apache.fineract.consumer.transfers.command.exception.TransferInProgressException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferInvalidException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferNotFoundException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferStepUpInvalidException;
@@ -72,6 +75,7 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
     private final ClientApi clientApi;
     private final SavingsAccountApi savingsAccountApi;
     private final AccountTransfersApi accountTransfersApi;
+    private final IdempotencyKeyHolder idempotencyKeyHolder;
 
     @Override
     public TransferChallengeCommandData initiate(Jwt jwt, InitiateTransferCommand command) {
@@ -101,7 +105,7 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         return TransferChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(EmailMasking.mask(user.getEmail()))
+                .sentTo(EmailMaskingService.mask(user.getEmail()))
                 .build();
     }
 
@@ -130,44 +134,49 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
 
         Long callerClientId = user.getFineractClientId();
 
-        Long callerOfficeId = call(() -> clientApi.retrieveOneClient(callerClientId, false)).getOfficeId();
+        idempotencyKeyHolder.set(IdempotencyKeyDeriver.derive(publicId, command.getIdempotencyKey()));
+        try {
+            Long callerOfficeId = call(() -> clientApi.retrieveOneClient(callerClientId, false)).getOfficeId();
 
-        Long toClientId;
-        Long toOfficeId;
-        if (toLoan) {
-            toClientId = callerClientId;
-            toOfficeId = callerOfficeId;
-        } else {
-            SavingsAccountData destination =
-                    call(() -> savingsAccountApi.retrieveSavingsAccount(command.getToAccountId(), null, null, null));
-            Long destinationClientId = destination.getClientId();
-            toClientId = destinationClientId;
-            toOfficeId = call(() -> clientApi.retrieveOneClient(destinationClientId, false)).getOfficeId();
+            Long toClientId;
+            Long toOfficeId;
+            if (toLoan) {
+                toClientId = callerClientId;
+                toOfficeId = callerOfficeId;
+            } else {
+                SavingsAccountData destination =
+                        call(() -> savingsAccountApi.retrieveSavingsAccount(command.getToAccountId(), null, null, null));
+                Long destinationClientId = destination.getClientId();
+                toClientId = destinationClientId;
+                toOfficeId = call(() -> clientApi.retrieveOneClient(destinationClientId, false)).getOfficeId();
+            }
+
+            AccountTransferRequest request = new AccountTransferRequest()
+                    .fromOfficeId(String.valueOf(callerOfficeId))
+                    .fromClientId(String.valueOf(callerClientId))
+                    .fromAccountId(String.valueOf(command.getFromAccountId()))
+                    .fromAccountType(TransferConstants.SAVINGS_TYPE_CODE)
+                    .toOfficeId(String.valueOf(toOfficeId))
+                    .toClientId(String.valueOf(toClientId))
+                    .toAccountId(String.valueOf(command.getToAccountId()))
+                    .toAccountType(toLoan ? TransferConstants.LOAN_TYPE_CODE : TransferConstants.SAVINGS_TYPE_CODE)
+                    .transferAmount(command.getAmount().toPlainString())
+                    .transferDate(LocalDate.now().toString())
+                    .dateFormat(TransferConstants.DATE_FORMAT)
+                    .locale(TransferConstants.LOCALE)
+                    .transferDescription(TransferConstants.DEFAULT_DESCRIPTION);
+
+            PostAccountTransfersResponse response = callWrite(() -> accountTransfersApi.createAccountTransfer(request));
+
+            return TransferCommandData.builder()
+                    .transferId(response.getResourceId())
+                    .fromAccountId(command.getFromAccountId())
+                    .toAccountId(command.getToAccountId())
+                    .amount(command.getAmount())
+                    .build();
+        } finally {
+            idempotencyKeyHolder.clear();
         }
-
-        AccountTransferRequest request = new AccountTransferRequest()
-                .fromOfficeId(String.valueOf(callerOfficeId))
-                .fromClientId(String.valueOf(callerClientId))
-                .fromAccountId(String.valueOf(command.getFromAccountId()))
-                .fromAccountType(TransferConstants.SAVINGS_TYPE_CODE)
-                .toOfficeId(String.valueOf(toOfficeId))
-                .toClientId(String.valueOf(toClientId))
-                .toAccountId(String.valueOf(command.getToAccountId()))
-                .toAccountType(toLoan ? TransferConstants.LOAN_TYPE_CODE : TransferConstants.SAVINGS_TYPE_CODE)
-                .transferAmount(command.getAmount().toPlainString())
-                .transferDate(LocalDate.now().toString())
-                .dateFormat(TransferConstants.DATE_FORMAT)
-                .locale(TransferConstants.LOCALE)
-                .transferDescription(TransferConstants.DEFAULT_DESCRIPTION);
-
-        PostAccountTransfersResponse response = call(() -> accountTransfersApi.createAccountTransfer(request));
-
-        return TransferCommandData.builder()
-                .transferId(response.getResourceId())
-                .fromAccountId(command.getFromAccountId())
-                .toAccountId(command.getToAccountId())
-                .amount(command.getAmount())
-                .build();
     }
 
     private UUID publicId(Jwt jwt) {
@@ -202,6 +211,14 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
         return FineractCaller.call(upstream,
                 e -> new TransferNotFoundException(),
                 TransferInvalidException::new,
+                TransferUpstreamUnavailableException::new);
+    }
+
+    private <T> T callWrite(Supplier<T> upstream) {
+        return FineractCaller.call(upstream,
+                e -> new TransferNotFoundException(),
+                TransferInvalidException::new,
+                TransferInProgressException::new,
                 TransferUpstreamUnavailableException::new);
     }
 

@@ -34,7 +34,7 @@ import org.apache.fineract.consumer.authentication.command.data.VerifyTwoFactorC
 import org.apache.fineract.consumer.authentication.command.data.VerifyTwoFactorCommandRequest;
 import org.apache.fineract.consumer.authentication.command.exception.RefreshTokenInvalidException;
 import org.apache.fineract.consumer.authentication.command.service.AuthenticationCommandService;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthCookiePayload;
 import org.apache.fineract.consumer.infrastructure.access.service.AuthCookieFactory;
 import org.springframework.http.HttpHeaders;

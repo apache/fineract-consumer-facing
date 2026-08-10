@@ -145,25 +145,32 @@ export class LoansStore {
       .pipe(tap(schedule => this.schedulePreview.set(schedule)));
   }
 
-  submit(request: SubmitLoanApplicationCommandRequest): Observable<LoanApplicationCommandData> {
-    return this.command.submitLoanApplication(request).pipe(tap(draft => this.draft.set(draft)));
+  submit(
+    idempotencyKey: string,
+    request: SubmitLoanApplicationCommandRequest,
+  ): Observable<LoanApplicationCommandData> {
+    return this.command
+      .submitLoanApplication(idempotencyKey, request)
+      .pipe(tap(draft => this.draft.set(draft)));
   }
 
   modify(
     loanId: number,
+    idempotencyKey: string,
     request: ModifyLoanApplicationCommandRequest,
   ): Observable<LoanApplicationCommandData> {
     return this.command
-      .modifyLoanApplication(loanId, request)
+      .modifyLoanApplication(idempotencyKey, loanId, request)
       .pipe(tap(draft => this.draft.set(draft)));
   }
 
   withdraw(
     loanId: number,
+    idempotencyKey: string,
     request: WithdrawLoanApplicationCommandRequest,
   ): Observable<LoanApplicationCommandData> {
     return this.command
-      .withdrawLoanApplication(loanId, 'withdraw', request)
+      .withdrawLoanApplication(idempotencyKey, loanId, 'withdraw', request)
       .pipe(tap(() => this.draft.set(null)));
   }
 }

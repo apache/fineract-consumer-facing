@@ -48,4 +48,5 @@ public final class SubmitLoanApplicationCommand {
     private final String transactionProcessingStrategyCode;
     private final LocalDate expectedDisbursementDate;
     private final LocalDate submittedOnDate;
+    private final String idempotencyKey;
 }

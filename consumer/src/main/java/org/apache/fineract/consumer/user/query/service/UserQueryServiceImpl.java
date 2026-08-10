@@ -37,7 +37,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetObligeeData;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
-import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
+import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.user.query.data.UserChargeQueryData;
 import org.apache.fineract.consumer.user.query.data.UserChargesQuery;
 import org.apache.fineract.consumer.user.query.data.UserChargesQueryResponse;
@@ -96,7 +96,7 @@ public class UserQueryServiceImpl implements UserQueryService {
                 .accountNo(client.getAccountNo())
                 .active(client.getActive())
                 .memberSince(client.getActivationDate())
-                .maskedEmail(EmailMasking.mask(client.getEmailAddress()))
+                .maskedEmail(EmailMaskingService.mask(client.getEmailAddress()))
                 .maskedMobile(maskMobile(client.getMobileNo()))
                 .kycVerified(Boolean.TRUE.equals(jwt.getClaimAsBoolean(JwtClaims.KYC_VERIFIED)))
                 .hasImage(Boolean.TRUE.equals(client.getImagePresent()))

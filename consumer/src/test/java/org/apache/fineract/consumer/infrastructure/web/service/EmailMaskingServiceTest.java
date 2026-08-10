@@ -17,24 +17,24 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.web;
+package org.apache.fineract.consumer.infrastructure.web.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-class EmailMaskingTest {
+class EmailMaskingServiceTest {
 
     @Test
     void nullInputIsMasked() {
-        assertThat(EmailMasking.mask(null)).isEqualTo("***");
+        assertThat(EmailMaskingService.mask(null)).isEqualTo("***");
     }
 
     @Test
     void inputWithoutAtSignNeverEchoesTheInput() {
         String input = "noatsign";
 
-        String masked = EmailMasking.mask(input);
+        String masked = EmailMaskingService.mask(input);
 
         assertThat(masked).isEqualTo("***");
         assertThat(masked).doesNotContain(input);
@@ -42,16 +42,16 @@ class EmailMaskingTest {
 
     @Test
     void emptyLocalPartMasksToDomainOnly() {
-        assertThat(EmailMasking.mask("@x.com")).isEqualTo("***@x.com");
+        assertThat(EmailMaskingService.mask("@x.com")).isEqualTo("***@x.com");
     }
 
     @Test
     void singleCharLocalPartIsFullyMasked() {
-        assertThat(EmailMasking.mask("a@x.com")).isEqualTo("***@x.com");
+        assertThat(EmailMaskingService.mask("a@x.com")).isEqualTo("***@x.com");
     }
 
     @Test
     void longerLocalPartKeepsFirstCharacter() {
-        assertThat(EmailMasking.mask("ab@x.com")).isEqualTo("a***@x.com");
+        assertThat(EmailMaskingService.mask("ab@x.com")).isEqualTo("a***@x.com");
     }
 }

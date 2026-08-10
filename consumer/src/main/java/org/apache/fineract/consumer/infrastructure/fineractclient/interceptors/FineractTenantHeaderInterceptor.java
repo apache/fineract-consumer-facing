@@ -22,7 +22,7 @@ package org.apache.fineract.consumer.infrastructure.fineractclient.interceptors;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.fineractclient.FineractHeaders;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractHeaders;
 import org.apache.fineract.consumer.infrastructure.fineractclient.configs.FineractClientProperties;
 
 @RequiredArgsConstructor

@@ -17,26 +17,16 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.web;
+package org.apache.fineract.consumer.transfers.command.exception;
 
-public final class EmailMasking {
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
+import org.springframework.http.HttpStatus;
 
-    private static final String MASK = "***";
+public class TransferInProgressException extends AbstractConsumerException {
 
-    private EmailMasking() {
-    }
+    public static final String CODE = "error.msg.consumer.transfers.request.in.progress";
 
-    public static String mask(String email) {
-        if (email == null) {
-            return MASK;
-        }
-        int at = email.indexOf('@');
-        if (at < 0) {
-            return MASK;
-        }
-        if (at <= 1) {
-            return MASK + email.substring(at);
-        }
-        return email.charAt(0) + MASK + email.substring(at);
+    public TransferInProgressException(Throwable cause) {
+        super(HttpStatus.TOO_EARLY, CODE, "original transfer request still processing, retry shortly", cause);
     }
 }

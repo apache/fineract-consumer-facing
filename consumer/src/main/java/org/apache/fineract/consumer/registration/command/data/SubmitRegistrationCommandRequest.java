@@ -29,7 +29,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
-import org.apache.fineract.consumer.infrastructure.validation.PasswordPolicy;
+import org.apache.fineract.consumer.infrastructure.web.data.PasswordPolicy;
 
 @Getter
 @RequiredArgsConstructor

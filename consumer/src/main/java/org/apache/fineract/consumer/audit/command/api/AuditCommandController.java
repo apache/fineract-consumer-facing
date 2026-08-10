@@ -24,7 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.audit.command.data.AuditEventsSubmittedCommandData;
 import org.apache.fineract.consumer.audit.command.data.SubmitAuditEventsCommandRequest;
 import org.apache.fineract.consumer.audit.command.service.AuditCommandService;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

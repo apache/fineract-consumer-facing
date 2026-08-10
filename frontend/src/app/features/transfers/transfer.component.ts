@@ -192,8 +192,13 @@ export class TransferComponent {
     amount: [null as number | null, [Validators.required, Validators.min(0.01)]],
   });
 
+  private idempotencyKey: string | null = null;
+
   constructor() {
     addIcons({ swapHorizontal });
+    this.form.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => (this.idempotencyKey = null));
   }
 
   protected initiate(): void {
@@ -221,11 +226,20 @@ export class TransferComponent {
       return;
     }
     this.loading.set(true);
+    this.idempotencyKey ??= crypto.randomUUID();
     this.store
-      .confirm({ stepUpToken, otp, fromAccountId, toAccountId, toAccountType, amount })
+      .confirm(this.idempotencyKey, {
+        stepUpToken,
+        otp,
+        fromAccountId,
+        toAccountId,
+        toAccountType,
+        amount,
+      })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
+          this.idempotencyKey = null;
           this.step.set('done');
           this.loading.set(false);
         },

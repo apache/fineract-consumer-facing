@@ -17,16 +17,18 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.stepup;
+package org.apache.fineract.consumer.infrastructure.idempotency.data;
 
-import java.time.Duration;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 
-public final class StepUpConstants {
+@Getter
+@RequiredArgsConstructor
+@EqualsAndHashCode
+@ToString
+public final class DerivedIdempotencyKey {
 
-    private StepUpConstants() {
-    }
-
-    public static final String STEPUP_PURPOSE_VALUE = "stepup";
-
-    public static final Duration STEPUP_TTL = Duration.ofMinutes(5);
+    private final String value;
 }

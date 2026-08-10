@@ -23,7 +23,7 @@ import feign.FeignException;
 import feign.Retryer;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.client.ApiClient;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.springframework.http.HttpHeaders;
 
 public final class ConsumerApiClientFactory {

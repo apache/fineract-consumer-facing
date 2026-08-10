@@ -22,7 +22,7 @@ package org.apache.fineract.consumer.loans.query.service;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.GuarantorsApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoanChargesApi;

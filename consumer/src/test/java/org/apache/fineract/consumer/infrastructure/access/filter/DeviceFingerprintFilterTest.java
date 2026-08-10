@@ -27,7 +27,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import jakarta.servlet.FilterChain;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;

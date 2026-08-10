@@ -40,4 +40,5 @@ public final class ConfirmTransferCommand {
     private final String toAccountType;
     private final BigDecimal amount;
     private final String deviceFingerprint;
+    private final String idempotencyKey;
 }

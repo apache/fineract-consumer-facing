@@ -31,9 +31,9 @@ import org.apache.fineract.consumer.infrastructure.audit.data.TransactionalAudit
 import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
 import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
-import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
+import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
+import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
@@ -129,7 +129,7 @@ public class UserCommandServiceImpl implements UserCommandService {
         return UserPasswordChangeChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(EmailMasking.mask(user.getEmail()))
+                .sentTo(EmailMaskingService.mask(user.getEmail()))
                 .build();
     }
 

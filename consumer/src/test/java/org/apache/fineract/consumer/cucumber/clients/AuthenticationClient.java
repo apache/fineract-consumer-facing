@@ -34,7 +34,7 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.springframework.http.MediaType;
 
 public final class AuthenticationClient {

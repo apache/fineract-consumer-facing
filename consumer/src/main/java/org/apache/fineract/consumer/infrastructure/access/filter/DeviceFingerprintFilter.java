@@ -31,7 +31,7 @@ import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
 import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.exception.ConsumerApiError;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;

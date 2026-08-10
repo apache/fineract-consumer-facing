@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.stepup;
+package org.apache.fineract.consumer.infrastructure.stepup.service;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
+import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
 import org.springframework.security.oauth2.jwt.Jwt;

@@ -34,7 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
-import org.apache.fineract.consumer.infrastructure.fineractclient.FineractHeaders;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractHeaders;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientIdentifierApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.CodeValuesApi;
@@ -74,8 +74,8 @@ public class FineractSeeder {
     private static final String ACTIVE_STATUS = "ACTIVE";
     private static final long LEGAL_FORM_PERSON = 1L;
     private static final String LOCALE = "en";
-    private static final String DATE_FORMAT = "dd MMMM yyyy";
-    private static final String FIXED_DATE = "01 January 2023";
+    public static final String DATE_FORMAT = "dd MMMM yyyy";
+    public static final String FIXED_DATE = "01 January 2023";
     private static final String USD = "USD";
     private static final String ACTIVATE_COMMAND = "activate";
     private static final String APPROVE_COMMAND = "approve";
@@ -87,7 +87,7 @@ public class FineractSeeder {
     private static final String DOCUMENT_KEY_PREFIX = "PASS-";
     public static final String CLIENT_EMAIL_LOCAL_PREFIX = "client-";
     public static final String CLIENT_EMAIL_DOMAIN = "@seed.test";
-    private static final String TRANSACTION_PROCESSING_STRATEGY = "mifos-standard-strategy";
+    public static final String TRANSACTION_PROCESSING_STRATEGY = "mifos-standard-strategy";
     private static final String LOAN_TYPE_INDIVIDUAL = "individual";
     private static final String SAVINGS_PRODUCT_NAME_PREFIX = "CUKE-SAV-";
     private static final String LOAN_PRODUCT_NAME_PREFIX = "CUKE-LOAN-";
@@ -275,7 +275,7 @@ public class FineractSeeder {
         }
     }
 
-    private long loanProductId() {
+    public long loanProductId() {
         Long cached = cachedLoanProductId;
         if (cached != null) {
             return cached;

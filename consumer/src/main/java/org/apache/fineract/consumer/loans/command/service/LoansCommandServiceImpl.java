@@ -22,7 +22,7 @@ package org.apache.fineract.consumer.loans.command.service;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdResponse;
@@ -33,12 +33,15 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.OwnedAccountsCache;
+import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyDeriver;
+import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyHolder;
 import org.apache.fineract.consumer.loans.command.data.LoanApplicationCommandData;
 import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.WithdrawLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.exception.LoanApplicationInvalidException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
+import org.apache.fineract.consumer.loans.command.exception.LoanCommandInProgressException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandNotFoundException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandUpstreamUnavailableException;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
@@ -57,6 +60,7 @@ public class LoansCommandServiceImpl implements LoansCommandService {
     private final UserQueryService userQueryService;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final OwnedAccountsCache ownedAccountsCache;
+    private final IdempotencyKeyHolder idempotencyKeyHolder;
     private final LoansApi loansApi;
 
     @Override
@@ -64,7 +68,8 @@ public class LoansCommandServiceImpl implements LoansCommandService {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOAN_APPLICATION_SUBMIT);
         Long clientId = resolveClientId(jwt);
         PostLoansRequest request = buildSubmitRequest(command, clientId);
-        PostLoansResponse response = call(() -> loansApi.calculateLoanScheduleOrSubmitLoanApplication(request, null));
+        PostLoansResponse response = callWithIdempotency(jwt, command.getIdempotencyKey(),
+                () -> loansApi.calculateLoanScheduleOrSubmitLoanApplication(request, null));
         ownedAccountsCache.evict(clientId);
         return LoanApplicationCommandData.builder()
                 .loanId(response.getLoanId())
@@ -79,7 +84,8 @@ public class LoansCommandServiceImpl implements LoansCommandService {
                 LoanCommandAccessDeniedException::new);
         Long clientId = resolveClientId(jwt);
         PutLoansLoanIdRequest request = buildModifyRequest(command);
-        PutLoansLoanIdResponse response = call(() -> loansApi.modifyLoanApplication(command.getLoanId(), request, null));
+        PutLoansLoanIdResponse response = callWithIdempotency(jwt, command.getIdempotencyKey(),
+                () -> loansApi.modifyLoanApplication(command.getLoanId(), request, null));
         return LoanApplicationCommandData.builder()
                 .loanId(command.getLoanId())
                 .resourceId(response.getResourceId())
@@ -96,8 +102,8 @@ public class LoansCommandServiceImpl implements LoansCommandService {
                 .withdrawnOnDate(command.getWithdrawnOnDate().toString())
                 .dateFormat(DATE_FORMAT)
                 .locale(LOCALE);
-        PostLoansLoanIdResponse response =
-                call(() -> loansApi.stateTransitions(command.getLoanId(), request, WITHDRAW_COMMAND));
+        PostLoansLoanIdResponse response = callWithIdempotency(jwt, command.getIdempotencyKey(),
+                () -> loansApi.stateTransitions(command.getLoanId(), request, WITHDRAW_COMMAND));
         return LoanApplicationCommandData.builder()
                 .loanId(command.getLoanId())
                 .resourceId(response.getResourceId())
@@ -111,10 +117,21 @@ public class LoansCommandServiceImpl implements LoansCommandService {
         return user.getFineractClientId();
     }
 
+    private <T> T callWithIdempotency(Jwt jwt, String rawKey, Supplier<T> upstream) {
+        UUID publicId = UUID.fromString(jwt.getSubject());
+        idempotencyKeyHolder.set(IdempotencyKeyDeriver.derive(publicId, rawKey));
+        try {
+            return call(upstream);
+        } finally {
+            idempotencyKeyHolder.clear();
+        }
+    }
+
     private <T> T call(Supplier<T> upstream) {
         return FineractCaller.call(upstream,
                 e -> new LoanCommandNotFoundException(),
                 LoanApplicationInvalidException::new,
+                LoanCommandInProgressException::new,
                 LoanCommandUpstreamUnavailableException::new);
     }
 

@@ -37,3 +37,12 @@ Feature: Consumer loan reads
     When I get the other client's loan account
     Then the loan request is denied as forbidden
 
+  Scenario: Submitting the same loan application twice with one idempotency key creates one loan
+    When I submit a loan application twice with the same idempotency key
+    Then both submissions return the same loan id
+    And I have exactly one more loan account
+
+  Scenario: Submitting a loan application without an idempotency key is rejected
+    When I submit a loan application without an idempotency key
+    Then the loan submission is rejected for the missing idempotency key
+

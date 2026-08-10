@@ -42,7 +42,7 @@ import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryU
 import org.apache.fineract.consumer.beneficiaries.command.repository.BeneficiaryCommandRepository;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.fineractclient.FineractCaller;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
@@ -53,9 +53,9 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSearchResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpConstants;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
+import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
+import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
@@ -294,7 +294,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         return BeneficiaryChallengeCommandData.builder()
                 .stepUpToken(issued.getTokenValue())
                 .expiresAt(issued.getExpiresAt())
-                .sentTo(EmailMasking.mask(email))
+                .sentTo(EmailMaskingService.mask(email))
                 .build();
     }
 
