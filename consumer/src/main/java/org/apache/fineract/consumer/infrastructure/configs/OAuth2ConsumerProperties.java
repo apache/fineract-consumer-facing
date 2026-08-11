@@ -27,8 +27,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
 @RequiredArgsConstructor
-@ConfigurationProperties("consumer.oauth2")
+@ConfigurationProperties(OAuth2ConsumerProperties.PREFIX)
 public class OAuth2ConsumerProperties {
+
+    static final String PREFIX = "consumer.oauth2";
 
     private final TppClient tppClient;
     private final Duration accessTokenTtl;

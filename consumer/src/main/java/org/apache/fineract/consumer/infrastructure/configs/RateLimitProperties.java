@@ -27,8 +27,10 @@ import org.springframework.validation.annotation.Validated;
 
 @Getter
 @Validated
-@ConfigurationProperties(prefix = "consumer.rate-limit")
+@ConfigurationProperties(prefix = RateLimitProperties.PREFIX)
 public class RateLimitProperties {
+
+    static final String PREFIX = "consumer.rate-limit";
 
     private final boolean enabled;
 

@@ -25,8 +25,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
 @RequiredArgsConstructor
-@ConfigurationProperties("fineract.client")
+@ConfigurationProperties(FineractClientProperties.PREFIX)
 public class FineractClientProperties {
+
+    static final String PREFIX = "fineract.client";
 
     private final String baseUrl;
     private final String username;
