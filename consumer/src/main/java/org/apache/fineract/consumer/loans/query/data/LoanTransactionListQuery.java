@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.loans.query.data;
 
+import java.time.LocalDate;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -35,4 +36,6 @@ public final class LoanTransactionListQuery {
     private final Integer page;
     private final Integer size;
     private final String sort;
+    private final LocalDate fromDate;
+    private final LocalDate toDate;
 }

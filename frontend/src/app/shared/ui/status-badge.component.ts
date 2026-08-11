@@ -18,45 +18,62 @@
  */
 
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 
-type Tone = 'success' | 'warning' | 'error' | 'info' | 'neutral';
+type Tone = 'success' | 'warning' | 'error' | 'neutral';
 
 function classify(status: string): Tone {
   const value = status.toLowerCase();
-  if (value.includes('active') || value.includes('approved')) {
+  if (value.includes('awaiting')) {
+    return 'warning';
+  }
+  if (value.includes('active') || value.includes('approved') || value.includes('authorised')) {
     return 'success';
   }
   if (value.includes('pending') || value.includes('submitted')) {
     return 'warning';
   }
-  if (
-    value.includes('rejected') ||
-    value.includes('closed') ||
-    value.includes('overpaid') ||
-    value.includes('withdrawn')
-  ) {
+  if (value.includes('rejected') || value.includes('revoked')) {
     return 'error';
   }
-  if (value.includes('draft')) {
-    return 'info';
-  }
   return 'neutral';
-}
-
-function humanize(status: string): string {
-  const code = status.includes('.') ? status.slice(status.indexOf('.') + 1) : status;
-  const text = code.replace(/\./g, ' ');
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 @Component({
   selector: 'app-status-badge',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<span class="badge" [class]="tone()">{{ label() }}</span>`,
-  styleUrls: ['../css/badge.scss'],
+  imports: [TranslatePipe],
+  template: `<span class="badge" [class]="tone()">{{ status() | translate }}</span>`,
+  styles: `
+    .badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+    .success {
+      background-color: var(--success-tint);
+      color: var(--success);
+    }
+    .warning {
+      background-color: var(--warning-tint);
+      color: var(--warning);
+    }
+    .error {
+      background-color: var(--danger-tint);
+      color: var(--danger);
+    }
+    .neutral {
+      background-color: var(--neutral-tint);
+      color: var(--neutral);
+    }
+  `,
 })
 export class StatusBadgeComponent {
   readonly status = input.required<string>();
   protected readonly tone = computed(() => classify(this.status()));
-  protected readonly label = computed(() => humanize(this.status()));
 }

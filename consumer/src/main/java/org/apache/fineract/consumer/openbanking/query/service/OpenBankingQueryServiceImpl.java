@@ -146,6 +146,7 @@ public class OpenBankingQueryServiceImpl implements OpenBankingQueryService {
                 .accountNo(account.getAccountNo())
                 .productName(account.getProductName())
                 .status(account.getStatus())
+                .active(account.isActive())
                 .currency(account.getCurrency())
                 .build();
     }
@@ -157,6 +158,7 @@ public class OpenBankingQueryServiceImpl implements OpenBankingQueryService {
                 .accountNo(account.getAccountNo())
                 .productName(account.getProductName())
                 .status(account.getStatus())
+                .active(account.isActive())
                 .currency(account.getCurrency())
                 .build();
     }

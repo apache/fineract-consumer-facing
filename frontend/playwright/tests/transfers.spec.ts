@@ -31,11 +31,38 @@ async function mockResumedSession(page: Page): Promise<void> {
   );
 }
 
+async function mockAccountData(page: Page): Promise<void> {
+  await page.route('**/api/v1/savings', route =>
+    route.fulfill({
+      status: 200,
+      contentType: JSON_CONTENT_TYPE,
+      body: JSON.stringify([
+        {
+          id: 1,
+          accountNo: 'S-001',
+          productName: 'Basic Savings',
+          status: 'ACTIVE',
+          currency: 'USD',
+        },
+      ]),
+    }),
+  );
+  await page.route('**/api/v1/beneficiaries', route =>
+    route.fulfill({
+      status: 200,
+      contentType: JSON_CONTENT_TYPE,
+      body: JSON.stringify([
+        { publicId: 'b1', name: 'Asha', fineractAccountId: 2, transferLimit: 100 },
+      ]),
+    }),
+  );
+}
+
 async function fillTransferForm(page: Page): Promise<void> {
-  await page.locator('ion-input[formControlName="fromAccountId"] input').fill('1');
-  await page.locator('ion-input[formControlName="toAccountId"] input').fill('2');
-  await page.locator('ion-select[formControlName="toAccountType"]').click();
-  await page.getByRole('radio', { name: 'Savings' }).click();
+  await page.locator('ion-select[formControlName="fromAccountId"]').click();
+  await page.getByRole('radio', { name: 'Basic Savings · S-001' }).click();
+  await page.locator('ion-select[formControlName="toDestination"]').click();
+  await page.getByRole('radio', { name: 'Asha' }).click();
   await page.locator('ion-input[formControlName="amount"] input').fill('50');
   await page.getByRole('button', { name: 'Send transfer' }).click();
 }
@@ -47,8 +74,25 @@ test('transfers route is guarded: redirects to /login when unauthenticated', asy
   await expect(page).toHaveURL(/\/login$/);
 });
 
+test('history page: the new-transfer button navigates to the form', async ({ page }) => {
+  await mockResumedSession(page);
+  await mockAccountData(page);
+  await page.route(
+    url => url.pathname === '/api/v1/transfers',
+    route =>
+      route.fulfill({ status: 200, contentType: JSON_CONTENT_TYPE, body: JSON.stringify([]) }),
+  );
+
+  await page.goto('/transfers');
+  await page.getByRole('button', { name: /transfer money/i }).click();
+
+  await expect(page).toHaveURL(/\/transfers\/new$/);
+  await expect(page.locator('ion-select[formControlName="fromAccountId"]')).toBeVisible();
+});
+
 test('logged-in: form -> OTP step-up -> confirm -> success', async ({ page }) => {
   await mockResumedSession(page);
+  await mockAccountData(page);
   await page.route('**/api/v1/transfers/initiate', route =>
     route.fulfill({
       status: 200,
@@ -64,8 +108,8 @@ test('logged-in: form -> OTP step-up -> confirm -> success', async ({ page }) =>
     }),
   );
 
-  await page.goto('/transfers');
-  await expect(page).toHaveURL(/\/transfers$/);
+  await page.goto('/transfers/new');
+  await expect(page).toHaveURL(/\/transfers\/new$/);
 
   await fillTransferForm(page);
 
@@ -81,6 +125,7 @@ test('wrong OTP: surfaces the ConsumerApiError snackbar and stays on the OTP ste
   page,
 }) => {
   await mockResumedSession(page);
+  await mockAccountData(page);
   await page.route('**/api/v1/transfers/initiate', route =>
     route.fulfill({
       status: 200,
@@ -96,7 +141,7 @@ test('wrong OTP: surfaces the ConsumerApiError snackbar and stays on the OTP ste
     }),
   );
 
-  await page.goto('/transfers');
+  await page.goto('/transfers/new');
   await fillTransferForm(page);
 
   const otpField = page.locator('ion-input[formControlName="otp"] input');

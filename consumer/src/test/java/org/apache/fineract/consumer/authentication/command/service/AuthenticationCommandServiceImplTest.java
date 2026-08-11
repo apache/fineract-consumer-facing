@@ -60,9 +60,9 @@ import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
 import org.apache.fineract.consumer.infrastructure.kyc.service.ClientStandingChecker;
-import org.apache.fineract.consumer.otp.command.data.OtpConstants;
-import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
+import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -107,7 +107,7 @@ class AuthenticationCommandServiceImplTest {
     @Mock
     private PrincipalUserAuthLookupPort principalUserAuthLookup;
     @Mock
-    private OtpCommandService otpCommandService;
+    private OtpService otpService;
     @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
@@ -128,7 +128,7 @@ class AuthenticationCommandServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthenticationCommandServiceImpl(principalUserAuthLookup, otpCommandService, passwordEncoder,
+        service = new AuthenticationCommandServiceImpl(principalUserAuthLookup, otpService, passwordEncoder,
                 jwtIssuer, jwtDecoder, jwtDenylist, refreshTokenCommandRepository, clientStandingChecker, PROPERTIES,
                 FINERACT_PROPERTIES, eventPublisher);
     }
@@ -186,7 +186,7 @@ class AuthenticationCommandServiceImplTest {
 
             LoginChallengeCommandData challenge = service.login(loginCommand());
 
-            verify(otpCommandService).createOtp(PUBLIC_ID, OtpDestination.builder()
+            verify(otpService).createOtp(PUBLIC_ID, OtpDestination.builder()
                     .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
                     .target(EMAIL)
                     .build());
@@ -207,7 +207,7 @@ class AuthenticationCommandServiceImplTest {
 
             assertThatThrownBy(() -> service.login(loginCommand()))
                     .isInstanceOf(InvalidCredentialsException.class);
-            verify(otpCommandService, never()).createOtp(any(), any());
+            verify(otpService, never()).createOtp(any(), any());
         }
 
         @Test
@@ -217,7 +217,7 @@ class AuthenticationCommandServiceImplTest {
 
             assertThatThrownBy(() -> service.login(loginCommand()))
                     .isInstanceOf(InvalidCredentialsException.class);
-            verify(otpCommandService, never()).createOtp(any(), any());
+            verify(otpService, never()).createOtp(any(), any());
         }
 
         @Test
@@ -263,7 +263,7 @@ class AuthenticationCommandServiceImplTest {
 
             EstablishedSessionCommandData session = service.verifyTwoFactor(command());
 
-            verify(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP_TOKEN), any());
+            verify(otpService).validateOtp(eq(PUBLIC_ID), eq(OTP_TOKEN), any());
             assertThat(session.getAccessToken()).isEqualTo(ACCESS_TOKEN);
             assertThat(session.getRefreshToken()).isNotBlank();
 
@@ -326,7 +326,7 @@ class AuthenticationCommandServiceImplTest {
 
             assertThatThrownBy(() -> service.verifyTwoFactor(command()))
                     .isInstanceOf(TwoFactorInvalidException.class);
-            verify(otpCommandService, never()).validateOtp(any(), any(), any());
+            verify(otpService, never()).validateOtp(any(), any(), any());
         }
 
         @Test
@@ -336,7 +336,7 @@ class AuthenticationCommandServiceImplTest {
 
             assertThatThrownBy(() -> service.verifyTwoFactor(command()))
                     .isInstanceOf(TwoFactorInvalidException.class);
-            verify(otpCommandService, never()).validateOtp(any(), any(), any());
+            verify(otpService, never()).validateOtp(any(), any(), any());
         }
 
         @Test
@@ -351,7 +351,7 @@ class AuthenticationCommandServiceImplTest {
         void wrongOtpIsWrappedAsTwoFactorFailure() {
             when(jwtDecoder.decode(CHALLENGE_TOKEN))
                     .thenReturn(challengeJwt(AuthenticationConstants.CHALLENGE_PURPOSE_VALUE, DEVICE_FINGERPRINT));
-            doAnswer(throwsCallerSuppliedException(2)).when(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP_TOKEN), any());
+            doAnswer(throwsCallerSuppliedException(2)).when(otpService).validateOtp(eq(PUBLIC_ID), eq(OTP_TOKEN), any());
 
             assertThatThrownBy(() -> service.verifyTwoFactor(command()))
                     .isInstanceOf(TwoFactorInvalidException.class)

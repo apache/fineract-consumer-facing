@@ -22,15 +22,15 @@ import { Routes } from '@angular/router';
 export const SAVINGS_ROUTES: Routes = [
   {
     path: '',
-    loadComponent: () => import('./savings-list.component').then(m => m.SavingsListComponent),
+    loadComponent: () => import('./savings-list.component').then((m) => m.SavingsListComponent),
   },
   {
     path: ':savingsId',
-    loadComponent: () => import('./savings-detail.component').then(m => m.SavingsDetailComponent),
+    loadComponent: () => import('./savings-detail.component').then((m) => m.SavingsDetailComponent),
   },
   {
     path: ':savingsId/transactions/:transactionId',
     loadComponent: () =>
-      import('./savings-transaction.component').then(m => m.SavingsTransactionComponent),
+      import('./savings-transaction.component').then((m) => m.SavingsTransactionComponent),
   },
 ];

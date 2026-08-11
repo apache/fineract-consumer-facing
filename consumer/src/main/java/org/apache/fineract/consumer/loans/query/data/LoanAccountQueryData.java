@@ -44,4 +44,5 @@ public final class LoanAccountQueryData {
     private final String currency;
     private final LocalDate nextDueDate;
     private final BigDecimal nextDueAmount;
+    private final boolean active;
 }

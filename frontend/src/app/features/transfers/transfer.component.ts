@@ -17,237 +17,167 @@
  * under the License.
  */
 
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { CdkTableModule } from '@angular/cdk/table';
 import {
   IonButton,
   IonCard,
   IonCardContent,
-  IonCardHeader,
-  IonCardTitle,
   IonIcon,
-  IonInput,
   IonProgressBar,
-  IonSelect,
-  IonSelectOption,
+  IonRouterLink,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { swapHorizontal } from 'ionicons/icons';
+import { add } from 'ionicons/icons';
 import { TranslatePipe } from '@ngx-translate/core';
-import { ACCOUNT_TYPE_LABEL_KEYS } from '../../shared/models/account-types';
-import { OtpComponent } from '../../shared/otp/otp.component';
+import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { TransfersStore } from './transfers.store';
+
+const HISTORY_PAGE_SIZE = 10;
 
 @Component({
   selector: 'app-transfer',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    ReactiveFormsModule,
+    CdkTableModule,
     IonButton,
     IonCard,
     IonCardContent,
-    IonCardHeader,
-    IonCardTitle,
     IonIcon,
-    IonInput,
     IonProgressBar,
-    IonSelect,
-    IonSelectOption,
+    IonRouterLink,
+    RouterLink,
+    PageHeaderComponent,
+    DatePipe,
     DecimalPipe,
     TranslatePipe,
-    OtpComponent,
   ],
   template: `
-    <ion-card class="transfer-card">
-      <ion-card-header>
-        <ion-card-title>{{ 'transfers.title' | translate }}</ion-card-title>
-      </ion-card-header>
+    <app-page-header [title]="'transfers.history.title' | translate">
+      <ion-button [routerLink]="['/transfers', 'new']">
+        <ion-icon slot="start" name="add" aria-hidden="true" />
+        {{ 'transfers.newCta' | translate }}
+      </ion-button>
+    </app-page-header>
 
-      @if (loading()) {
+    <ion-card>
+      @if (store.historyLoading()) {
         <ion-progress-bar type="indeterminate" />
       }
 
       <ion-card-content>
-        @switch (step()) {
-          @case ('form') {
-            <form [formGroup]="form" (ngSubmit)="initiate()">
-              <ion-input
-                type="number"
-                formControlName="fromAccountId"
-                fill="outline"
-                labelPlacement="stacked"
-                [label]="'transfers.form.fromAccountLabel' | translate"
-              />
-              <ion-input
-                type="number"
-                formControlName="toAccountId"
-                fill="outline"
-                labelPlacement="stacked"
-                [label]="'transfers.form.toAccountLabel' | translate"
-              />
-              <ion-select
-                formControlName="toAccountType"
-                interface="popover"
-                fill="outline"
-                labelPlacement="stacked"
-                [label]="'transfers.form.toAccountTypeLabel' | translate"
-              >
-                @for (type of accountTypes; track type.value) {
-                  <ion-select-option [value]="type.value">{{ type.labelKey | translate }}</ion-select-option>
-                }
-              </ion-select>
-              <ion-input
-                type="number"
-                step="0.01"
-                formControlName="amount"
-                fill="outline"
-                labelPlacement="stacked"
-                [label]="'transfers.form.amountLabel' | translate"
-              />
-              <div class="actions-end">
-                <ion-button type="submit" [disabled]="loading() || form.invalid">
-                  <ion-icon slot="start" name="swap-horizontal" />
-                  {{ 'transfers.form.submitCta' | translate }}
-                </ion-button>
-              </div>
-            </form>
-          }
-          @case ('otp') {
-            <app-otp
-              [sentTo]="store.challenge()?.sentTo ?? null"
-              [loading]="loading()"
-              (submitted)="confirm($event)"
-              (cancelled)="backToForm()"
-            />
-          }
-          @case ('done') {
-            <div class="done">
-              <p>{{ 'transfers.done.complete' | translate }}</p>
-              @if (store.result(); as result) {
-                <dl>
-                  <dt>{{ 'transfers.done.reference' | translate }}</dt>
-                  <dd>{{ result.transferId }}</dd>
-                  <dt>{{ 'common.filter.from' | translate }}</dt>
-                  <dd>{{ result.fromAccountId }}</dd>
-                  <dt>{{ 'common.filter.to' | translate }}</dt>
-                  <dd>{{ result.toAccountId }}</dd>
-                  <dt>{{ 'transfers.done.amount' | translate }}</dt>
-                  <dd>{{ result.amount | number: '1.2-2' }}</dd>
-                </dl>
-              }
-            </div>
-          }
-        }
+        <div class="table-scroll">
+          <table cdk-table [dataSource]="store.history()">
+            <ng-container cdkColumnDef="date">
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.date' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row">{{ row.date | date: 'mediumDate' }}</td>
+            </ng-container>
+            <ng-container cdkColumnDef="fromAccount">
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.filter.from' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row">{{ row.fromAccount }}</td>
+            </ng-container>
+            <ng-container cdkColumnDef="toAccount">
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.filter.to' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row">{{ row.toAccount }}</td>
+            </ng-container>
+            <ng-container cdkColumnDef="amount">
+              <th cdk-header-cell *cdkHeaderCellDef class="num">
+                {{ 'common.table.amount' | translate }}
+              </th>
+              <td cdk-cell *cdkCellDef="let row" class="num">
+                {{ row.amount | number: '1.2-2' }} {{ row.currency }}
+              </td>
+            </ng-container>
+            <ng-container cdkColumnDef="direction">
+              <th cdk-header-cell *cdkHeaderCellDef>
+                {{ 'transfers.history.direction.label' | translate }}
+              </th>
+              <td cdk-cell *cdkCellDef="let row">
+                {{
+                  row.direction ? ('transfers.history.direction.' + row.direction | translate) : ''
+                }}
+              </td>
+            </ng-container>
+
+            <tr cdk-header-row *cdkHeaderRowDef="historyColumns"></tr>
+            <tr cdk-row *cdkRowDef="let row; columns: historyColumns"></tr>
+            <tr class="empty-row" *cdkNoDataRow>
+              <td [attr.colspan]="historyColumns.length">
+                {{ 'transfers.history.empty' | translate }}
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="pager">
+          <span class="showing">
+            {{ 'common.pagination.showing' | translate: showingParams() }}
+          </span>
+          <ion-button
+            size="small"
+            fill="outline"
+            [disabled]="historyPrevDisabled()"
+            (click)="historyPrev()"
+          >
+            {{ 'common.action.prev' | translate }}
+          </ion-button>
+          <ion-button
+            size="small"
+            fill="outline"
+            [disabled]="historyNextDisabled()"
+            (click)="historyNext()"
+          >
+            {{ 'common.action.next' | translate }}
+          </ion-button>
+        </div>
       </ion-card-content>
     </ion-card>
   `,
-  styleUrls: [
-    '../../shared/css/centered-page.scss',
-    '../../shared/css/form.scss',
-    '../../shared/css/actions.scss',
-  ],
-  styles: `
-    :host {
-      flex: 1;
-      min-height: 0;
-    }
-    .transfer-card {
-      width: 100%;
-      max-width: 28rem;
-    }
-    dl {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 0.25rem 1rem;
-    }
-    dt {
-      font-weight: 600;
-    }
-    dd {
-      margin: 0;
-    }
-    form {
-      gap: 0.875rem;
-    }
-  `,
+  styleUrls: ['../../shared/css/table.scss', '../../shared/css/pager.scss'],
 })
 export class TransferComponent {
-  private readonly fb = inject(NonNullableFormBuilder);
-  private readonly destroyRef = inject(DestroyRef);
   protected readonly store = inject(TransfersStore);
 
-  protected readonly step = signal<'form' | 'otp' | 'done'>('form');
-  protected readonly loading = signal(false);
+  protected readonly historyColumns = ['date', 'fromAccount', 'toAccount', 'amount', 'direction'];
 
-  protected readonly accountTypes = Object.entries(ACCOUNT_TYPE_LABEL_KEYS).map(
-    ([value, labelKey]) => ({ value, labelKey }),
+  protected readonly historyPrevDisabled = computed(
+    () => this.store.historyLoading() || this.store.historyPage() === 0,
   );
-
-  protected readonly form = this.fb.group({
-    fromAccountId: [null as number | null, [Validators.required]],
-    toAccountId: [null as number | null, [Validators.required]],
-    toAccountType: ['SAVINGS', [Validators.required]],
-    amount: [null as number | null, [Validators.required, Validators.min(0.01)]],
+  protected readonly historyNextDisabled = computed(
+    () =>
+      this.store.historyLoading() ||
+      this.store.historyTotalPages() === 0 ||
+      this.store.historyPage() >= this.store.historyTotalPages() - 1,
+  );
+  protected readonly showingParams = computed(() => {
+    const total = this.store.historyTotalElements();
+    if (total === 0) {
+      return { from: 0, to: 0, total: 0 };
+    }
+    const page = this.store.historyPage();
+    const size = this.store.historySize();
+    return { from: page * size + 1, to: Math.min((page + 1) * size, total), total };
   });
 
-  private idempotencyKey: string | null = null;
-
   constructor() {
-    addIcons({ swapHorizontal });
-    this.form.valueChanges
-      .pipe(takeUntilDestroyed())
-      .subscribe(() => (this.idempotencyKey = null));
+    addIcons({ add });
+    this.loadPage(0);
   }
 
-  protected initiate(): void {
-    const { fromAccountId, toAccountId, toAccountType, amount } = this.form.getRawValue();
-    if (this.form.invalid || fromAccountId == null || toAccountId == null || amount == null) {
+  protected historyPrev(): void {
+    this.loadPage(this.store.historyPage() - 1);
+  }
+
+  protected historyNext(): void {
+    this.loadPage(this.store.historyPage() + 1);
+  }
+
+  private loadPage(page: number): void {
+    if (page < 0) {
       return;
     }
-    this.loading.set(true);
-    this.store
-      .initiate({ fromAccountId, toAccountId, toAccountType, amount })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.step.set('otp');
-          this.loading.set(false);
-        },
-        error: () => this.loading.set(false),
-      });
-  }
-
-  protected confirm(otp: string): void {
-    const stepUpToken = this.store.challenge()?.stepUpToken;
-    const { fromAccountId, toAccountId, toAccountType, amount } = this.form.getRawValue();
-    if (!stepUpToken || fromAccountId == null || toAccountId == null || amount == null) {
-      return;
-    }
-    this.loading.set(true);
-    this.idempotencyKey ??= crypto.randomUUID();
-    this.store
-      .confirm(this.idempotencyKey, {
-        stepUpToken,
-        otp,
-        fromAccountId,
-        toAccountId,
-        toAccountType,
-        amount,
-      })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.idempotencyKey = null;
-          this.step.set('done');
-          this.loading.set(false);
-        },
-        error: () => this.loading.set(false),
-      });
-  }
-
-  protected backToForm(): void {
-    this.step.set('form');
+    this.store.loadHistory(page, HISTORY_PAGE_SIZE);
   }
 }

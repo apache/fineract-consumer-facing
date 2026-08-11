@@ -27,6 +27,7 @@ import {
   SavingsQueryControllerService,
   SavingsTransactionQueryData,
 } from '@bff/client';
+import { byAccountNo } from '../../shared/utils/account-sort';
 
 export interface TransactionFilter {
   fromDate?: string;
@@ -44,6 +45,10 @@ export class SavingsStore {
   readonly selected = signal<SavingsAccountQueryData | null>(null);
   readonly charges = signal<SavingsChargeQueryData[]>([]);
   readonly transactions = signal<SavingsTransactionQueryData[]>([]);
+  readonly transactionsPage = signal(0);
+  readonly transactionsSize = signal(0);
+  readonly transactionsTotalElements = signal(0);
+  readonly transactionsTotalPages = signal(0);
   readonly selectedTransaction = signal<SavingsTransactionQueryData | null>(null);
   readonly template = signal<SavingsApplicationTemplateQueryData | null>(null);
   readonly loading = signal(false);
@@ -55,8 +60,8 @@ export class SavingsStore {
       .listSavingsAccounts()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: rows => {
-          this.accounts.set(rows);
+        next: (rows) => {
+          this.accounts.set([...rows].sort(byAccountNo));
           this.loading.set(false);
         },
         error: () => this.loading.set(false),
@@ -70,7 +75,7 @@ export class SavingsStore {
       .getSavingsAccount(savingsId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: account => {
+        next: (account) => {
           this.selected.set(account);
           this.loading.set(false);
         },
@@ -84,7 +89,7 @@ export class SavingsStore {
       .getSavingsCharges(savingsId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: rows => this.charges.set(rows),
+        next: (rows) => this.charges.set(rows),
         error: () => {},
       });
   }
@@ -93,11 +98,21 @@ export class SavingsStore {
     this.transactions.set([]);
     this.loading.set(true);
     this.query
-      .searchSavingsTransactions(savingsId, filter.fromDate, filter.toDate, filter.page, filter.size)
+      .searchSavingsTransactions(
+        savingsId,
+        filter.fromDate,
+        filter.toDate,
+        filter.page,
+        filter.size,
+      )
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: rows => {
-          this.transactions.set(rows);
+        next: (response) => {
+          this.transactions.set(response.content ?? []);
+          this.transactionsPage.set(response.page ?? 0);
+          this.transactionsSize.set(response.size ?? 0);
+          this.transactionsTotalElements.set(response.totalElements ?? 0);
+          this.transactionsTotalPages.set(response.totalPages ?? 0);
           this.loading.set(false);
         },
         error: () => this.loading.set(false),
@@ -110,7 +125,7 @@ export class SavingsStore {
       .getSavingsTransaction(savingsId, transactionId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: tx => this.selectedTransaction.set(tx),
+        next: (tx) => this.selectedTransaction.set(tx),
         error: () => {},
       });
   }
@@ -121,7 +136,7 @@ export class SavingsStore {
       .getSavingsApplicationTemplate(productId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: template => this.template.set(template),
+        next: (template) => this.template.set(template),
         error: () => {},
       });
   }

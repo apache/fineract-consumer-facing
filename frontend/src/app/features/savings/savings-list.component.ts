@@ -20,7 +20,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { CdkTableModule } from '@angular/cdk/table';
-import { IonButton, IonCard, IonCardContent, IonProgressBar } from '@ionic/angular/standalone';
+import { IonCard, IonCardContent, IonProgressBar } from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
@@ -31,7 +31,6 @@ import { SavingsStore } from './savings.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CdkTableModule,
-    IonButton,
     IonCard,
     IonCardContent,
     IonProgressBar,
@@ -49,45 +48,44 @@ import { SavingsStore } from './savings.store';
 
       <ion-card-content>
         <div class="table-scroll">
-        <table cdk-table [dataSource]="store.accounts()">
-          <ng-container cdkColumnDef="accountNo">
-            <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.account' | translate }}</th>
-            <td cdk-cell *cdkCellDef="let row">{{ row.accountNo }}</td>
-          </ng-container>
-          <ng-container cdkColumnDef="productName">
-            <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.product' | translate }}</th>
-            <td cdk-cell *cdkCellDef="let row">{{ row.productName }}</td>
-          </ng-container>
-          <ng-container cdkColumnDef="status">
-            <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.status' | translate }}</th>
-            <td cdk-cell *cdkCellDef="let row">
-              @if (row.status) {
-                <app-status-badge [status]="row.status" />
-              }
-            </td>
-          </ng-container>
-          <ng-container cdkColumnDef="currency">
-            <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.currency' | translate }}</th>
-            <td cdk-cell *cdkCellDef="let row">{{ row.currency }}</td>
-          </ng-container>
+          <table cdk-table [dataSource]="store.accounts()">
+            <ng-container cdkColumnDef="accountNo">
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.account' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row">{{ row.accountNo }}</td>
+            </ng-container>
+            <ng-container cdkColumnDef="productName">
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.product' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row">{{ row.productName }}</td>
+            </ng-container>
+            <ng-container cdkColumnDef="status">
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.status' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row">
+                @if (row.status) {
+                  <app-status-badge [status]="row.status" />
+                }
+              </td>
+            </ng-container>
+            <ng-container cdkColumnDef="currency">
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.currency' | translate }}</th>
+              <td cdk-cell *cdkCellDef="let row">{{ row.currency }}</td>
+            </ng-container>
 
-          <tr cdk-header-row *cdkHeaderRowDef="columns"></tr>
-          <tr cdk-row *cdkRowDef="let row; columns: columns" class="clickable" (click)="open(row.id)"></tr>
-          <tr class="empty-row" *cdkNoDataRow>
-            <td [attr.colspan]="columns.length">{{ 'savings.list.empty' | translate }}</td>
-          </tr>
-        </table>
-        </div>
-
-        <div class="actions-row">
-          <ion-button class="btn-danger" (click)="tryForbiddenAccount()">
-            {{ 'savings.list.tryForbidden' | translate }}
-          </ion-button>
+            <tr cdk-header-row *cdkHeaderRowDef="columns"></tr>
+            <tr
+              cdk-row
+              *cdkRowDef="let row; columns: columns"
+              class="clickable"
+              (click)="open(row.id)"
+            ></tr>
+            <tr class="empty-row" *cdkNoDataRow>
+              <td [attr.colspan]="columns.length">{{ 'savings.list.empty' | translate }}</td>
+            </tr>
+          </table>
         </div>
       </ion-card-content>
     </ion-card>
   `,
-  styleUrls: ['../../shared/css/table.scss', '../../shared/css/actions.scss'],
+  styleUrls: ['../../shared/css/table.scss'],
 })
 export class SavingsListComponent {
   protected readonly store = inject(SavingsStore);
@@ -103,9 +101,5 @@ export class SavingsListComponent {
     if (savingsId != null) {
       this.router.navigate(['/savings', savingsId]);
     }
-  }
-
-  protected tryForbiddenAccount(): void {
-    this.router.navigate(['/savings', 999999]);
   }
 }

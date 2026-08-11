@@ -83,8 +83,7 @@ public class Beneficiary {
     private Instant updatedAt;
 
     public static Beneficiary register(UUID publicId, Long userId, String name, Long fineractOfficeId,
-            Long fineractClientId, Long fineractAccountId, BeneficiaryAccountType accountType,
-            BigDecimal transferLimit) {
+            Long fineractClientId, Long fineractAccountId, BigDecimal transferLimit) {
         Instant now = Instant.now();
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.publicId = publicId;
@@ -93,7 +92,7 @@ public class Beneficiary {
         beneficiary.fineractOfficeId = fineractOfficeId;
         beneficiary.fineractClientId = fineractClientId;
         beneficiary.fineractAccountId = fineractAccountId;
-        beneficiary.accountType = accountType;
+        beneficiary.accountType = BeneficiaryAccountType.SAVINGS;
         beneficiary.transferLimit = transferLimit;
         beneficiary.active = true;
         beneficiary.createdAt = now;

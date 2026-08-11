@@ -30,7 +30,7 @@ import org.apache.fineract.consumer.client.model.SubmitRegistrationCommandReques
 import org.apache.fineract.consumer.client.model.VerifyOtpCommandData;
 import org.apache.fineract.consumer.client.model.VerifyOtpCommandRequest;
 import org.apache.fineract.consumer.cucumber.clients.MailpitClient;
-import org.apache.fineract.consumer.otp.command.data.OtpConstants;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
 
 public class RegistrationHelper {
 

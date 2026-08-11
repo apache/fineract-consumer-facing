@@ -34,20 +34,36 @@ import {
   LoansQueryControllerService,
   ModifyLoanApplicationCommandRequest,
   SubmitLoanApplicationCommandRequest,
+  UserObligeeQueryData,
+  UserQueryControllerService,
   WithdrawLoanApplicationCommandRequest,
 } from '@bff/client';
+import { byAccountNo } from '../../shared/utils/account-sort';
+
+export interface TransactionFilter {
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  size?: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class LoansStore {
   private readonly query = inject(LoansQueryControllerService);
   private readonly command = inject(LoansCommandControllerService);
+  private readonly userQuery = inject(UserQueryControllerService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly loans = signal<LoanAccountListItemQueryData[]>([]);
   readonly selected = signal<LoanAccountQueryData | null>(null);
   readonly charges = signal<LoanChargeQueryData[]>([]);
   readonly guarantors = signal<LoanGuarantorQueryData[]>([]);
+  readonly obligees = signal<UserObligeeQueryData[]>([]);
   readonly transactions = signal<LoanTransactionQueryData[]>([]);
+  readonly transactionsPage = signal(0);
+  readonly transactionsSize = signal(0);
+  readonly transactionsTotalElements = signal(0);
+  readonly transactionsTotalPages = signal(0);
   readonly selectedTransaction = signal<LoanTransactionQueryData | null>(null);
   readonly template = signal<LoanApplicationTemplateQueryData | null>(null);
   readonly schedulePreview = signal<LoanScheduleQueryData | null>(null);
@@ -61,8 +77,8 @@ export class LoansStore {
       .listLoanAccounts()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: rows => {
-          this.loans.set(rows);
+        next: (rows) => {
+          this.loans.set([...rows].sort(byAccountNo));
           this.loading.set(false);
         },
         error: () => this.loading.set(false),
@@ -76,7 +92,7 @@ export class LoansStore {
       .getLoanAccount(loanId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: account => {
+        next: (account) => {
           this.selected.set(account);
           this.loading.set(false);
         },
@@ -90,7 +106,7 @@ export class LoansStore {
       .getLoanCharges(loanId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: rows => this.charges.set(rows),
+        next: (rows) => this.charges.set(rows),
         error: () => {},
       });
   }
@@ -101,19 +117,45 @@ export class LoansStore {
       .getLoanGuarantors(loanId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: rows => this.guarantors.set(rows),
+        next: (rows) => this.guarantors.set(rows),
         error: () => {},
       });
   }
 
-  loadTransactions(loanId: number): void {
-    this.transactions.set([]);
-    this.query
-      .listLoanTransactions(loanId)
+  loadObligees(): void {
+    this.obligees.set([]);
+    this.userQuery
+      .getUserObligees()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: rows => this.transactions.set(rows),
+        next: (rows) => this.obligees.set(rows),
         error: () => {},
+      });
+  }
+
+  loadTransactions(loanId: number, filter: TransactionFilter = {}): void {
+    this.transactions.set([]);
+    this.loading.set(true);
+    this.query
+      .listLoanTransactions(
+        loanId,
+        filter.page,
+        filter.size,
+        undefined,
+        filter.fromDate,
+        filter.toDate,
+      )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.transactions.set(response.content ?? []);
+          this.transactionsPage.set(response.page ?? 0);
+          this.transactionsSize.set(response.size ?? 0);
+          this.transactionsTotalElements.set(response.totalElements ?? 0);
+          this.transactionsTotalPages.set(response.totalPages ?? 0);
+          this.loading.set(false);
+        },
+        error: () => this.loading.set(false),
       });
   }
 
@@ -123,7 +165,7 @@ export class LoansStore {
       .getLoanTransaction(loanId, transactionId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: tx => this.selectedTransaction.set(tx),
+        next: (tx) => this.selectedTransaction.set(tx),
         error: () => {},
       });
   }
@@ -134,7 +176,7 @@ export class LoansStore {
       .getLoanApplicationTemplate(productId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: template => this.template.set(template),
+        next: (template) => this.template.set(template),
         error: () => {},
       });
   }
@@ -142,7 +184,7 @@ export class LoansStore {
   previewSchedule(request: LoanSchedulePreviewQueryRequest): Observable<LoanScheduleQueryData> {
     return this.query
       .previewLoanSchedule(request)
-      .pipe(tap(schedule => this.schedulePreview.set(schedule)));
+      .pipe(tap((schedule) => this.schedulePreview.set(schedule)));
   }
 
   submit(
@@ -151,7 +193,7 @@ export class LoansStore {
   ): Observable<LoanApplicationCommandData> {
     return this.command
       .submitLoanApplication(idempotencyKey, request)
-      .pipe(tap(draft => this.draft.set(draft)));
+      .pipe(tap((draft) => this.draft.set(draft)));
   }
 
   modify(
@@ -161,7 +203,7 @@ export class LoansStore {
   ): Observable<LoanApplicationCommandData> {
     return this.command
       .modifyLoanApplication(idempotencyKey, loanId, request)
-      .pipe(tap(draft => this.draft.set(draft)));
+      .pipe(tap((draft) => this.draft.set(draft)));
   }
 
   withdraw(

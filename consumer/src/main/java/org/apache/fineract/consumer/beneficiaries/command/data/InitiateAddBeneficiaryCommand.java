@@ -35,7 +35,6 @@ public final class InitiateAddBeneficiaryCommand {
     private final String name;
     private final String officeName;
     private final String accountNumber;
-    private final BeneficiaryAccountType accountType;
     private final BigDecimal transferLimit;
     private final String deviceFingerprint;
 }

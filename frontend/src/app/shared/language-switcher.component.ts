@@ -18,12 +18,18 @@
  */
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonPopover } from '@ionic/angular/standalone';
+import {
+  IonButton,
+  IonIcon,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonPopover,
+} from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { globeOutline } from 'ionicons/icons';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-
-const STORAGE_KEY = 'app.lang';
+import { TranslatePipe } from '@ngx-translate/core';
+import { I18nService } from '../core/i18n/i18n.service';
 
 interface LanguageOption {
   readonly code: string;
@@ -51,7 +57,11 @@ interface LanguageOption {
             <ion-item [button]="true" [detail]="false" (click)="use(lang.code)">
               <ion-label>
                 {{ lang.endonym
-                }}{{ (lang.nameKey | translate) === lang.endonym ? '' : ' (' + (lang.nameKey | translate) + ')' }}
+                }}{{
+                  (lang.nameKey | translate) === lang.endonym
+                    ? ''
+                    : ' (' + (lang.nameKey | translate) + ')'
+                }}
               </ion-label>
             </ion-item>
           }
@@ -62,7 +72,9 @@ interface LanguageOption {
   styleUrls: ['./css/icon-button.scss'],
   styles: `
     ion-button {
-      --color: var(--slate-600);
+      --color: var(--toolbar-icon-color, var(--slate-600));
+      --background-hover: var(--toolbar-icon-color, var(--slate-600));
+      --background-hover-opacity: 0.12;
     }
 
     ion-popover {
@@ -86,7 +98,7 @@ interface LanguageOption {
   `,
 })
 export class LanguageSwitcherComponent {
-  private readonly translate = inject(TranslateService);
+  private readonly i18n = inject(I18nService);
 
   protected readonly languages: readonly LanguageOption[] = [
     { code: 'en', endonym: 'English', nameKey: 'common.language.en' },
@@ -95,14 +107,9 @@ export class LanguageSwitcherComponent {
 
   constructor() {
     addIcons({ globeOutline });
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      this.translate.use(stored);
-    }
   }
 
   protected use(code: string): void {
-    this.translate.use(code);
-    localStorage.setItem(STORAGE_KEY, code);
+    this.i18n.use(code);
   }
 }

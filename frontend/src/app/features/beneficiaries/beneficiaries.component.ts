@@ -17,10 +17,15 @@
  * under the License.
  */
 
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
 import { CdkTableModule } from '@angular/cdk/table';
 import {
   IonButton,
@@ -29,18 +34,20 @@ import {
   IonIcon,
   IonInput,
   IonProgressBar,
-  IonSelect,
-  IonSelectOption,
   ToastController,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { pencil, personAdd, trash } from 'ionicons/icons';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { BeneficiaryQueryData, InitiateAddBeneficiaryCommandRequest } from '@bff/client';
-import { ACCOUNT_TYPE_LABEL_KEYS } from '../../shared/models/account-types';
+import { TranslatePipe } from '@ngx-translate/core';
+import { BeneficiaryQueryData } from '@bff/client';
+import { I18nService } from '../../core/i18n/i18n.service';
+import { NotificationService } from '../../core/notifications/notification.service';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { BeneficiariesStore } from './beneficiaries.store';
+
+const NAME_MAX_LENGTH = 50;
+const MIN_TRANSFER_LIMIT = 0.01;
 
 @Component({
   selector: 'app-beneficiaries',
@@ -54,8 +61,6 @@ import { BeneficiariesStore } from './beneficiaries.store';
     IonIcon,
     IonInput,
     IonProgressBar,
-    IonSelect,
-    IonSelectOption,
     DecimalPipe,
     TranslatePipe,
     OtpComponent,
@@ -73,52 +78,30 @@ import { BeneficiariesStore } from './beneficiaries.store';
         @switch (step()) {
           @case ('list') {
             <div class="table-scroll">
-            <table cdk-table [dataSource]="store.beneficiaries()">
-              <ng-container cdkColumnDef="name">
-                <th cdk-header-cell *cdkHeaderCellDef>{{ 'beneficiaries.list.nameColumn' | translate }}</th>
-                <td cdk-cell *cdkCellDef="let row">{{ row.name }}</td>
-              </ng-container>
-              <ng-container cdkColumnDef="accountType">
-                <th cdk-header-cell *cdkHeaderCellDef>
-                  {{ 'beneficiaries.list.accountTypeColumn' | translate }}
-                </th>
-                <td cdk-cell *cdkCellDef="let row">
-                  @if (typeLabelKey(row.accountType); as key) {
-                    {{ key | translate }}
-                  } @else {
-                    {{ row.accountType }}
-                  }
-                </td>
-              </ng-container>
-              <ng-container cdkColumnDef="transferLimit">
-                <th cdk-header-cell *cdkHeaderCellDef class="num">
-                  {{ 'beneficiaries.list.transferLimitColumn' | translate }}
-                </th>
-                <td cdk-cell *cdkCellDef="let row" class="num">
-                  @if (row.transferLimit != null) {
-                    {{ row.transferLimit | number: '1.2-2' }}
-                  } @else {
-                    —
-                  }
-                </td>
-              </ng-container>
-              <ng-container cdkColumnDef="actions">
-                <th cdk-header-cell *cdkHeaderCellDef>
-                  {{ 'beneficiaries.list.actionsColumn' | translate }}
-                </th>
-                <td cdk-cell *cdkCellDef="let row" class="row-actions">
-                  @if (pendingDeleteId() === row.publicId) {
-                    <ion-button
-                      class="btn-danger"
-                      [disabled]="loading()"
-                      (click)="confirmDelete(row.publicId)"
-                    >
-                      {{ 'beneficiaries.delete.confirm' | translate }}
-                    </ion-button>
-                    <ion-button fill="clear" [disabled]="loading()" (click)="cancelDelete()">
-                      {{ 'beneficiaries.delete.cancel' | translate }}
-                    </ion-button>
-                  } @else {
+              <table cdk-table [dataSource]="store.beneficiaries()">
+                <ng-container cdkColumnDef="name">
+                  <th cdk-header-cell *cdkHeaderCellDef>
+                    {{ 'beneficiaries.list.nameColumn' | translate }}
+                  </th>
+                  <td cdk-cell *cdkCellDef="let row">{{ row.name }}</td>
+                </ng-container>
+                <ng-container cdkColumnDef="transferLimit">
+                  <th cdk-header-cell *cdkHeaderCellDef class="num">
+                    {{ 'beneficiaries.list.transferLimitColumn' | translate }}
+                  </th>
+                  <td cdk-cell *cdkCellDef="let row" class="num">
+                    @if (row.transferLimit != null) {
+                      {{ row.transferLimit | number: '1.2-2' }}
+                    } @else {
+                      —
+                    }
+                  </td>
+                </ng-container>
+                <ng-container cdkColumnDef="actions">
+                  <th cdk-header-cell *cdkHeaderCellDef>
+                    {{ 'beneficiaries.list.actionsColumn' | translate }}
+                  </th>
+                  <td cdk-cell *cdkCellDef="let row" class="row-actions">
                     <ion-button
                       fill="clear"
                       class="icon-action"
@@ -130,21 +113,23 @@ import { BeneficiariesStore } from './beneficiaries.store';
                     <ion-button
                       fill="clear"
                       class="icon-action"
-                      [attr.aria-label]="'beneficiaries.delete.confirm' | translate"
-                      (click)="requestDelete(row.publicId)"
+                      [attr.aria-label]="'beneficiaries.delete.action' | translate"
+                      [disabled]="deletingId() === row.publicId"
+                      (click)="confirmDelete(row.publicId)"
                     >
                       <ion-icon slot="icon-only" name="trash" />
                     </ion-button>
-                  }
-                </td>
-              </ng-container>
+                  </td>
+                </ng-container>
 
-              <tr cdk-header-row *cdkHeaderRowDef="columns"></tr>
-              <tr cdk-row *cdkRowDef="let row; columns: columns"></tr>
-              <tr class="empty-row" *cdkNoDataRow>
-                <td [attr.colspan]="columns.length">{{ 'beneficiaries.list.empty' | translate }}</td>
-              </tr>
-            </table>
+                <tr cdk-header-row *cdkHeaderRowDef="columns"></tr>
+                <tr cdk-row *cdkRowDef="let row; columns: columns"></tr>
+                <tr class="empty-row" *cdkNoDataRow>
+                  <td [attr.colspan]="columns.length">
+                    {{ 'beneficiaries.list.empty' | translate }}
+                  </td>
+                </tr>
+              </table>
             </div>
 
             <div class="actions-end">
@@ -158,7 +143,7 @@ import { BeneficiariesStore } from './beneficiaries.store';
             <form [formGroup]="addForm" (ngSubmit)="submitAdd()">
               <ion-input
                 formControlName="name"
-                [maxlength]="50"
+                [maxlength]="nameMaxLength"
                 fill="outline"
                 labelPlacement="stacked"
                 [label]="'beneficiaries.form.nameLabel' | translate"
@@ -175,23 +160,6 @@ import { BeneficiariesStore } from './beneficiaries.store';
                 labelPlacement="stacked"
                 [label]="'beneficiaries.form.accountNumberLabel' | translate"
               />
-              <ion-select
-                formControlName="accountType"
-                interface="popover"
-                fill="outline"
-                labelPlacement="stacked"
-                [label]="'beneficiaries.form.accountTypeLabel' | translate"
-              >
-                @for (option of typeOptions(); track option.value) {
-                  <ion-select-option [value]="option.value">
-                    @if (option.labelKey) {
-                      {{ option.labelKey | translate }}
-                    } @else {
-                      {{ option.value }}
-                    }
-                  </ion-select-option>
-                }
-              </ion-select>
               <ion-input
                 type="number"
                 step="0.01"
@@ -201,10 +169,15 @@ import { BeneficiariesStore } from './beneficiaries.store';
                 [label]="'beneficiaries.form.transferLimitLabel' | translate"
               />
               <div class="actions-end">
-                <ion-button fill="outline" type="button" [disabled]="loading()" (click)="backToList()">
+                <ion-button
+                  fill="outline"
+                  type="button"
+                  [disabled]="loading()"
+                  (click)="backToList()"
+                >
                   {{ 'beneficiaries.form.cancelCta' | translate }}
                 </ion-button>
-                <ion-button type="submit" [disabled]="loading() || addForm.invalid">
+                <ion-button type="submit" [disabled]="loading()">
                   {{ 'beneficiaries.form.submitCta' | translate }}
                 </ion-button>
               </div>
@@ -215,7 +188,7 @@ import { BeneficiariesStore } from './beneficiaries.store';
             <form [formGroup]="editForm" (ngSubmit)="submitEdit()">
               <ion-input
                 formControlName="name"
-                [maxlength]="50"
+                [maxlength]="nameMaxLength"
                 fill="outline"
                 labelPlacement="stacked"
                 [label]="'beneficiaries.form.nameLabel' | translate"
@@ -229,10 +202,15 @@ import { BeneficiariesStore } from './beneficiaries.store';
                 [label]="'beneficiaries.form.transferLimitLabel' | translate"
               />
               <div class="actions-end">
-                <ion-button fill="outline" type="button" [disabled]="loading()" (click)="backToList()">
+                <ion-button
+                  fill="outline"
+                  type="button"
+                  [disabled]="loading()"
+                  (click)="backToList()"
+                >
                   {{ 'beneficiaries.form.cancelCta' | translate }}
                 </ion-button>
-                <ion-button type="submit" [disabled]="loading() || editForm.invalid">
+                <ion-button type="submit" [disabled]="loading()">
                   {{ 'beneficiaries.form.submitCta' | translate }}
                 </ion-button>
               </div>
@@ -286,60 +264,44 @@ export class BeneficiariesComponent {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly destroyRef = inject(DestroyRef);
   private readonly toastCtrl = inject(ToastController);
-  private readonly translate = inject(TranslateService);
+  private readonly i18n = inject(I18nService);
+  private readonly notifications = inject(NotificationService);
   protected readonly store = inject(BeneficiariesStore);
 
   protected readonly step = signal<'list' | 'add-form' | 'edit-form' | 'otp'>('list');
   protected readonly loading = signal(false);
   protected readonly otpMode = signal<'add' | 'edit'>('add');
   protected readonly editing = signal<BeneficiaryQueryData | null>(null);
-  protected readonly pendingDeleteId = signal<string | null>(null);
+  protected readonly deletingId = signal<string | null>(null);
 
-  protected readonly columns = ['name', 'accountType', 'transferLimit', 'actions'];
-
-  protected readonly typeOptions = computed(() =>
-    this.store.accountTypeOptions().map(value => ({
-      value,
-      labelKey: ACCOUNT_TYPE_LABEL_KEYS[value] ?? null,
-    })),
-  );
+  protected readonly columns = ['name', 'transferLimit', 'actions'];
+  protected readonly nameMaxLength = NAME_MAX_LENGTH;
 
   protected readonly addForm = this.fb.group({
-    name: ['', [Validators.required, Validators.maxLength(50)]],
+    name: ['', [Validators.required, Validators.maxLength(NAME_MAX_LENGTH)]],
     officeName: ['', [Validators.required]],
     accountNumber: ['', [Validators.required]],
-    accountType: ['', [Validators.required]],
-    transferLimit: [null as number | null, [Validators.min(0.01)]],
+    transferLimit: [null as number | null, [Validators.min(MIN_TRANSFER_LIMIT)]],
   });
 
   protected readonly editForm = this.fb.group({
-    name: ['', [Validators.required, Validators.maxLength(50)]],
-    transferLimit: [null as number | null, [Validators.min(0.01)]],
+    name: ['', [Validators.required, Validators.maxLength(NAME_MAX_LENGTH)]],
+    transferLimit: [null as number | null, [Validators.min(MIN_TRANSFER_LIMIT)]],
   });
 
   constructor() {
     addIcons({ pencil, personAdd, trash });
     this.refresh();
-    this.store.loadTemplate().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
-  }
-
-  protected typeLabelKey(accountType: string | undefined): string | null {
-    if (!accountType) {
-      return null;
-    }
-    return ACCOUNT_TYPE_LABEL_KEYS[accountType] ?? null;
   }
 
   protected startAdd(): void {
     this.addForm.reset();
-    this.pendingDeleteId.set(null);
     this.step.set('add-form');
   }
 
   protected startEdit(row: BeneficiaryQueryData): void {
     this.editing.set(row);
     this.editForm.reset({ name: row.name ?? '', transferLimit: row.transferLimit ?? null });
-    this.pendingDeleteId.set(null);
     this.step.set('edit-form');
   }
 
@@ -348,7 +310,14 @@ export class BeneficiariesComponent {
   }
 
   protected submitAdd(): void {
-    if (this.addForm.invalid) {
+    const { name, officeName, accountNumber, transferLimit } = this.addForm.controls;
+    const error =
+      this.nameError(name) ??
+      this.requiredError(officeName, 'beneficiaries.form.error.officeNameRequired') ??
+      this.requiredError(accountNumber, 'beneficiaries.form.error.accountNumberRequired') ??
+      this.transferLimitError(transferLimit);
+    if (error) {
+      this.notifications.showError(error);
       return;
     }
     this.otpMode.set('add');
@@ -366,8 +335,14 @@ export class BeneficiariesComponent {
   }
 
   protected submitEdit(): void {
+    const { name, transferLimit } = this.editForm.controls;
+    const error = this.nameError(name) ?? this.transferLimitError(transferLimit);
+    if (error) {
+      this.notifications.showError(error);
+      return;
+    }
     const publicId = this.editing()?.publicId;
-    if (this.editForm.invalid || !publicId) {
+    if (!publicId) {
       return;
     }
     this.otpMode.set('edit');
@@ -401,7 +376,9 @@ export class BeneficiariesComponent {
     confirmed$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.notify(
-          this.otpMode() === 'add' ? 'beneficiaries.snackbar.added' : 'beneficiaries.snackbar.updated',
+          this.otpMode() === 'add'
+            ? 'beneficiaries.snackbar.added'
+            : 'beneficiaries.snackbar.updated',
         );
         this.step.set('list');
         this.refresh();
@@ -414,27 +391,38 @@ export class BeneficiariesComponent {
     this.step.set(this.otpMode() === 'add' ? 'add-form' : 'edit-form');
   }
 
-  protected requestDelete(publicId: string): void {
-    this.pendingDeleteId.set(publicId);
-  }
-
-  protected cancelDelete(): void {
-    this.pendingDeleteId.set(null);
-  }
-
   protected confirmDelete(publicId: string): void {
+    this.deletingId.set(publicId);
     this.loading.set(true);
     this.store
       .delete(publicId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          this.pendingDeleteId.set(null);
+          this.deletingId.set(null);
           this.notify('beneficiaries.snackbar.deleted');
           this.refresh();
         },
-        error: () => this.loading.set(false),
+        error: () => {
+          this.deletingId.set(null);
+          this.loading.set(false);
+        },
       });
+  }
+
+  private nameError(control: AbstractControl): string | null {
+    if (control.hasError('required')) {
+      return 'beneficiaries.form.error.nameRequired';
+    }
+    return control.hasError('maxlength') ? 'beneficiaries.form.error.nameTooLong' : null;
+  }
+
+  private transferLimitError(control: AbstractControl): string | null {
+    return control.hasError('min') ? 'beneficiaries.form.error.transferLimitTooSmall' : null;
+  }
+
+  private requiredError(control: AbstractControl, key: string): string | null {
+    return control.hasError('required') ? key : null;
   }
 
   private refresh(): void {
@@ -449,12 +437,11 @@ export class BeneficiariesComponent {
   }
 
   private addPayload() {
-    const { name, officeName, accountNumber, accountType, transferLimit } = this.addForm.getRawValue();
+    const { name, officeName, accountNumber, transferLimit } = this.addForm.getRawValue();
     return {
       name,
       officeName,
       accountNumber,
-      accountType: accountType as InitiateAddBeneficiaryCommandRequest.AccountTypeEnum,
       ...(transferLimit != null ? { transferLimit } : {}),
     };
   }
@@ -467,10 +454,10 @@ export class BeneficiariesComponent {
   private notify(key: string): void {
     void this.toastCtrl
       .create({
-        message: this.translate.instant(key),
+        message: this.i18n.translate(key),
         duration: 5000,
-        buttons: [{ text: this.translate.instant('common.action.dismiss'), role: 'cancel' }],
+        buttons: [{ text: this.i18n.translate('common.action.dismiss'), role: 'cancel' }],
       })
-      .then(toast => toast.present());
+      .then((toast) => toast.present());
   }
 }

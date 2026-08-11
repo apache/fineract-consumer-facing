@@ -112,6 +112,7 @@ class OpenBankingQueryServiceImplTest {
                         .accountNo("000000021")
                         .productName("Everyday Savings")
                         .status(ACTIVE_STATUS)
+                        .active(true)
                         .currency(CURRENCY)
                         .build(),
                 OpenBankingAccountQueryData.builder()
@@ -120,6 +121,7 @@ class OpenBankingQueryServiceImplTest {
                         .accountNo("000000031")
                         .productName("Personal Loan")
                         .status(ACTIVE_STATUS)
+                        .active(false)
                         .currency(CURRENCY)
                         .build());
     }
@@ -313,6 +315,7 @@ class OpenBankingQueryServiceImplTest {
                 .accountNo("000000021")
                 .productName("Everyday Savings")
                 .status(ACTIVE_STATUS)
+                .active(true)
                 .currency(CURRENCY)
                 .build();
     }
@@ -323,6 +326,7 @@ class OpenBankingQueryServiceImplTest {
                 .accountNo("000000031")
                 .productName("Personal Loan")
                 .status(ACTIVE_STATUS)
+                .active(false)
                 .currency(CURRENCY)
                 .build();
     }

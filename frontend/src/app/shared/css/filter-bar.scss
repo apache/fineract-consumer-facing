@@ -31,7 +31,10 @@
   min-width: var(--field-sm);
 }
 
-.filter ion-select { flex-basis: var(--field-md); min-width: var(--field-md); }
+.filter ion-select {
+  flex-basis: var(--field-md);
+  min-width: var(--field-md);
+}
 
 .field {
   display: flex;
@@ -41,6 +44,7 @@
 }
 
 .field-label {
+  padding-inline-start: 0.75rem;
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--slate-600);

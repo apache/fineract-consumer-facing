@@ -24,12 +24,7 @@ import { deviceFingerprint } from '../auth/device-fingerprint';
 export const AUDIT_EVENTS_PATH = '/api/v1/audit/events';
 
 export type ClientAuditEventType =
-  | 'SENSITIVE_VIEW'
-  | 'SENSITIVE_ACTION'
-  | 'CLIENT_ERROR'
-  | 'API_FAILURE'
-  | 'NAVIGATION'
-  | 'LOGOUT';
+  'SENSITIVE_VIEW' | 'SENSITIVE_ACTION' | 'CLIENT_ERROR' | 'API_FAILURE' | 'NAVIGATION' | 'LOGOUT';
 
 const FLUSH_THRESHOLD = 20;
 const FLUSH_INTERVAL_MS = 30_000;
@@ -39,7 +34,6 @@ const MAX_CONSECUTIVE_FAILURES = 3;
 
 @Injectable({ providedIn: 'root' })
 export class AuditService {
-
   private readonly buffer: AuditEventCommandRequest[] = [];
   private consecutiveFailures = 0;
   private flushing = false;
@@ -67,8 +61,7 @@ export class AuditService {
       if (eventType === 'LOGOUT' || this.buffer.length >= FLUSH_THRESHOLD) {
         this.flush();
       }
-    } catch {
-    }
+    } catch {}
   }
 
   private flush(): void {
@@ -110,4 +103,3 @@ export class AuditService {
     this.buffer.unshift(...batch);
   }
 }
-

@@ -48,6 +48,7 @@ import org.apache.fineract.consumer.savings.query.data.SavingsApplicationTemplat
 import org.apache.fineract.consumer.savings.query.data.SavingsChargeQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsProductOptionQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryData;
+import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryResponse;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionSearchQuery;
 import org.apache.fineract.consumer.savings.query.exception.SavingsAccountNotFoundException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsProductNotFoundException;
@@ -107,11 +108,13 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     }
 
     @Override
-    public List<SavingsTransactionQueryData> searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query) {
+    public SavingsTransactionQueryResponse searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, query.getSavingsId(),
                 SavingsQueryAccessDeniedException::new);
         Integer limit = query.getSize();
         Integer offset = query.getPage() * query.getSize();
+        String orderBy = orderByOf(query.getSort());
+        String sortOrder = sortOrderOf(query.getSort());
         // TODO: Fix Fineract's GET /savingsaccounts/{id}/transactions/{txnId} endpoint to return an object, not a string, then refactor
         SavingsAccountTransactionsSearchResponse response = fetch(() ->
                 savingsAccountTransactionsApi.searchTransactions(
@@ -121,12 +124,16 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
                         null, null, null, null, null, null, null,
                         offset,
                         limit,
-                        null, null,
+                        orderBy,
+                        sortOrder,
                         LOCALE, DATE_FORMAT));
         if (response == null || response.getContent() == null) {
-            return List.of();
+            return toTransactionPage(List.of(), query.getPage(), query.getSize(), 0L);
         }
-        return response.getContent().stream().map(this::toTransactionData).toList();
+        List<SavingsTransactionQueryData> content =
+                response.getContent().stream().map(this::toTransactionData).toList();
+        long totalElements = response.getTotal() == null ? 0L : response.getTotal();
+        return toTransactionPage(content, query.getPage(), query.getSize(), totalElements);
     }
 
     @Override
@@ -176,7 +183,8 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
                 .id(account.getId())
                 .accountNo(account.getAccountNo())
                 .productName(account.getProductName())
-                .status(account.getStatus() == null ? null : account.getStatus().getValue())
+                .status(account.getStatus() == null ? null : account.getStatus().getCode())
+                .active(account.getStatus() != null && Boolean.TRUE.equals(account.getStatus().getActive()))
                 .currency(account.getCurrency() == null ? null : account.getCurrency().getCode())
                 .build();
     }
@@ -187,10 +195,12 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
                 .id(account.getId())
                 .accountNo(account.getAccountNo())
                 .productName(account.getSavingsProductName())
-                .status(account.getStatus() == null ? null : account.getStatus().getValue())
+                .status(account.getStatus() == null ? null : account.getStatus().getCode())
+                .active(account.getStatus() != null && Boolean.TRUE.equals(account.getStatus().getActive()))
                 .balance(summary == null ? null : summary.getAccountBalance())
                 .availableBalance(summary == null ? null : summary.getAvailableBalance())
                 .nominalAnnualInterestRate(account.getNominalAnnualInterestRate())
+                .currency(account.getCurrency() == null ? null : account.getCurrency().getCode())
                 .build();
     }
 
@@ -200,14 +210,16 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
                 .name(charge.getName())
                 .amount(charge.getAmount())
                 .amountOutstanding(charge.getAmountOutstanding())
+                .currency(charge.getCurrency() == null ? null : charge.getCurrency().getCode())
                 .build();
     }
 
     private SavingsTransactionQueryData toTransactionData(GetSavingsAccountTransactionsPageItem transaction) {
         return SavingsTransactionQueryData.builder()
                 .id(transaction.getId())
-                .type(transaction.getTransactionType() == null ? null : transaction.getTransactionType().getValue())
+                .type(transaction.getTransactionType() == null ? null : transaction.getTransactionType().getCode())
                 .amount(transaction.getAmount())
+                .currency(transaction.getCurrency() == null ? null : transaction.getCurrency().getCode())
                 .runningBalance(transaction.getRunningBalance())
                 .date(transaction.getDate())
                 .build();
@@ -216,8 +228,9 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     private SavingsTransactionQueryData toTransactionData(SavingsAccountTransactionData transaction) {
         return SavingsTransactionQueryData.builder()
                 .id(transaction.getId())
-                .type(transaction.getTransactionType() == null ? null : transaction.getTransactionType().getValue())
+                .type(transaction.getTransactionType() == null ? null : transaction.getTransactionType().getCode())
                 .amount(transaction.getAmount())
+                .currency(transaction.getCurrency() == null ? null : transaction.getCurrency().getCode())
                 .runningBalance(transaction.getRunningBalance())
                 .date(transaction.getDate())
                 .build();
@@ -270,6 +283,33 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
                         ? null
                         : product.getInterestCalculationDaysInYearType().getCode())
                 .build();
+    }
+
+    private static SavingsTransactionQueryResponse toTransactionPage(
+            List<SavingsTransactionQueryData> content, int page, int size, long totalElements) {
+        return SavingsTransactionQueryResponse.builder()
+                .content(content)
+                .page(page)
+                .size(size)
+                .totalElements(totalElements)
+                .totalPages((int) Math.ceil(totalElements / (double) size))
+                .build();
+    }
+
+    private static String orderByOf(String sort) {
+        if (sort == null) {
+            return null;
+        }
+        int comma = sort.indexOf(',');
+        return comma < 0 ? sort : sort.substring(0, comma);
+    }
+
+    private static String sortOrderOf(String sort) {
+        if (sort == null) {
+            return null;
+        }
+        int comma = sort.indexOf(',');
+        return comma < 0 ? null : sort.substring(comma + 1);
     }
 
     private static Long toLong(Integer value) {

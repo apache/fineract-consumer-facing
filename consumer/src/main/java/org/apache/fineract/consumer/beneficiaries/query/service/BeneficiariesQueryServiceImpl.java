@@ -19,14 +19,12 @@
 
 package org.apache.fineract.consumer.beneficiaries.query.service;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryQueryEntity;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
-import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryTemplateQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.repository.BeneficiaryQueryRepository;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
@@ -54,21 +52,11 @@ public class BeneficiariesQueryServiceImpl implements BeneficiariesQueryService 
     }
 
     @Override
-    public BeneficiaryTemplateQueryData getTemplate(Jwt jwt) {
-        accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_LIST);
-        return BeneficiaryTemplateQueryData.builder()
-                .accountTypeOptions(Arrays.stream(BeneficiaryAccountType.values())
-                        .map(Enum::name)
-                        .toList())
-                .build();
-    }
-
-    @Override
     @Transactional(readOnly = true)
-    public Optional<BeneficiaryQueryData> findActiveByAccount(
-            Long userId, Long fineractAccountId, BeneficiaryAccountType accountType) {
+    public Optional<BeneficiaryQueryData> findActiveByAccount(Long userId, Long fineractAccountId) {
         return repository
-                .findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(userId, fineractAccountId, accountType)
+                .findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
+                        userId, fineractAccountId, BeneficiaryAccountType.SAVINGS)
                 .map(BeneficiariesQueryServiceImpl::toQueryData);
     }
 
@@ -76,7 +64,7 @@ public class BeneficiariesQueryServiceImpl implements BeneficiariesQueryService 
         return BeneficiaryQueryData.builder()
                 .publicId(beneficiary.getPublicId())
                 .name(beneficiary.getName())
-                .accountType(beneficiary.getAccountType())
+                .fineractAccountId(beneficiary.getFineractAccountId())
                 .transferLimit(beneficiary.getTransferLimit())
                 .build();
     }

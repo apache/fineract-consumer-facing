@@ -73,6 +73,9 @@ jobs:
       - name: Generate BFF client
         run: npm run e2e:docker:up:backend && npm run generate:client
 
+      - name: Production build
+        run: npm run build
+
       - name: Run Vitest
         run: npm test -- --no-watch
 

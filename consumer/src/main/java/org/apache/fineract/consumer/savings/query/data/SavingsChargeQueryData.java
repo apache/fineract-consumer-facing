@@ -36,4 +36,5 @@ public final class SavingsChargeQueryData {
     private final String name;
     private final BigDecimal amount;
     private final BigDecimal amountOutstanding;
+    private final String currency;
 }

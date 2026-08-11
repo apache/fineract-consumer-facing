@@ -22,19 +22,23 @@ import { Routes } from '@angular/router';
 export const LOANS_ROUTES: Routes = [
   {
     path: '',
-    loadComponent: () => import('./loans-list.component').then(m => m.LoansListComponent),
+    loadComponent: () => import('./loans-list.component').then((m) => m.LoansListComponent),
   },
   {
     path: 'apply',
-    loadComponent: () => import('./loan-apply.component').then(m => m.LoanApplyComponent),
+    loadComponent: () => import('./loan-apply.component').then((m) => m.LoanApplyComponent),
   },
   {
     path: ':loanId',
-    loadComponent: () => import('./loans-detail.component').then(m => m.LoansDetailComponent),
+    loadComponent: () => import('./loans-detail.component').then((m) => m.LoansDetailComponent),
+  },
+  {
+    path: ':loanId/repay',
+    loadComponent: () => import('./loan-repay.component').then((m) => m.LoanRepayComponent),
   },
   {
     path: ':loanId/transactions/:transactionId',
     loadComponent: () =>
-      import('./loans-transaction.component').then(m => m.LoansTransactionComponent),
+      import('./loans-transaction.component').then((m) => m.LoansTransactionComponent),
   },
 ];

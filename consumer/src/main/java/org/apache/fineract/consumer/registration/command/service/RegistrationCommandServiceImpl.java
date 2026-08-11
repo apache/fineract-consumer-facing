@@ -22,9 +22,9 @@ package org.apache.fineract.consumer.registration.command.service;
 import java.time.ZonedDateTime;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
-import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.data.PendingOtp;
-import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
+import org.apache.fineract.consumer.infrastructure.otp.data.PendingOtp;
+import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
 import org.apache.fineract.consumer.registration.command.data.SendOtpCommand;
 import org.apache.fineract.consumer.registration.command.data.SendOtpCommandData;
 import org.apache.fineract.consumer.registration.command.data.SubmitRegistrationCommand;
@@ -52,7 +52,7 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
     private final IdentityQueryService identityQueryService;
     private final UserCommandService userCommandService;
     private final UserQueryService userQueryService;
-    private final OtpCommandService otpCommandService;
+    private final OtpService otpService;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -90,7 +90,7 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
                 .deliveryMethod(command.getDeliveryMethod())
                 .target(user.getEmail())
                 .build();
-        PendingOtp request = otpCommandService.createOtp(user.getPublicId(), destination);
+        PendingOtp request = otpService.createOtp(user.getPublicId(), destination);
         ZonedDateTime expiresAt = request.getMetadata().getRequestTime()
                 .plusSeconds(request.getMetadata().getTokenLiveTimeInSec());
         return SendOtpCommandData.builder()
@@ -104,7 +104,7 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
     @Transactional
     public VerifyOtpCommandData verifyOtp(VerifyOtpCommand command) {
         UserQueryData user = userQueryService.findByPublicId(command.getRegistrationId());
-        otpCommandService.validateOtp(user.getPublicId(), command.getToken());
+        otpService.validateOtp(user.getPublicId(), command.getToken());
         userCommandService.markOtpVerified(user.getId());
         return VerifyOtpCommandData.builder()
                 .status(UserStatus.BOUND)

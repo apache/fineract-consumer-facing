@@ -34,9 +34,9 @@ import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
-import org.apache.fineract.consumer.otp.command.data.OtpConstants;
-import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
+import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
 import org.apache.fineract.consumer.user.command.data.ConfirmPasswordChangeCommand;
 import org.apache.fineract.consumer.user.command.data.CreateUserCommand;
 import org.apache.fineract.consumer.user.command.data.ForgotPasswordCommand;
@@ -72,7 +72,7 @@ public class UserCommandServiceImpl implements UserCommandService {
     private final UserCommandRepository repository;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final PasswordEncoder passwordEncoder;
-    private final OtpCommandService otpCommandService;
+    private final OtpService otpService;
     private final StepUpTokenService stepUpTokenService;
     private final AuthenticationCommandService authenticationCommandService;
     private final AsyncTaskExecutor applicationTaskExecutor;
@@ -142,7 +142,7 @@ public class UserCommandServiceImpl implements UserCommandService {
                 passwordChangeActionFingerprint(publicId))) {
             throw new UserStepUpInvalidException();
         }
-        otpCommandService.validateOtp(publicId, command.getOtp(), UserStepUpInvalidException::new);
+        otpService.validateOtp(publicId, command.getOtp(), UserStepUpInvalidException::new);
 
         User user = repository.findByPublicId(publicId).orElseThrow(UserCommandNotFoundException::new);
         user.changePassword(passwordEncoder.encode(command.getNewPassword()));
@@ -174,7 +174,7 @@ public class UserCommandServiceImpl implements UserCommandService {
             log.warn("password.reset.failed: unknown email");
             return new UserPasswordResetInvalidException();
         });
-        otpCommandService.validateOtp(user.getPublicId(), command.getOtp(), () -> {
+        otpService.validateOtp(user.getPublicId(), command.getOtp(), () -> {
             log.warn("password.reset.failed: invalid otp for user {}", user.getPublicId());
             return new UserPasswordResetInvalidException();
         });
@@ -187,7 +187,7 @@ public class UserCommandServiceImpl implements UserCommandService {
     }
 
     private void sendOtp(User user) {
-        otpCommandService.createOtp(user.getPublicId(), OtpDestination.builder()
+        otpService.createOtp(user.getPublicId(), OtpDestination.builder()
                 .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
                 .target(user.getEmail())
                 .build());

@@ -37,4 +37,5 @@ public final class OpenBankingAccountQueryData {
     private final String productName;
     private final String status;
     private final String currency;
+    private final boolean active;
 }

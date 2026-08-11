@@ -48,11 +48,13 @@ import {
 import { addIcons } from 'ionicons';
 import {
   cashOutline,
+  flaskOutline,
   gridOutline,
   logOutOutline,
   menuOutline,
   peopleOutline,
   personOutline,
+  settingsOutline,
   swapHorizontalOutline,
   walletOutline,
 } from 'ionicons/icons';
@@ -69,6 +71,8 @@ const SENSITIVE_ROUTE_VIEWS: Record<string, string> = {
   '/loans/:loanId/transactions/:transactionId': 'LOAN_DETAIL',
   '/beneficiaries': 'BENEFICIARIES',
   '/profile': 'PROFILE',
+  '/settings': 'SETTINGS',
+  '/demo': 'DEMO',
 };
 
 const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
@@ -114,7 +118,14 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
           </ion-button>
         </ion-buttons>
         <div class="brand" slot="start">
-          <img ngSrc="/apache-fineract-logo.png" width="40" height="40" alt="" class="brand-icon" priority />
+          <img
+            ngSrc="/apache-fineract-logo.png"
+            width="40"
+            height="40"
+            alt=""
+            class="brand-icon"
+            priority
+          />
           <span>{{ 'layout.shell.brand' | translate }}</span>
         </div>
         <ion-buttons slot="end">
@@ -136,29 +147,77 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
         <ion-menu contentId="shell-content" menuId="shell-nav">
           <ion-content>
             <ion-list lines="none">
-              <ion-item [button]="true" [detail]="false" routerLink="/summary" routerLinkActive="active-link">
+              <ion-item
+                [button]="true"
+                [detail]="false"
+                routerLink="/summary"
+                routerLinkActive="active-link"
+              >
                 <ion-icon slot="start" name="grid-outline" aria-hidden="true" />
                 <ion-label>{{ 'layout.nav.summary' | translate }}</ion-label>
               </ion-item>
-              <ion-item [button]="true" [detail]="false" routerLink="/savings" routerLinkActive="active-link">
+              <ion-item
+                [button]="true"
+                [detail]="false"
+                routerLink="/savings"
+                routerLinkActive="active-link"
+              >
                 <ion-icon slot="start" name="wallet-outline" aria-hidden="true" />
                 <ion-label>{{ 'layout.nav.savings' | translate }}</ion-label>
               </ion-item>
-              <ion-item [button]="true" [detail]="false" routerLink="/loans" routerLinkActive="active-link">
+              <ion-item
+                [button]="true"
+                [detail]="false"
+                routerLink="/loans"
+                routerLinkActive="active-link"
+              >
                 <ion-icon slot="start" name="cash-outline" aria-hidden="true" />
                 <ion-label>{{ 'layout.nav.loans' | translate }}</ion-label>
               </ion-item>
-              <ion-item [button]="true" [detail]="false" routerLink="/transfers" routerLinkActive="active-link">
+              <ion-item
+                [button]="true"
+                [detail]="false"
+                routerLink="/transfers"
+                routerLinkActive="active-link"
+              >
                 <ion-icon slot="start" name="swap-horizontal-outline" aria-hidden="true" />
                 <ion-label>{{ 'layout.nav.transfers' | translate }}</ion-label>
               </ion-item>
-              <ion-item [button]="true" [detail]="false" routerLink="/beneficiaries" routerLinkActive="active-link">
+              <ion-item
+                [button]="true"
+                [detail]="false"
+                routerLink="/beneficiaries"
+                routerLinkActive="active-link"
+              >
                 <ion-icon slot="start" name="people-outline" aria-hidden="true" />
                 <ion-label>{{ 'layout.nav.beneficiaries' | translate }}</ion-label>
               </ion-item>
-              <ion-item [button]="true" [detail]="false" routerLink="/profile" routerLinkActive="active-link">
+              <ion-item
+                [button]="true"
+                [detail]="false"
+                routerLink="/profile"
+                routerLinkActive="active-link"
+              >
                 <ion-icon slot="start" name="person-outline" aria-hidden="true" />
                 <ion-label>{{ 'layout.nav.profile' | translate }}</ion-label>
+              </ion-item>
+              <ion-item
+                [button]="true"
+                [detail]="false"
+                routerLink="/settings"
+                routerLinkActive="active-link"
+              >
+                <ion-icon slot="start" name="settings-outline" aria-hidden="true" />
+                <ion-label>{{ 'layout.nav.settings' | translate }}</ion-label>
+              </ion-item>
+              <ion-item
+                [button]="true"
+                [detail]="false"
+                routerLink="/demo"
+                routerLinkActive="active-link"
+              >
+                <ion-icon slot="start" name="flask-outline" aria-hidden="true" />
+                <ion-label>{{ 'layout.nav.demo' | translate }}</ion-label>
               </ion-item>
             </ion-list>
           </ion-content>
@@ -180,16 +239,19 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
     }
 
     ion-toolbar {
-      --background: var(--surface);
-      --color: var(--ink);
-      --border-color: var(--border);
+      --background: var(--cobalt-700);
+      --color: var(--ion-color-primary-contrast);
+      --border-color: var(--cobalt-800);
       --border-style: solid;
       --border-width: 0 0 1px 0;
       --min-height: 4.5rem;
+      --toolbar-icon-color: var(--ion-color-primary-contrast);
     }
 
     ion-buttons ion-button {
-      --color: var(--slate-600);
+      --color: var(--ion-color-primary-contrast);
+      --background-hover: var(--ion-color-primary-contrast);
+      --background-hover-opacity: 0.12;
     }
 
     .brand {
@@ -198,7 +260,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
       gap: 0.625rem;
       font-size: 1.25rem;
       font-weight: 600;
-      color: var(--ink);
+      color: var(--ion-color-primary-contrast);
     }
 
     .nav-toggle-btn {
@@ -228,7 +290,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
         visibility 0s;
 
       ion-content {
-        --background: var(--surface);
+        --background: var(--cobalt-50);
       }
     }
 
@@ -247,7 +309,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
 
     ion-item {
       --background: transparent;
-      --background-hover: var(--page-bg);
+      --background-hover: var(--surface);
       --background-hover-opacity: 1;
       --color: var(--slate-600);
       --border-radius: var(--radius-sm);
@@ -256,13 +318,14 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
       font-size: var(--text-md);
 
       ion-icon {
-        color: var(--slate-400);
+        color: var(--slate-500);
         font-size: var(--text-2xl);
         margin-inline-end: 0.75rem;
       }
 
       &.active-link {
-        --background: var(--cobalt-50);
+        --background: var(--cobalt-100);
+        --background-hover: var(--cobalt-100);
         --color: var(--cobalt-800);
         font-weight: 600;
 
@@ -300,11 +363,13 @@ export class ShellComponent {
   constructor() {
     addIcons({
       cashOutline,
+      flaskOutline,
       gridOutline,
       logOutOutline,
       menuOutline,
       peopleOutline,
       personOutline,
+      settingsOutline,
       swapHorizontalOutline,
       walletOutline,
     });

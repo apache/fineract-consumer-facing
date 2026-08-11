@@ -52,13 +52,21 @@ import { LoansStore } from './loans.store';
     @if (store.selectedTransaction(); as tx) {
       <ion-card>
         <ion-card-header>
-          <ion-card-title>{{ 'common.transaction.title' | translate: { id: tx.id } }}</ion-card-title>
+          <ion-card-title>{{
+            'common.transaction.title' | translate: { id: tx.id }
+          }}</ion-card-title>
           <ion-card-subtitle>{{ tx.date | date: 'mediumDate' }}</ion-card-subtitle>
         </ion-card-header>
         <ion-card-content>
-          <p>{{ 'loans.transaction.typeLabel' | translate }} {{ tx.type }}</p>
-          <p>{{ 'loans.transaction.amountLabel' | translate }} {{ tx.amount | currency: tx.currency }}</p>
-          <p>{{ 'loans.transaction.outstandingLabel' | translate }} {{ tx.outstandingLoanBalance | currency: tx.currency }}</p>
+          <p>{{ 'loans.transaction.typeLabel' | translate }} {{ tx.type | translate }}</p>
+          <p>
+            {{ 'loans.transaction.amountLabel' | translate }}
+            {{ tx.amount | currency: tx.currency }}
+          </p>
+          <p>
+            {{ 'loans.transaction.outstandingLabel' | translate }}
+            {{ tx.outstandingLoanBalance | currency: tx.currency }}
+          </p>
         </ion-card-content>
         <div class="card-actions">
           <ion-button fill="clear" [routerLink]="['/loans', loanId]">

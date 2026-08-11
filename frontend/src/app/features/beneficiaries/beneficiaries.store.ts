@@ -25,7 +25,6 @@ import {
   BeneficiaryChallengeCommandData,
   BeneficiaryCommandData,
   BeneficiaryQueryData,
-  BeneficiaryTemplateQueryData,
   ConfirmAddBeneficiaryCommandRequest,
   ConfirmUpdateBeneficiaryCommandRequest,
   InitiateAddBeneficiaryCommandRequest,
@@ -41,24 +40,19 @@ export class BeneficiariesStore {
   private readonly audit = inject(AuditService);
 
   readonly beneficiaries = signal<BeneficiaryQueryData[]>([]);
-  readonly accountTypeOptions = signal<string[]>([]);
   readonly challenge = signal<BeneficiaryChallengeCommandData | null>(null);
 
   load(): Observable<BeneficiaryQueryData[]> {
-    return this.query.listBeneficiaries().pipe(tap(rows => this.beneficiaries.set(rows)));
+    return this.query.listBeneficiaries().pipe(tap((rows) => this.beneficiaries.set(rows)));
   }
 
-  loadTemplate(): Observable<BeneficiaryTemplateQueryData> {
-    return this.query
-      .getBeneficiaryTemplate()
-      .pipe(tap(template => this.accountTypeOptions.set(template.accountTypeOptions ?? [])));
-  }
-
-  initiateAdd(request: InitiateAddBeneficiaryCommandRequest): Observable<BeneficiaryChallengeCommandData> {
+  initiateAdd(
+    request: InitiateAddBeneficiaryCommandRequest,
+  ): Observable<BeneficiaryChallengeCommandData> {
     this.audit.record('SENSITIVE_ACTION', { action: 'BENEFICIARY_ADD' });
     return this.command
       .initiateAddBeneficiary(deviceFingerprint(), request)
-      .pipe(tap(challenge => this.challenge.set(challenge)));
+      .pipe(tap((challenge) => this.challenge.set(challenge)));
   }
 
   confirmAdd(request: ConfirmAddBeneficiaryCommandRequest): Observable<BeneficiaryCommandData> {
@@ -73,7 +67,7 @@ export class BeneficiariesStore {
   ): Observable<BeneficiaryChallengeCommandData> {
     return this.command
       .initiateUpdateBeneficiary(deviceFingerprint(), publicId, request)
-      .pipe(tap(challenge => this.challenge.set(challenge)));
+      .pipe(tap((challenge) => this.challenge.set(challenge)));
   }
 
   confirmUpdate(

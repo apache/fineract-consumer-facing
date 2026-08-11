@@ -37,4 +37,5 @@ public final class SavingsTransactionSearchQuery {
     private final LocalDate toDate;
     private final Integer page;
     private final Integer size;
+    private final String sort;
 }

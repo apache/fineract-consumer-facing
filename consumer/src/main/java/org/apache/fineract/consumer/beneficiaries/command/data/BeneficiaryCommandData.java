@@ -38,7 +38,5 @@ public final class BeneficiaryCommandData {
 
     private final String name;
 
-    private final BeneficiaryAccountType accountType;
-
     private final BigDecimal transferLimit;
 }

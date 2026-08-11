@@ -17,14 +17,16 @@
  * under the License.
  */
 
-import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SummaryQueryControllerService } from '@bff/client';
+import { byAccountNo } from '../../shared/utils/account-sort';
 
 export interface SavingsCard {
   id: number;
   accountNo?: string;
   productName?: string;
+  status?: string;
   currency?: string;
   balance?: number;
 }
@@ -33,6 +35,7 @@ export interface LoanCard {
   id: number;
   accountNo?: string;
   productName?: string;
+  status?: string;
   currency?: string;
   totalOutstanding?: number;
 }
@@ -46,6 +49,11 @@ export class SummaryStore {
   readonly loanCards = signal<LoanCard[]>([]);
   readonly loading = signal(false);
 
+  readonly topSavings = computed(() => this.savingsCards().slice(0, 3));
+  readonly topLoans = computed(() => this.loanCards().slice(0, 3));
+  readonly savingsCount = computed(() => this.savingsCards().length);
+  readonly loansCount = computed(() => this.loanCards().length);
+
   load(): void {
     this.savingsCards.set([]);
     this.loanCards.set([]);
@@ -54,28 +62,32 @@ export class SummaryStore {
       .getAccountsSummary()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: summary => {
+        next: (summary) => {
           this.savingsCards.set(
             (summary.savings ?? [])
-              .filter(item => item.id != null)
-              .map(item => ({
+              .filter((item) => item.id != null)
+              .map((item) => ({
                 id: item.id!,
                 accountNo: item.accountNo,
                 productName: item.productName,
+                status: item.status,
                 currency: item.currency,
                 balance: item.accountBalance ?? 0,
-              })),
+              }))
+              .sort(byAccountNo),
           );
           this.loanCards.set(
             (summary.loans ?? [])
-              .filter(item => item.id != null)
-              .map(item => ({
+              .filter((item) => item.id != null)
+              .map((item) => ({
                 id: item.id!,
                 accountNo: item.accountNo,
                 productName: item.productName,
+                status: item.status,
                 currency: item.currency,
                 totalOutstanding: item.loanBalance ?? 0,
-              })),
+              }))
+              .sort(byAccountNo),
           );
           this.loading.set(false);
         },

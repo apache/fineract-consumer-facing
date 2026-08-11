@@ -1,0 +1,124 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.fineract.consumer.infrastructure.otp.service;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.HexFormat;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Supplier;
+import lombok.RequiredArgsConstructor;
+import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
+import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
+import org.apache.fineract.consumer.infrastructure.otp.data.PendingOtp;
+import org.apache.fineract.consumer.infrastructure.otp.exception.OtpDestinationInvalidException;
+import org.apache.fineract.consumer.infrastructure.otp.exception.OtpTokenInvalidException;
+import org.apache.fineract.consumer.infrastructure.otp.repository.OtpRepository;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class OtpServiceImpl implements OtpService {
+
+    private static final int OTP_LENGTH = 6;
+    private static final String ALLOWED_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static final String HASH_ALGORITHM = "SHA-256";
+    private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String DETAIL_USER_PUBLIC_ID = "userPublicId";
+
+    private final OtpRepository otpRepository;
+    private final OtpEmailDeliveryService otpEmailDeliveryService;
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Override
+    public PendingOtp createOtp(UUID publicId, OtpDestination destination) {
+        if (OtpConstants.EMAIL_DELIVERY_METHOD_NAME.equalsIgnoreCase(destination.getDeliveryMethod())) {
+            PendingOtp request = generateNewToken(destination);
+            otpEmailDeliveryService.deliver(destination.getTarget(), request.getToken());
+            otpRepository.savePendingOtp(publicId, hashToken(request.getToken()));
+            publishOtpEvent(AuditEventType.OTP_CHALLENGE_ISSUED, publicId);
+            return request;
+        }
+        throw new OtpDestinationInvalidException();
+    }
+
+    @Override
+    public void validateOtp(UUID publicId, String token) {
+        validateOtp(publicId, token, OtpTokenInvalidException::new);
+    }
+
+    @Override
+    public void validateOtp(UUID publicId, String token, Supplier<? extends AbstractConsumerException> onInvalid) {
+        String storedHash = otpRepository.getPendingTokenHash(publicId);
+        if (token == null || storedHash == null || !storedHash.equals(hashToken(token))) {
+            boolean attemptsExceeded = false;
+            if (storedHash != null) {
+                long failedAttempts = otpRepository.recordFailedValidationAttempt(publicId);
+                if (failedAttempts >= OtpConstants.MAX_OTP_VALIDATION_ATTEMPTS) {
+                    otpRepository.deletePendingOtp(publicId);
+                    attemptsExceeded = true;
+                }
+            }
+            if (attemptsExceeded) {
+                publishOtpEvent(AuditEventType.OTP_ATTEMPTS_EXCEEDED, publicId);
+            } else {
+                publishOtpEvent(AuditEventType.OTP_VALIDATION_FAILED, publicId);
+            }
+            throw onInvalid.get();
+        }
+        otpRepository.deletePendingOtp(publicId);
+    }
+
+    private void publishOtpEvent(AuditEventType eventType, UUID publicId) {
+        eventPublisher.publishEvent(NonTransactionalAuditEvent.of(eventType, null, false, null,
+                Map.of(DETAIL_USER_PUBLIC_ID, publicId.toString())));
+    }
+
+    private PendingOtp generateNewToken(OtpDestination destination) {
+        String token = generateToken(OTP_LENGTH);
+        return PendingOtp.create(token, OtpConstants.OTP_TTL_SECONDS, destination);
+    }
+
+    private static String generateToken(int length) {
+        StringBuilder builder = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            builder.append(ALLOWED_CHARS.charAt(RANDOM.nextInt(ALLOWED_CHARS.length())));
+        }
+        return builder.toString();
+    }
+
+    private static String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance(HASH_ALGORITHM);
+            byte[] hashed = digest.digest(token.toUpperCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashed);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(HASH_ALGORITHM + " unavailable", e);
+        }
+    }
+}

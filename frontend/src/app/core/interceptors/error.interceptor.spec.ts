@@ -19,24 +19,34 @@
 
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpErrorResponse,
+  provideHttpClient,
+  withInterceptors,
+} from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { ToastController } from '@ionic/angular/standalone';
-import { TranslateService } from '@ngx-translate/core';
+import { of } from 'rxjs';
 import { ConsumerApiError } from '../../api/consumer-api-error';
 import { AuthService } from '../auth/auth.service';
+import { I18nService } from '../i18n/i18n.service';
 import { errorInterceptor } from './error.interceptor';
 
 describe('errorInterceptor', () => {
   const present = vi.fn(() => Promise.resolve());
   const create = vi.fn(() => Promise.resolve({ present }));
+  const refresh = vi.fn(() => of(void 0));
+  const clearSession = vi.fn();
   let http: HttpClient;
   let controller: HttpTestingController;
 
   beforeEach(() => {
     present.mockClear();
     create.mockClear();
+    refresh.mockClear();
+    clearSession.mockClear();
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
@@ -44,11 +54,11 @@ describe('errorInterceptor', () => {
         provideHttpClient(withInterceptors([errorInterceptor])),
         provideHttpClientTesting(),
         { provide: ToastController, useValue: { create } },
-        { provide: AuthService, useValue: {} },
+        { provide: AuthService, useValue: { refresh, clearSession } },
         {
-          provide: TranslateService,
+          provide: I18nService,
           useValue: {
-            instant: (key: string) => (key === 'common.action.dismiss' ? 'Dismiss' : key),
+            translate: (key: string) => (key === 'common.action.dismiss' ? 'Dismiss' : key),
           },
         },
       ],
@@ -78,5 +88,50 @@ describe('errorInterceptor', () => {
       position: 'bottom',
       buttons: [{ text: 'Dismiss', role: 'cancel' }],
     });
+  });
+
+  it('does not refresh or redirect on a business 401 carrying a ConsumerApiError code', () => {
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate');
+    const envelope: ConsumerApiError = {
+      code: 'error.msg.consumer.auth.two.factor.invalid',
+      defaultMessage: 'invalid two-factor challenge',
+    };
+    let received: unknown;
+
+    http
+      .post('/api/v1/authentication/2fa', {})
+      .subscribe({ error: (error: unknown) => (received = error) });
+
+    controller.expectOne('/api/v1/authentication/2fa').flush(envelope, {
+      status: 401,
+      statusText: 'Unauthorized',
+    });
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(clearSession).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(received).toBeInstanceOf(HttpErrorResponse);
+    expect(create).toHaveBeenCalledWith({
+      message: envelope.defaultMessage,
+      duration: 5000,
+      position: 'bottom',
+      buttons: [{ text: 'Dismiss', role: 'cancel' }],
+    });
+  });
+
+  it('refreshes and retries on a session 401 with an empty body', () => {
+    let result: unknown;
+
+    http.get('/api/v1/savings').subscribe({ next: (value) => (result = value) });
+
+    controller.expectOne('/api/v1/savings').flush(null, {
+      status: 401,
+      statusText: 'Unauthorized',
+    });
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    controller.expectOne('/api/v1/savings').flush([{ id: 1 }]);
+    expect(result).toEqual([{ id: 1 }]);
   });
 });

@@ -17,7 +17,14 @@
  * under the License.
  */
 
-import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
@@ -36,7 +43,19 @@ import {
 } from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 import { SubmitLoanApplicationCommandRequest } from '@bff/client';
+import { NotificationService } from '../../core/notifications/notification.service';
 import { LoansStore } from './loans.store';
+
+const FIELD_ERROR_KEYS = [
+  ['productId', 'loans.apply.error.productRequired'],
+  ['principal', 'loans.apply.error.principalRequired'],
+  ['numberOfRepayments', 'loans.apply.error.numberOfRepaymentsRequired'],
+  ['repaymentEvery', 'loans.apply.error.repaymentEveryRequired'],
+  ['loanTermFrequency', 'loans.apply.error.loanTermFrequencyRequired'],
+  ['interestRatePerPeriod', 'loans.apply.error.interestRateRequired'],
+  ['expectedDisbursementDate', 'loans.apply.error.expectedDisbursementDateRequired'],
+  ['submittedOnDate', 'loans.apply.error.submittedOnDateRequired'],
+] as const;
 
 @Component({
   selector: 'app-loan-apply',
@@ -134,10 +153,16 @@ import { LoansStore } from './loans.store';
         </form>
 
         <div class="actions-row">
-          <ion-button fill="outline" class="btn-secondary" type="button" [disabled]="loading() || form.invalid" (click)="preview()">
+          <ion-button
+            fill="outline"
+            class="btn-secondary"
+            type="button"
+            [disabled]="loading() || form.invalid"
+            (click)="preview()"
+          >
             {{ 'loans.apply.previewCta' | translate }}
           </ion-button>
-          <ion-button type="button" [disabled]="loading() || form.invalid" (click)="submit()">
+          <ion-button type="button" [disabled]="loading()" (click)="submit()">
             {{ 'loans.apply.submitCta' | translate }}
           </ion-button>
         </div>
@@ -151,37 +176,48 @@ import { LoansStore } from './loans.store';
           <ion-card-subtitle>
             {{
               'loans.apply.totalRepaymentExpected'
-                | translate: { amount: schedule.totalRepaymentExpected, currency: schedule.currency }
+                | translate
+                  : { amount: schedule.totalRepaymentExpected, currency: schedule.currency }
             }}
           </ion-card-subtitle>
         </ion-card-header>
         <ion-card-content>
           <div class="table-scroll">
-          <table cdk-table [dataSource]="schedule.periods ?? []">
-            <ng-container cdkColumnDef="period">
-              <th cdk-header-cell *cdkHeaderCellDef>{{ 'loans.apply.schedule.period' | translate }}</th>
-              <td cdk-cell *cdkCellDef="let row">{{ row.period }}</td>
-            </ng-container>
-            <ng-container cdkColumnDef="dueDate">
-              <th cdk-header-cell *cdkHeaderCellDef>{{ 'loans.apply.schedule.dueDate' | translate }}</th>
-              <td cdk-cell *cdkCellDef="let row">{{ row.dueDate }}</td>
-            </ng-container>
-            <ng-container cdkColumnDef="principalDue">
-              <th cdk-header-cell *cdkHeaderCellDef class="num">{{ 'loans.apply.principalLabel' | translate }}</th>
-              <td cdk-cell *cdkCellDef="let row" class="num">{{ row.principalDue }}</td>
-            </ng-container>
-            <ng-container cdkColumnDef="totalDueForPeriod">
-              <th cdk-header-cell *cdkHeaderCellDef class="num">{{ 'loans.apply.schedule.totalDue' | translate }}</th>
-              <td cdk-cell *cdkCellDef="let row" class="num">{{ row.totalDueForPeriod }}</td>
-            </ng-container>
-            <ng-container cdkColumnDef="outstandingBalance">
-              <th cdk-header-cell *cdkHeaderCellDef class="num">{{ 'common.table.balance' | translate }}</th>
-              <td cdk-cell *cdkCellDef="let row" class="num">{{ row.outstandingBalance }}</td>
-            </ng-container>
+            <table cdk-table [dataSource]="schedule.periods ?? []">
+              <ng-container cdkColumnDef="period">
+                <th cdk-header-cell *cdkHeaderCellDef>
+                  {{ 'loans.apply.schedule.period' | translate }}
+                </th>
+                <td cdk-cell *cdkCellDef="let row">{{ row.period }}</td>
+              </ng-container>
+              <ng-container cdkColumnDef="dueDate">
+                <th cdk-header-cell *cdkHeaderCellDef>
+                  {{ 'loans.apply.schedule.dueDate' | translate }}
+                </th>
+                <td cdk-cell *cdkCellDef="let row">{{ row.dueDate }}</td>
+              </ng-container>
+              <ng-container cdkColumnDef="principalDue">
+                <th cdk-header-cell *cdkHeaderCellDef class="num">
+                  {{ 'loans.apply.principalLabel' | translate }}
+                </th>
+                <td cdk-cell *cdkCellDef="let row" class="num">{{ row.principalDue }}</td>
+              </ng-container>
+              <ng-container cdkColumnDef="totalDueForPeriod">
+                <th cdk-header-cell *cdkHeaderCellDef class="num">
+                  {{ 'loans.apply.schedule.totalDue' | translate }}
+                </th>
+                <td cdk-cell *cdkCellDef="let row" class="num">{{ row.totalDueForPeriod }}</td>
+              </ng-container>
+              <ng-container cdkColumnDef="outstandingBalance">
+                <th cdk-header-cell *cdkHeaderCellDef class="num">
+                  {{ 'common.table.balance' | translate }}
+                </th>
+                <td cdk-cell *cdkCellDef="let row" class="num">{{ row.outstandingBalance }}</td>
+              </ng-container>
 
-            <tr cdk-header-row *cdkHeaderRowDef="scheduleColumns"></tr>
-            <tr cdk-row *cdkRowDef="let row; columns: scheduleColumns"></tr>
-          </table>
+              <tr cdk-header-row *cdkHeaderRowDef="scheduleColumns"></tr>
+              <tr cdk-row *cdkRowDef="let row; columns: scheduleColumns"></tr>
+            </table>
           </div>
         </ion-card-content>
       </ion-card>
@@ -190,15 +226,28 @@ import { LoansStore } from './loans.store';
     @if (store.draft(); as draft) {
       <ion-card>
         <ion-card-header>
-          <ion-card-title>{{ 'loans.apply.draftTitle' | translate: { id: draft.loanId } }}</ion-card-title>
+          <ion-card-title>{{
+            'loans.apply.draftTitle' | translate: { id: draft.loanId }
+          }}</ion-card-title>
         </ion-card-header>
         <ion-card-content>
           <p>{{ 'loans.apply.draftHint' | translate }}</p>
           <div class="actions-row">
-            <ion-button fill="outline" class="btn-secondary" type="button" [disabled]="loading() || form.invalid" (click)="modify(draft.loanId)">
+            <ion-button
+              fill="outline"
+              class="btn-secondary"
+              type="button"
+              [disabled]="loading()"
+              (click)="modify(draft.loanId)"
+            >
               {{ 'loans.apply.modifyCta' | translate }}
             </ion-button>
-            <ion-button class="btn-danger" type="button" [disabled]="loading()" (click)="withdraw(draft.loanId)">
+            <ion-button
+              class="btn-danger"
+              type="button"
+              [disabled]="loading()"
+              (click)="withdraw(draft.loanId)"
+            >
               {{ 'loans.apply.withdrawCta' | translate }}
             </ion-button>
           </div>
@@ -247,10 +296,17 @@ import { LoansStore } from './loans.store';
 export class LoanApplyComponent {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notifications = inject(NotificationService);
   protected readonly store = inject(LoansStore);
 
   protected readonly loading = signal(false);
-  protected readonly scheduleColumns = ['period', 'dueDate', 'principalDue', 'totalDueForPeriod', 'outstandingBalance'];
+  protected readonly scheduleColumns = [
+    'period',
+    'dueDate',
+    'principalDue',
+    'totalDueForPeriod',
+    'outstandingBalance',
+  ];
 
   protected readonly form = this.fb.group({
     productId: [0, [Validators.required, Validators.min(1)]],
@@ -273,9 +329,7 @@ export class LoanApplyComponent {
 
   constructor() {
     this.store.loadTemplate();
-    this.form.valueChanges
-      .pipe(takeUntilDestroyed())
-      .subscribe(() => (this.idempotencyKey = null));
+    this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => (this.idempotencyKey = null));
     effect(() => {
       const template = this.store.template();
       if (!template) {
@@ -284,18 +338,24 @@ export class LoanApplyComponent {
       this.form.patchValue({
         productId: template.productId ?? this.form.controls.productId.value,
         principal: template.principal ?? this.form.controls.principal.value,
-        numberOfRepayments: template.numberOfRepayments ?? this.form.controls.numberOfRepayments.value,
+        numberOfRepayments:
+          template.numberOfRepayments ?? this.form.controls.numberOfRepayments.value,
         repaymentEvery: template.repaymentEvery ?? this.form.controls.repaymentEvery.value,
-        interestRatePerPeriod: template.interestRatePerPeriod ?? this.form.controls.interestRatePerPeriod.value,
+        interestRatePerPeriod:
+          template.interestRatePerPeriod ?? this.form.controls.interestRatePerPeriod.value,
         loanTermFrequency: (template.numberOfRepayments ?? 0) * (template.repaymentEvery ?? 1),
-        loanTermFrequencyType: template.repaymentFrequencyTypeId ?? this.form.controls.loanTermFrequencyType.value,
-        repaymentFrequencyType: template.repaymentFrequencyTypeId ?? this.form.controls.repaymentFrequencyType.value,
+        loanTermFrequencyType:
+          template.repaymentFrequencyTypeId ?? this.form.controls.loanTermFrequencyType.value,
+        repaymentFrequencyType:
+          template.repaymentFrequencyTypeId ?? this.form.controls.repaymentFrequencyType.value,
         amortizationType: template.amortizationTypeId ?? this.form.controls.amortizationType.value,
         interestType: template.interestTypeId ?? this.form.controls.interestType.value,
         interestCalculationPeriodType:
-          template.interestCalculationPeriodTypeId ?? this.form.controls.interestCalculationPeriodType.value,
+          template.interestCalculationPeriodTypeId ??
+          this.form.controls.interestCalculationPeriodType.value,
         transactionProcessingStrategyCode:
-          template.transactionProcessingStrategyCode ?? this.form.controls.transactionProcessingStrategyCode.value,
+          template.transactionProcessingStrategyCode ??
+          this.form.controls.transactionProcessingStrategyCode.value,
       });
     });
   }
@@ -315,7 +375,7 @@ export class LoanApplyComponent {
   }
 
   protected submit(): void {
-    if (this.form.invalid) {
+    if (this.reportFirstFieldError()) {
       return;
     }
     this.idempotencyKey ??= crypto.randomUUID();
@@ -326,7 +386,11 @@ export class LoanApplyComponent {
   }
 
   protected modify(loanId: number | undefined): void {
-    if (loanId == null || this.form.invalid) {
+    if (loanId == null) {
+      this.notifications.showError('loans.apply.error.draftUnavailable');
+      return;
+    }
+    if (this.reportFirstFieldError()) {
       return;
     }
     this.idempotencyKey ??= crypto.randomUUID();
@@ -347,6 +411,16 @@ export class LoanApplyComponent {
       }),
       () => (this.idempotencyKey = null),
     );
+  }
+
+  private reportFirstFieldError(): boolean {
+    for (const [name, key] of FIELD_ERROR_KEYS) {
+      if (this.form.controls[name].invalid) {
+        this.notifications.showError(key);
+        return true;
+      }
+    }
+    return false;
   }
 
   private buildRequest(): SubmitLoanApplicationCommandRequest {

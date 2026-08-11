@@ -38,7 +38,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryChallengeCommandData;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryCommandData;
@@ -52,6 +51,7 @@ import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiarySelfAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryStepUpInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryUpstreamUnavailableException;
 import org.apache.fineract.consumer.beneficiaries.command.repository.BeneficiaryCommandRepository;
@@ -59,21 +59,17 @@ import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SearchApiApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdResponse;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdStatus;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSearchResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountStatusEnumData;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
-import org.apache.fineract.consumer.otp.command.data.OtpConstants;
-import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
+import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
 import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
@@ -106,8 +102,8 @@ class BeneficiariesCommandServiceImplTest {
     private static final String OTHER_ACCOUNT_NUMBER = "999999999";
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
     private static final String TRANSFER_LIMIT_FINGERPRINT_PART = "500";
-    private static final Long LOAN_ID = 55L;
     private static final Long SAVINGS_ID = 66L;
+    private static final Long CALLER_CLIENT_ID = 42L;
     private static final Long DEST_CLIENT_ID = 99L;
     private static final Long DEST_OFFICE_ID = 2L;
     private static final Long ACTIVE_STATUS_ID = 300L;
@@ -120,16 +116,13 @@ class BeneficiariesCommandServiceImplTest {
     private UserQueryService userQueryService;
 
     @Mock
-    private OtpCommandService otpCommandService;
+    private OtpService otpService;
 
     @Mock
     private StepUpTokenService stepUpTokenService;
 
     @Mock
     private BeneficiaryCommandRepository beneficiaryCommandRepository;
-
-    @Mock
-    private LoansApi loansApi;
 
     @Mock
     private SavingsAccountApi savingsAccountApi;
@@ -154,31 +147,29 @@ class BeneficiariesCommandServiceImplTest {
         return UserQueryData.builder()
                 .id(USER_ID)
                 .publicId(PUBLIC_ID)
-                .fineractClientId(42L)
+                .fineractClientId(CALLER_CLIENT_ID)
                 .email(EMAIL)
                 .status(UserStatus.BOUND)
                 .build();
     }
 
-    private static InitiateAddBeneficiaryCommand initiateAddLoanCommand() {
+    private static InitiateAddBeneficiaryCommand initiateAddCommand() {
         return InitiateAddBeneficiaryCommand.builder()
                 .name(NAME)
                 .officeName(OFFICE_NAME)
                 .accountNumber(ACCOUNT_NUMBER)
-                .accountType(BeneficiaryAccountType.LOAN)
                 .transferLimit(TRANSFER_LIMIT)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
     }
 
-    private static ConfirmAddBeneficiaryCommand confirmAddSavingsCommand() {
+    private static ConfirmAddBeneficiaryCommand confirmAddCommand() {
         return ConfirmAddBeneficiaryCommand.builder()
                 .stepUpToken(STEP_UP_TOKEN)
                 .otp(OTP)
                 .name(NAME)
                 .officeName(OFFICE_NAME)
                 .accountNumber(ACCOUNT_NUMBER)
-                .accountType(BeneficiaryAccountType.SAVINGS)
                 .transferLimit(TRANSFER_LIMIT)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
@@ -206,15 +197,7 @@ class BeneficiariesCommandServiceImplTest {
 
     private static Beneficiary existingBeneficiary(String name) {
         return Beneficiary.register(BENEFICIARY_PUBLIC_ID, USER_ID, name, DEST_OFFICE_ID, DEST_CLIENT_ID,
-                SAVINGS_ID, BeneficiaryAccountType.SAVINGS, BigDecimal.TEN);
-    }
-
-    private static GetLoansResponse loanPage(Long statusId) {
-        return new GetLoansResponse().pageItems(Set.of(new GetLoansLoanIdResponse()
-                .id(LOAN_ID)
-                .accountNo(ACCOUNT_NUMBER)
-                .clientId(DEST_CLIENT_ID)
-                .status(new GetLoansLoanIdStatus().id(statusId))));
+                SAVINGS_ID, BigDecimal.TEN);
     }
 
     private static SavingsAccountData savingsAccount(String accountNo, Long statusId) {
@@ -224,13 +207,20 @@ class BeneficiariesCommandServiceImplTest {
                 .status(new SavingsAccountStatusEnumData().id(statusId));
     }
 
+    private static SavingsAccountData callerOwnedSavingsAccount() {
+        return new SavingsAccountData()
+                .accountNo(ACCOUNT_NUMBER)
+                .clientId(CALLER_CLIENT_ID)
+                .status(new SavingsAccountStatusEnumData().id(ACTIVE_STATUS_ID));
+    }
+
     private static GetClientsClientIdResponse destinationClient(String officeName) {
         return new GetClientsClientIdResponse().officeId(DEST_OFFICE_ID).officeName(officeName);
     }
 
-    private void stubAddFingerprint(BeneficiaryAccountType accountType) {
+    private void stubAddFingerprint() {
         when(stepUpTokenService.actionFingerprint(BeneficiaryConstants.ADD_ACTION_ID,
-                NAME, OFFICE_NAME, ACCOUNT_NUMBER, accountType.name(), TRANSFER_LIMIT_FINGERPRINT_PART))
+                NAME, OFFICE_NAME, ACCOUNT_NUMBER, TRANSFER_LIMIT_FINGERPRINT_PART))
                 .thenReturn(ACTION_FINGERPRINT);
     }
 
@@ -245,12 +235,6 @@ class BeneficiariesCommandServiceImplTest {
                 .thenReturn(IssuedJwt.builder().tokenValue(STEP_UP_TOKEN).expiresAt(expiresAt).build());
     }
 
-    private void stubLoanResolution() {
-        when(loansApi.retrieveAllLoans(null, null, null, null, null, ACCOUNT_NUMBER, null, null, null))
-                .thenReturn(loanPage(ACTIVE_STATUS_ID));
-        when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false)).thenReturn(destinationClient(OFFICE_NAME));
-    }
-
     private void stubSavingsResolution() {
         when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
@@ -259,8 +243,16 @@ class BeneficiariesCommandServiceImplTest {
         when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false)).thenReturn(destinationClient(OFFICE_NAME));
     }
 
+    private void stubCallerOwnedSavingsResolution() {
+        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+                .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
+        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+                .thenReturn(callerOwnedSavingsAccount());
+        when(clientApi.retrieveOneClient(CALLER_CLIENT_ID, false)).thenReturn(destinationClient(OFFICE_NAME));
+    }
+
     private void stubValidConfirmAdd() {
-        stubAddFingerprint(BeneficiaryAccountType.SAVINGS);
+        stubAddFingerprint();
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT))
                 .thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
@@ -275,18 +267,18 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        stubLoanResolution();
-        stubAddFingerprint(BeneficiaryAccountType.LOAN);
+        stubSavingsResolution();
+        stubAddFingerprint();
         stubIssuedToken(expiresAt);
 
-        BeneficiaryChallengeCommandData result = service.initiateAdd(jwt(), initiateAddLoanCommand());
+        BeneficiaryChallengeCommandData result = service.initiateAdd(jwt(), initiateAddCommand());
 
         assertThat(result.getStepUpToken()).isEqualTo(STEP_UP_TOKEN);
         assertThat(result.getExpiresAt()).isEqualTo(expiresAt);
         assertThat(result.getSentTo()).isEqualTo(MASKED_EMAIL);
 
         ArgumentCaptor<OtpDestination> destination = ArgumentCaptor.forClass(OtpDestination.class);
-        verify(otpCommandService).createOtp(eq(PUBLIC_ID), destination.capture());
+        verify(otpService).createOtp(eq(PUBLIC_ID), destination.capture());
         assertThat(destination.getValue().getDeliveryMethod()).isEqualTo(OtpConstants.EMAIL_DELIVERY_METHOD_NAME);
         assertThat(destination.getValue().getTarget()).isEqualTo(EMAIL);
     }
@@ -297,40 +289,42 @@ class BeneficiariesCommandServiceImplTest {
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddLoanCommand()))
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(BeneficiaryDuplicateNameException.class)
                 .hasFieldOrPropertyWithValue("code", BeneficiaryDuplicateNameException.CODE);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
-    void initiateAddRejectsUnresolvableLoanAccount() {
+    void initiateAddRejectsUnresolvableAccount() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(loansApi.retrieveAllLoans(null, null, null, null, null, ACCOUNT_NUMBER, null, null, null))
-                .thenReturn(new GetLoansResponse().pageItems(Set.of()));
+        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+                .thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddLoanCommand()))
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(BeneficiaryAccountInvalidException.class)
                 .hasFieldOrPropertyWithValue("code", BeneficiaryAccountInvalidException.CODE);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
-    void initiateAddRejectsClosedLoan() {
+    void initiateAddRejectsClosedAccount() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(loansApi.retrieveAllLoans(null, null, null, null, null, ACCOUNT_NUMBER, null, null, null))
-                .thenReturn(loanPage(CLOSED_STATUS_ID));
+        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+                .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
+        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+                .thenReturn(savingsAccount(ACCOUNT_NUMBER, CLOSED_STATUS_ID));
 
-        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddLoanCommand()))
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(BeneficiaryAccountInvalidException.class);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
@@ -338,14 +332,30 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(loansApi.retrieveAllLoans(null, null, null, null, null, ACCOUNT_NUMBER, null, null, null))
-                .thenReturn(loanPage(ACTIVE_STATUS_ID));
+        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+                .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
+        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+                .thenReturn(savingsAccount(ACCOUNT_NUMBER, ACTIVE_STATUS_ID));
         when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false)).thenReturn(destinationClient(OTHER_OFFICE_NAME));
 
-        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddLoanCommand()))
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(BeneficiaryAccountInvalidException.class);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
+    }
+
+    @Test
+    void initiateAddRejectsCallersOwnAccount() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
+                .thenReturn(false);
+        stubCallerOwnedSavingsResolution();
+
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
+                .isInstanceOf(BeneficiarySelfAccountException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiarySelfAccountException.CODE);
+
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
@@ -353,10 +363,10 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(loansApi.retrieveAllLoans(null, null, null, null, null, ACCOUNT_NUMBER, null, null, null))
+        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenThrow(mock(FeignException.NotFound.class));
 
-        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddLoanCommand()))
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(BeneficiaryAccountInvalidException.class);
     }
 
@@ -365,10 +375,10 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(loansApi.retrieveAllLoans(null, null, null, null, null, ACCOUNT_NUMBER, null, null, null))
+        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenThrow(mock(FeignException.InternalServerError.class));
 
-        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddLoanCommand()))
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(BeneficiaryUpstreamUnavailableException.class)
                 .hasFieldOrPropertyWithValue("code", BeneficiaryUpstreamUnavailableException.CODE);
     }
@@ -377,7 +387,7 @@ class BeneficiariesCommandServiceImplTest {
     void confirmAddPersistsBeneficiary() {
         stubValidConfirmAdd();
 
-        BeneficiaryCommandData result = service.confirmAdd(jwt(), confirmAddSavingsCommand());
+        BeneficiaryCommandData result = service.confirmAdd(jwt(), confirmAddCommand());
 
         ArgumentCaptor<Beneficiary> saved = ArgumentCaptor.forClass(Beneficiary.class);
         verify(beneficiaryCommandRepository).saveAndFlush(saved.capture());
@@ -393,17 +403,16 @@ class BeneficiariesCommandServiceImplTest {
 
         assertThat(result.getPublicId()).isEqualTo(beneficiary.getPublicId());
         assertThat(result.getName()).isEqualTo(NAME);
-        assertThat(result.getAccountType()).isEqualTo(BeneficiaryAccountType.SAVINGS);
         assertThat(result.getTransferLimit()).isEqualTo(TRANSFER_LIMIT);
     }
 
     @Test
     void confirmAddRejectsInvalidStepUp() {
-        stubAddFingerprint(BeneficiaryAccountType.SAVINGS);
+        stubAddFingerprint();
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT))
                 .thenReturn(false);
 
-        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddSavingsCommand()))
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
                 .isInstanceOf(BeneficiaryStepUpInvalidException.class)
                 .hasFieldOrPropertyWithValue("code", BeneficiaryStepUpInvalidException.CODE);
 
@@ -412,12 +421,12 @@ class BeneficiariesCommandServiceImplTest {
 
     @Test
     void confirmAddRejectsInvalidOtp() {
-        stubAddFingerprint(BeneficiaryAccountType.SAVINGS);
+        stubAddFingerprint();
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT))
                 .thenReturn(true);
-        doAnswer(throwsCallerSuppliedException(2)).when(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
+        doAnswer(throwsCallerSuppliedException(2)).when(otpService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
 
-        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddSavingsCommand()))
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
                 .isInstanceOf(BeneficiaryStepUpInvalidException.class)
                 .hasFieldOrPropertyWithValue("code", BeneficiaryStepUpInvalidException.CODE);
 
@@ -426,7 +435,7 @@ class BeneficiariesCommandServiceImplTest {
 
     @Test
     void confirmAddSkipsSearchHitWhoseAccountNumberDiffers() {
-        stubAddFingerprint(BeneficiaryAccountType.SAVINGS);
+        stubAddFingerprint();
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT))
                 .thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
@@ -437,8 +446,25 @@ class BeneficiariesCommandServiceImplTest {
         when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(savingsAccount(OTHER_ACCOUNT_NUMBER, ACTIVE_STATUS_ID));
 
-        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddSavingsCommand()))
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
                 .isInstanceOf(BeneficiaryAccountInvalidException.class);
+
+        verify(beneficiaryCommandRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void confirmAddRejectsCallersOwnAccount() {
+        stubAddFingerprint();
+        when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT))
+                .thenReturn(true);
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
+                .thenReturn(false);
+        stubCallerOwnedSavingsResolution();
+
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
+                .isInstanceOf(BeneficiarySelfAccountException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiarySelfAccountException.CODE);
 
         verify(beneficiaryCommandRepository, never()).saveAndFlush(any());
     }
@@ -449,7 +475,7 @@ class BeneficiariesCommandServiceImplTest {
         when(beneficiaryCommandRepository.saveAndFlush(any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
 
-        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddSavingsCommand()))
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
                 .isInstanceOf(BeneficiaryDuplicateNameException.class);
     }
 
@@ -469,7 +495,7 @@ class BeneficiariesCommandServiceImplTest {
         assertThat(result.getStepUpToken()).isEqualTo(STEP_UP_TOKEN);
         assertThat(result.getExpiresAt()).isEqualTo(expiresAt);
         assertThat(result.getSentTo()).isEqualTo(MASKED_EMAIL);
-        verify(otpCommandService).createOtp(eq(PUBLIC_ID), any());
+        verify(otpService).createOtp(eq(PUBLIC_ID), any());
     }
 
     @Test
@@ -482,7 +508,7 @@ class BeneficiariesCommandServiceImplTest {
                 .isInstanceOf(BeneficiaryNotFoundException.class)
                 .hasFieldOrPropertyWithValue("code", BeneficiaryNotFoundException.CODE);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
@@ -496,7 +522,7 @@ class BeneficiariesCommandServiceImplTest {
         assertThatThrownBy(() -> service.initiateUpdate(jwt(), initiateUpdateCommand(NAME)))
                 .isInstanceOf(BeneficiaryDuplicateNameException.class);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
@@ -513,7 +539,7 @@ class BeneficiariesCommandServiceImplTest {
 
         verify(beneficiaryCommandRepository, never())
                 .existsByUserIdAndNameIgnoreCaseAndActiveTrue(anyLong(), anyString());
-        verify(otpCommandService).createOtp(eq(PUBLIC_ID), any());
+        verify(otpService).createOtp(eq(PUBLIC_ID), any());
     }
 
     @Test
@@ -568,10 +594,10 @@ class BeneficiariesCommandServiceImplTest {
         doThrow(new AccessScopeInsufficientException())
                 .when(accessPolicyEvaluator).authorize(any(Jwt.class), eq(ConsumerAction.BENEFICIARY_ADD));
 
-        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddLoanCommand()))
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(AccessScopeInsufficientException.class);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
@@ -579,7 +605,7 @@ class BeneficiariesCommandServiceImplTest {
         doThrow(new AccessScopeInsufficientException())
                 .when(accessPolicyEvaluator).authorize(any(Jwt.class), eq(ConsumerAction.BENEFICIARY_ADD));
 
-        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddSavingsCommand()))
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
                 .isInstanceOf(AccessScopeInsufficientException.class);
 
         verify(beneficiaryCommandRepository, never()).saveAndFlush(any());
@@ -593,7 +619,7 @@ class BeneficiariesCommandServiceImplTest {
         assertThatThrownBy(() -> service.initiateUpdate(jwt(), initiateUpdateCommand(NAME)))
                 .isInstanceOf(AccessScopeInsufficientException.class);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test

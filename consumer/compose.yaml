@@ -114,7 +114,7 @@ services:
       FINERACT_BASE_URL: http://fineract:8080/fineract-provider/api
       SPRING_MAIL_HOST: mailpit
       SPRING_DATA_REDIS_HOST: valkey
-      OB_TPP_CLIENT_SECRET: demo-tpp-secret
+      CONSUMER_AUDIT_QUERY_ENABLED: "true"
       SERVER_FORWARD_HEADERS_STRATEGY: framework
       JWT_KEY_LOCATION: file:/etc/bff/jwt-key.pem
       JAVA_TOOL_OPTIONS: "-Xmx768m -Xms256m"

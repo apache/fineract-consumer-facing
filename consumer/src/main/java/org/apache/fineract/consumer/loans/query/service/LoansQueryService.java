@@ -29,6 +29,7 @@ import org.apache.fineract.consumer.loans.query.data.LoanGuarantorQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanScheduleQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
+import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface LoansQueryService {
@@ -41,7 +42,7 @@ public interface LoansQueryService {
 
     LoanAccountQueryData getLoan(Jwt jwt, Long loanId);
 
-    List<LoanTransactionQueryData> listTransactions(Jwt jwt, LoanTransactionListQuery query);
+    LoanTransactionQueryResponse listTransactions(Jwt jwt, LoanTransactionListQuery query);
 
     LoanTransactionQueryData getTransaction(Jwt jwt, Long loanId, Long transactionId);
 

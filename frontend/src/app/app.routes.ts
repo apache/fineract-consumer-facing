@@ -24,58 +24,75 @@ export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
   {
     path: 'login',
-    loadComponent: () => import('./features/auth/login.component').then(m => m.LoginComponent),
+    loadComponent: () => import('./features/auth/login.component').then((m) => m.LoginComponent),
   },
   {
     path: 'register',
     loadComponent: () =>
-      import('./features/registration/registration.component').then(m => m.RegistrationComponent),
+      import('./features/registration/registration.component').then((m) => m.RegistrationComponent),
   },
   {
     path: 'forgot-password',
     loadComponent: () =>
-      import('./features/auth/forgot-password.component').then(m => m.ForgotPasswordComponent),
+      import('./features/auth/forgot-password.component').then((m) => m.ForgotPasswordComponent),
   },
   {
     path: 'consent',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/consent/consent.component').then(m => m.ConsentComponent),
+      import('./features/consent/consent.component').then((m) => m.ConsentComponent),
   },
   {
     path: '',
     canActivate: [authGuard],
-    loadComponent: () => import('./layout/shell.component').then(m => m.ShellComponent),
+    loadComponent: () => import('./layout/shell.component').then((m) => m.ShellComponent),
     children: [
       {
         path: 'summary',
         loadComponent: () =>
-          import('./features/summary/summary.component').then(m => m.SummaryComponent),
+          import('./features/summary/summary.component').then((m) => m.SummaryComponent),
       },
       {
         path: 'savings',
-        loadChildren: () => import('./features/savings/savings.routes').then(m => m.SAVINGS_ROUTES),
+        loadChildren: () =>
+          import('./features/savings/savings.routes').then((m) => m.SAVINGS_ROUTES),
       },
       {
         path: 'loans',
-        loadChildren: () => import('./features/loans/loans.routes').then(m => m.LOANS_ROUTES),
+        loadChildren: () => import('./features/loans/loans.routes').then((m) => m.LOANS_ROUTES),
       },
       {
         path: 'transfers',
         loadComponent: () =>
-          import('./features/transfers/transfer.component').then(m => m.TransferComponent),
+          import('./features/transfers/transfer.component').then((m) => m.TransferComponent),
+      },
+      {
+        path: 'transfers/new',
+        loadComponent: () =>
+          import('./features/transfers/transfer-form.component').then(
+            (m) => m.TransferFormComponent,
+          ),
       },
       {
         path: 'beneficiaries',
         loadComponent: () =>
           import('./features/beneficiaries/beneficiaries.component').then(
-            m => m.BeneficiariesComponent,
+            (m) => m.BeneficiariesComponent,
           ),
       },
       {
         path: 'profile',
         loadComponent: () =>
-          import('./features/profile/profile.component').then(m => m.ProfileComponent),
+          import('./features/profile/profile.component').then((m) => m.ProfileComponent),
+      },
+      {
+        path: 'settings',
+        loadComponent: () =>
+          import('./features/settings/settings.component').then((m) => m.SettingsComponent),
+      },
+      {
+        path: 'demo',
+        loadComponent: () => import('./features/demo/demo.component').then((m) => m.DemoComponent),
       },
     ],
   },

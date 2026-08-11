@@ -39,4 +39,6 @@ public final class SavingsAccountQueryData {
     private final BigDecimal balance;
     private final BigDecimal availableBalance;
     private final BigDecimal nominalAnnualInterestRate;
+    private final String currency;
+    private final boolean active;
 }

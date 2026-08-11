@@ -28,6 +28,8 @@ const LOANS_URL = '/api/v1/loans';
 const SCHEDULE_PREVIEW_URL = `${LOANS_URL}/schedule-preview`;
 const LOAN_ID = 42;
 const LOAN_URL = `${LOANS_URL}/${LOAN_ID}`;
+const OBLIGEES_URL = '/api/v1/user/obligees';
+const OBLIGEE_NAME = 'Ravi Patel';
 
 const previewRequest: LoanSchedulePreviewQueryRequest = {
   productId: 1,
@@ -65,6 +67,60 @@ describe('LoansStore', () => {
 
   afterEach(() => controller.verify());
 
+  it('loadLoans sorts the loans by account number', () => {
+    store.loadLoans();
+    controller.expectOne(LOANS_URL).flush([
+      { id: 2, accountNo: '000002' },
+      { id: 1, accountNo: '000001' },
+    ]);
+
+    expect(store.loans().map((row) => row.accountNo)).toEqual(['000001', '000002']);
+  });
+
+  it('loadObligees sets the obligees signal', () => {
+    store.loadObligees();
+    controller.expectOne(OBLIGEES_URL).flush([
+      {
+        displayName: OBLIGEE_NAME,
+        accountNumber: 'L-42',
+        loanAmount: 1000,
+        guaranteeAmount: 250,
+        amountReleased: 0,
+      },
+    ]);
+
+    expect(store.obligees().length).toBe(1);
+    expect(store.obligees()[0].displayName).toBe(OBLIGEE_NAME);
+  });
+
+  it('loadTransactions forwards the filter and unwraps the page envelope', () => {
+    store.loadTransactions(LOAN_ID, {
+      fromDate: '2026-01-01',
+      toDate: '2026-02-01',
+      page: 1,
+      size: 10,
+    });
+
+    const req = controller.expectOne((r) => r.url === `${LOAN_URL}/transactions`);
+    expect(req.request.params.get('fromDate')).toBe('2026-01-01');
+    expect(req.request.params.get('toDate')).toBe('2026-02-01');
+    expect(req.request.params.get('page')).toBe('1');
+    expect(req.request.params.get('size')).toBe('10');
+    req.flush({
+      content: [{ id: 11, amount: 100 }],
+      page: 1,
+      size: 10,
+      totalElements: 25,
+      totalPages: 3,
+    });
+
+    expect(store.transactions()).toEqual([{ id: 11, amount: 100 }]);
+    expect(store.transactionsPage()).toBe(1);
+    expect(store.transactionsSize()).toBe(10);
+    expect(store.transactionsTotalElements()).toBe(25);
+    expect(store.transactionsTotalPages()).toBe(3);
+  });
+
   it('previewSchedule posts to schedule-preview and sets the schedulePreview signal', () => {
     store.previewSchedule(previewRequest).subscribe();
     controller
@@ -87,7 +143,7 @@ describe('LoansStore', () => {
     store.draft.set({ loanId: LOAN_ID });
 
     store.withdraw(LOAN_ID, 'key-withdraw', { withdrawnOnDate: '2026-06-25' }).subscribe();
-    const req = controller.expectOne(r => r.url === LOAN_URL);
+    const req = controller.expectOne((r) => r.url === LOAN_URL);
     expect(req.request.params.get('command')).toBe('withdraw');
     expect(req.request.headers.get('Idempotency-Key')).toBe('key-withdraw');
     req.flush({ loanId: LOAN_ID });

@@ -24,6 +24,8 @@
 
 table {
   width: 100%;
+  min-width: 44rem;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
@@ -37,7 +39,7 @@ table {
 }
 
 .cdk-header-cell {
-  padding: 0.625rem 1rem;
+  padding: 0.625rem 0.75rem;
   font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -48,22 +50,21 @@ table {
 }
 
 .cdk-cell {
-  padding: 0.625rem 1rem;
+  padding: 0.625rem 0.75rem;
   font-size: var(--text-base);
   color: var(--ink);
   border-bottom: 1px solid var(--border);
 }
 
-.cdk-header-cell,
-.num {
-  white-space: nowrap;
+.cdk-header-cell:first-child,
+.cdk-cell:first-child {
+  padding-left: 1.25rem;
 }
 
-.cdk-header-cell:first-child,
-.cdk-cell:first-child { padding-left: 1.25rem; }
-
 .cdk-header-cell:last-child,
-.cdk-cell:last-child { padding-right: 1.25rem; }
+.cdk-cell:last-child {
+  padding-right: 1.25rem;
+}
 
 .cdk-row:last-child .cdk-cell {
   border-bottom: 0;
@@ -78,7 +79,7 @@ table {
 }
 
 .num {
-  text-align: right;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }

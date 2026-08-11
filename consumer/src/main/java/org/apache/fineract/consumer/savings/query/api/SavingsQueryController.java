@@ -28,6 +28,7 @@ import org.apache.fineract.consumer.savings.query.data.SavingsAccountQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsApplicationTemplateQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsChargeQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryData;
+import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryResponse;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionSearchQuery;
 import org.apache.fineract.consumer.savings.query.service.SavingsQueryService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -67,19 +68,21 @@ public class SavingsQueryController {
 
     @Operation(operationId = "searchSavingsTransactions")
     @GetMapping("/{savingsId}/transactions")
-    public List<SavingsTransactionQueryData> searchTransactions(
+    public SavingsTransactionQueryResponse searchTransactions(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long savingsId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(defaultValue = "0") Integer page,
-            @RequestParam(defaultValue = "20") Integer size) {
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(required = false) String sort) {
         SavingsTransactionSearchQuery query = SavingsTransactionSearchQuery.builder()
                 .savingsId(savingsId)
                 .fromDate(fromDate)
                 .toDate(toDate)
                 .page(page)
                 .size(size)
+                .sort(sort)
                 .build();
         return savingsQueryService.searchTransactions(jwt, query);
     }

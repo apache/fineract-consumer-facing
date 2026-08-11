@@ -21,6 +21,7 @@ package org.apache.fineract.consumer.loans.query.api;
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.loans.query.data.CalculateLoanScheduleQuery;
@@ -33,7 +34,9 @@ import org.apache.fineract.consumer.loans.query.data.LoanScheduleQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanSchedulePreviewQueryRequest;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
+import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryResponse;
 import org.apache.fineract.consumer.loans.query.service.LoansQueryService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -88,19 +91,26 @@ public class LoansQueryController {
         return loansQueryService.getLoan(jwt, loanId);
     }
 
-    @Operation(operationId = "listLoanTransactions")
+    @Operation(operationId = "listLoanTransactions",
+            description = "Date filtering is applied in the BFF: Fineract's loan transaction API has no date"
+                    + " parameters, so when fromDate/toDate are supplied all transactions are fetched and"
+                    + " filtered/paged BFF-side.")
     @GetMapping("/{loanId}/transactions")
-    public List<LoanTransactionQueryData> listTransactions(
+    public LoanTransactionQueryResponse listTransactions(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long loanId,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size,
-            @RequestParam(required = false) String sort) {
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
         LoanTransactionListQuery query = LoanTransactionListQuery.builder()
                 .loanId(loanId)
                 .page(page)
                 .size(size)
                 .sort(sort)
+                .fromDate(fromDate)
+                .toDate(toDate)
                 .build();
         return loansQueryService.listTransactions(jwt, query);
     }
