@@ -75,8 +75,10 @@ describe('LoansStore', () => {
   });
 
   it('submit stores the returned draft', () => {
-    store.submit(previewRequest).subscribe();
-    controller.expectOne(LOANS_URL).flush({ loanId: LOAN_ID });
+    store.submit('key-submit', previewRequest).subscribe();
+    const req = controller.expectOne(LOANS_URL);
+    expect(req.request.headers.get('Idempotency-Key')).toBe('key-submit');
+    req.flush({ loanId: LOAN_ID });
 
     expect(store.draft()?.loanId).toBe(LOAN_ID);
   });
@@ -84,9 +86,10 @@ describe('LoansStore', () => {
   it('withdraw sends command=withdraw and clears the draft', () => {
     store.draft.set({ loanId: LOAN_ID });
 
-    store.withdraw(LOAN_ID, { withdrawnOnDate: '2026-06-25' }).subscribe();
+    store.withdraw(LOAN_ID, 'key-withdraw', { withdrawnOnDate: '2026-06-25' }).subscribe();
     const req = controller.expectOne(r => r.url === LOAN_URL);
     expect(req.request.params.get('command')).toBe('withdraw');
+    expect(req.request.headers.get('Idempotency-Key')).toBe('key-withdraw');
     req.flush({ loanId: LOAN_ID });
 
     expect(store.draft()).toBeNull();

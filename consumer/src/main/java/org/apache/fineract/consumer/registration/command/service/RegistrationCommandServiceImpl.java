@@ -21,7 +21,7 @@ package org.apache.fineract.consumer.registration.command.service;
 
 import java.time.ZonedDateTime;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
+import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.data.PendingOtp;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
@@ -94,7 +94,7 @@ public class RegistrationCommandServiceImpl implements RegistrationCommandServic
         ZonedDateTime expiresAt = request.getMetadata().getRequestTime()
                 .plusSeconds(request.getMetadata().getTokenLiveTimeInSec());
         return SendOtpCommandData.builder()
-                .sentTo(EmailMasking.mask(user.getEmail()))
+                .sentTo(EmailMaskingService.mask(user.getEmail()))
                 .expiresAt(expiresAt)
                 .tokenLiveTimeInSec(request.getMetadata().getTokenLiveTimeInSec())
                 .build();

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.validation;
+package org.apache.fineract.consumer.infrastructure.web.data;
 
 public final class PasswordPolicy {
 

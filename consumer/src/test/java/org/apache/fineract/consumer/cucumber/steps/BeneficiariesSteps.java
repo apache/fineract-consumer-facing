@@ -32,6 +32,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
 import org.apache.fineract.consumer.client.api.BeneficiariesQueryControllerApi;
@@ -51,7 +52,7 @@ import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
 import org.apache.fineract.consumer.cucumber.helpers.RegistrationHelper;
 import org.apache.fineract.consumer.infrastructure.exception.HttpMessageNotReadableExceptionHandler;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.apache.fineract.consumer.transfers.command.data.TransferConstants;
 import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferBeneficiaryLimitExceededException;
@@ -172,7 +173,7 @@ public class BeneficiariesSteps {
         TransferChallengeCommandData challenge = transfersApi.initiateTransfer(DEVICE_FINGERPRINT,
                 transferRequest(WITHIN_LIMIT_AMOUNT));
         String otp = mailpit.waitForOtp(user.email());
-        transferResult = transfersApi.confirmTransfer(DEVICE_FINGERPRINT,
+        transferResult = transfersApi.confirmTransfer(DEVICE_FINGERPRINT, UUID.randomUUID().toString(),
                 new ConfirmTransferCommandRequest()
                         .stepUpToken(challenge.getStepUpToken())
                         .otp(otp)

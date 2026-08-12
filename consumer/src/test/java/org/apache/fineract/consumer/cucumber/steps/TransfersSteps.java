@@ -26,6 +26,8 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.math.BigDecimal;
+import java.util.UUID;
+import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
 import org.apache.fineract.consumer.client.api.TransfersCommandControllerApi;
 import org.apache.fineract.consumer.client.model.ConfirmTransferCommandRequest;
 import org.apache.fineract.consumer.client.model.InitiateTransferCommandRequest;
@@ -53,8 +55,10 @@ public class TransfersSteps {
 
     private RegistrationHelper.BoundUserWithAccounts user;
     private TransfersCommandControllerApi transfersApi;
+    private SavingsQueryControllerApi savingsApi;
     private long foreignSavingsId;
     private TransferCommandData transferResult;
+    private TransferCommandData secondTransferResult;
     private int errorStatus;
 
     @Given("a logged-in customer with a funded savings account and a loan")
@@ -63,10 +67,53 @@ public class TransfersSteps {
         fineractSeeder.depositToSavings(user.savingsAccountId(), DEPOSIT_AMOUNT);
         String accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
         transfersApi = authenticatedClient(accessToken);
+        savingsApi = ConsumerApiClientFactory.authenticated(
+                SavingsQueryControllerApi.class, accessToken, DEVICE_FINGERPRINT);
     }
 
     @When("I transfer money from my savings account to my loan")
     public void transferSavingsToLoan() {
+        transferResult = confirmTransferToLoan(UUID.randomUUID().toString());
+    }
+
+    @When("I confirm the transfer twice with the same idempotency key")
+    public void confirmTransferTwiceWithSameKey() {
+        String idempotencyKey = UUID.randomUUID().toString();
+        transferResult = confirmTransferToLoan(idempotencyKey);
+        secondTransferResult = confirmTransferToLoan(idempotencyKey);
+    }
+
+    @When("I confirm the transfer twice with different idempotency keys")
+    public void confirmTransferTwiceWithDifferentKeys() {
+        transferResult = confirmTransferToLoan(UUID.randomUUID().toString());
+        secondTransferResult = confirmTransferToLoan(UUID.randomUUID().toString());
+    }
+
+    @Then("both confirmations return the same transfer id")
+    public void bothConfirmationsReturnSameTransferId() {
+        assertThat(transferResult.getTransferId()).isNotNull();
+        assertThat(secondTransferResult.getTransferId()).isEqualTo(transferResult.getTransferId());
+    }
+
+    @Then("the confirmations return different transfer ids")
+    public void confirmationsReturnDifferentTransferIds() {
+        assertThat(transferResult.getTransferId()).isNotNull();
+        assertThat(secondTransferResult.getTransferId()).isNotEqualTo(transferResult.getTransferId());
+    }
+
+    @Then("my savings account was debited exactly once")
+    public void savingsDebitedExactlyOnce() {
+        assertThat(savingsApi.getSavingsAccount(user.savingsAccountId()).getBalance())
+                .isEqualByComparingTo(DEPOSIT_AMOUNT.subtract(TRANSFER_AMOUNT));
+    }
+
+    @Then("my savings account was debited twice")
+    public void savingsDebitedTwice() {
+        assertThat(savingsApi.getSavingsAccount(user.savingsAccountId()).getBalance())
+                .isEqualByComparingTo(DEPOSIT_AMOUNT.subtract(TRANSFER_AMOUNT).subtract(TRANSFER_AMOUNT));
+    }
+
+    private TransferCommandData confirmTransferToLoan(String idempotencyKey) {
         mailpit.deleteMessages(user.email());
         TransferChallengeCommandData challenge = transfersApi.initiateTransfer(DEVICE_FINGERPRINT,
                 new InitiateTransferCommandRequest()
@@ -75,7 +122,7 @@ public class TransfersSteps {
                         .toAccountType(TransferConstants.LOAN_TYPE_NAME)
                         .amount(TRANSFER_AMOUNT));
         String otp = mailpit.waitForOtp(user.email());
-        transferResult = transfersApi.confirmTransfer(DEVICE_FINGERPRINT,
+        return transfersApi.confirmTransfer(DEVICE_FINGERPRINT, idempotencyKey,
                 new ConfirmTransferCommandRequest()
                         .stepUpToken(challenge.getStepUpToken())
                         .otp(otp)

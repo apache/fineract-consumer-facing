@@ -269,8 +269,13 @@ export class LoanApplyComponent {
     transactionProcessingStrategyCode: ['mifos-standard-strategy'],
   });
 
+  private idempotencyKey: string | null = null;
+
   constructor() {
     this.store.loadTemplate();
+    this.form.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => (this.idempotencyKey = null));
     effect(() => {
       const template = this.store.template();
       if (!template) {
@@ -313,31 +318,48 @@ export class LoanApplyComponent {
     if (this.form.invalid) {
       return;
     }
-    this.run(this.store.submit(this.buildRequest()));
+    this.idempotencyKey ??= crypto.randomUUID();
+    this.run(
+      this.store.submit(this.idempotencyKey, this.buildRequest()),
+      () => (this.idempotencyKey = null),
+    );
   }
 
   protected modify(loanId: number | undefined): void {
     if (loanId == null || this.form.invalid) {
       return;
     }
-    this.run(this.store.modify(loanId, this.buildRequest()));
+    this.idempotencyKey ??= crypto.randomUUID();
+    this.run(
+      this.store.modify(loanId, this.idempotencyKey, this.buildRequest()),
+      () => (this.idempotencyKey = null),
+    );
   }
 
   protected withdraw(loanId: number | undefined): void {
     if (loanId == null) {
       return;
     }
-    this.run(this.store.withdraw(loanId, { withdrawnOnDate: this.form.controls.submittedOnDate.value }));
+    this.idempotencyKey ??= crypto.randomUUID();
+    this.run(
+      this.store.withdraw(loanId, this.idempotencyKey, {
+        withdrawnOnDate: this.form.controls.submittedOnDate.value,
+      }),
+      () => (this.idempotencyKey = null),
+    );
   }
 
   private buildRequest(): SubmitLoanApplicationCommandRequest {
     return this.form.getRawValue();
   }
 
-  private run(work: Observable<unknown>): void {
+  private run(work: Observable<unknown>, onSuccess?: () => void): void {
     this.loading.set(true);
     work.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => this.loading.set(false),
+      next: () => {
+        this.loading.set(false);
+        onSuccess?.();
+      },
       error: () => this.loading.set(false),
     });
   }

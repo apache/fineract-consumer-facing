@@ -58,7 +58,7 @@ describe('TransfersStore', () => {
     store.challenge.set({ stepUpToken: 'tok' });
 
     store
-      .confirm({
+      .confirm('key-123', {
         stepUpToken: 'tok',
         otp: 'ABC123',
         fromAccountId: 1,
@@ -67,9 +67,9 @@ describe('TransfersStore', () => {
         amount: 50,
       })
       .subscribe();
-    controller
-      .expectOne('/api/v1/transfers/confirm')
-      .flush({ transferId: 9, fromAccountId: 1, toAccountId: 2, amount: 50 });
+    const req = controller.expectOne('/api/v1/transfers/confirm');
+    expect(req.request.headers.get('Idempotency-Key')).toBe('key-123');
+    req.flush({ transferId: 9, fromAccountId: 1, toAccountId: 2, amount: 50 });
 
     expect(store.result()?.transferId).toBe(9);
     expect(store.challenge()).toBeNull();

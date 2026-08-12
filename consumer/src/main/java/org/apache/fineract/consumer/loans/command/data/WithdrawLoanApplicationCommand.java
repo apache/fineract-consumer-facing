@@ -35,4 +35,5 @@ public final class WithdrawLoanApplicationCommand {
 
     private final Long loanId;
     private final LocalDate withdrawnOnDate;
+    private final String idempotencyKey;
 }

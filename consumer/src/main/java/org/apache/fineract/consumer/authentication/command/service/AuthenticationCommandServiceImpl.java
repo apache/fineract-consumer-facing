@@ -55,7 +55,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.configs.Finera
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
-import org.apache.fineract.consumer.infrastructure.web.EmailMasking;
+import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
@@ -120,7 +120,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         return LoginChallengeCommandData.builder()
                 .challengeToken(challenge.getTokenValue())
                 .expiresAt(challenge.getExpiresAt())
-                .sentTo(EmailMasking.mask(command.getEmail()))
+                .sentTo(EmailMaskingService.mask(command.getEmail()))
                 .build();
     }
 

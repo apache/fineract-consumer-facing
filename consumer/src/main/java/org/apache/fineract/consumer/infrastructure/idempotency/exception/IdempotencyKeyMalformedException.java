@@ -17,12 +17,16 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.web;
+package org.apache.fineract.consumer.infrastructure.idempotency.exception;
 
-public final class ConsumerHeaders {
+import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerException;
+import org.springframework.http.HttpStatus;
 
-    private ConsumerHeaders() {
+public class IdempotencyKeyMalformedException extends AbstractConsumerException {
+
+    public static final String CODE = "error.msg.consumer.idempotency.key.malformed";
+
+    public IdempotencyKeyMalformedException() {
+        super(HttpStatus.BAD_REQUEST, CODE, "idempotency key must be 1-64 visible ASCII characters");
     }
-
-    public static final String DEVICE_FINGERPRINT = "X-Device-Fingerprint";
 }

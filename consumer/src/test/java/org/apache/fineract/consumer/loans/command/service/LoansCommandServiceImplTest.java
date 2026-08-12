@@ -21,7 +21,9 @@ package org.apache.fineract.consumer.loans.command.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,17 +36,26 @@ import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.OwnedAccountsCache;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.LoansApi;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansLoanIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansResponse;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PutLoansLoanIdResponse;
+import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyDeriver;
+import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyHolder;
+import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.SubmitLoanApplicationCommand;
+import org.apache.fineract.consumer.loans.command.data.WithdrawLoanApplicationCommand;
+import org.apache.fineract.consumer.loans.command.exception.LoanCommandInProgressException;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandUpstreamUnavailableException;
 import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +65,7 @@ class LoansCommandServiceImplTest {
     private static final Long CLIENT_ID = 42L;
     private static final Long LOAN_ID = 7L;
     private static final String EMAIL = "user@test.com";
+    private static final String IDEMPOTENCY_KEY = "loan-op-key-1";
 
     @Mock
     private UserQueryService userQueryService;
@@ -63,6 +75,9 @@ class LoansCommandServiceImplTest {
 
     @Mock
     private OwnedAccountsCache ownedAccountsCache;
+
+    @Mock
+    private IdempotencyKeyHolder idempotencyKeyHolder;
 
     @Mock
     private LoansApi loansApi;
@@ -88,6 +103,15 @@ class LoansCommandServiceImplTest {
                 .build();
     }
 
+    private static SubmitLoanApplicationCommand submitCommand() {
+        return SubmitLoanApplicationCommand.builder()
+                .productId(1L)
+                .expectedDisbursementDate(LocalDate.of(2026, 7, 1))
+                .submittedOnDate(LocalDate.of(2026, 7, 1))
+                .idempotencyKey(IDEMPOTENCY_KEY)
+                .build();
+    }
+
     @Test
     void submitAuthorizesLoanApplicationSubmit() {
         Jwt jwt = jwt();
@@ -95,11 +119,7 @@ class LoansCommandServiceImplTest {
         when(loansApi.calculateLoanScheduleOrSubmitLoanApplication(any(), isNull()))
                 .thenReturn(new PostLoansResponse().loanId(LOAN_ID).resourceId(99L));
 
-        service.submitApplication(jwt, SubmitLoanApplicationCommand.builder()
-                .productId(1L)
-                .expectedDisbursementDate(LocalDate.of(2026, 7, 1))
-                .submittedOnDate(LocalDate.of(2026, 7, 1))
-                .build());
+        service.submitApplication(jwt, submitCommand());
 
         verify(accessPolicyEvaluator).authorize(jwt, ConsumerAction.LOAN_APPLICATION_SUBMIT);
         verify(ownedAccountsCache).evict(CLIENT_ID);
@@ -112,13 +132,92 @@ class LoansCommandServiceImplTest {
         when(loansApi.calculateLoanScheduleOrSubmitLoanApplication(any(), isNull()))
                 .thenThrow(mock(FeignException.class));
 
-        assertThatThrownBy(() -> service.submitApplication(jwt, SubmitLoanApplicationCommand.builder()
-                .productId(1L)
-                .expectedDisbursementDate(LocalDate.of(2026, 7, 1))
-                .submittedOnDate(LocalDate.of(2026, 7, 1))
-                .build()))
+        assertThatThrownBy(() -> service.submitApplication(jwt, submitCommand()))
                 .isInstanceOf(LoanCommandUpstreamUnavailableException.class);
 
         verify(ownedAccountsCache, never()).evict(any());
+    }
+
+    @Test
+    void submitSetsDerivedIdempotencyKeyBeforeUpstreamCallAndClearsAfter() {
+        Jwt jwt = jwt();
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(loansApi.calculateLoanScheduleOrSubmitLoanApplication(any(), isNull()))
+                .thenReturn(new PostLoansResponse().loanId(LOAN_ID).resourceId(99L));
+
+        service.submitApplication(jwt, submitCommand());
+
+        InOrder inOrder = inOrder(idempotencyKeyHolder, loansApi);
+        inOrder.verify(idempotencyKeyHolder).set(IdempotencyKeyDeriver.derive(PUBLIC_ID, IDEMPOTENCY_KEY));
+        inOrder.verify(loansApi).calculateLoanScheduleOrSubmitLoanApplication(any(), isNull());
+        inOrder.verify(idempotencyKeyHolder).clear();
+    }
+
+    @Test
+    void submitClearsIdempotencyKeyWhenUpstreamFails() {
+        Jwt jwt = jwt();
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(loansApi.calculateLoanScheduleOrSubmitLoanApplication(any(), isNull()))
+                .thenThrow(mock(FeignException.class));
+
+        assertThatThrownBy(() -> service.submitApplication(jwt, submitCommand()))
+                .isInstanceOf(LoanCommandUpstreamUnavailableException.class);
+
+        verify(idempotencyKeyHolder).clear();
+    }
+
+    @Test
+    void submitTranslatesInProgressReplayToLoanCommandInProgressException() {
+        Jwt jwt = jwt();
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        FeignException inProgress = mock(FeignException.class);
+        when(inProgress.status()).thenReturn(HttpStatus.TOO_EARLY.value());
+        when(loansApi.calculateLoanScheduleOrSubmitLoanApplication(any(), isNull())).thenThrow(inProgress);
+
+        assertThatThrownBy(() -> service.submitApplication(jwt, submitCommand()))
+                .isInstanceOf(LoanCommandInProgressException.class)
+                .hasFieldOrPropertyWithValue("code", LoanCommandInProgressException.CODE);
+
+        verify(idempotencyKeyHolder).clear();
+    }
+
+    @Test
+    void modifySetsDerivedIdempotencyKeyBeforeUpstreamCallAndClearsAfter() {
+        Jwt jwt = jwt();
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(loansApi.modifyLoanApplication(eq(LOAN_ID), any(), isNull()))
+                .thenReturn(new PutLoansLoanIdResponse().resourceId(99L));
+
+        service.modifyApplication(jwt, ModifyLoanApplicationCommand.builder()
+                .loanId(LOAN_ID)
+                .productId(1L)
+                .expectedDisbursementDate(LocalDate.of(2026, 7, 1))
+                .submittedOnDate(LocalDate.of(2026, 7, 1))
+                .idempotencyKey(IDEMPOTENCY_KEY)
+                .build());
+
+        InOrder inOrder = inOrder(idempotencyKeyHolder, loansApi);
+        inOrder.verify(idempotencyKeyHolder).set(IdempotencyKeyDeriver.derive(PUBLIC_ID, IDEMPOTENCY_KEY));
+        inOrder.verify(loansApi).modifyLoanApplication(eq(LOAN_ID), any(), isNull());
+        inOrder.verify(idempotencyKeyHolder).clear();
+    }
+
+    @Test
+    void withdrawSetsDerivedIdempotencyKeyBeforeUpstreamCallAndClearsAfter() {
+        Jwt jwt = jwt();
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(loansApi.stateTransitions(eq(LOAN_ID), any(), eq(LoansCommandService.WITHDRAW_COMMAND)))
+                .thenReturn(new PostLoansLoanIdResponse().resourceId(99L));
+
+        service.withdrawApplication(jwt, WithdrawLoanApplicationCommand.builder()
+                .loanId(LOAN_ID)
+                .withdrawnOnDate(LocalDate.of(2026, 7, 1))
+                .idempotencyKey(IDEMPOTENCY_KEY)
+                .build());
+
+        InOrder inOrder = inOrder(idempotencyKeyHolder, loansApi);
+        inOrder.verify(idempotencyKeyHolder).set(IdempotencyKeyDeriver.derive(PUBLIC_ID, IDEMPOTENCY_KEY));
+        inOrder.verify(loansApi).stateTransitions(eq(LOAN_ID), any(), eq(LoansCommandService.WITHDRAW_COMMAND));
+        inOrder.verify(idempotencyKeyHolder).clear();
     }
 }

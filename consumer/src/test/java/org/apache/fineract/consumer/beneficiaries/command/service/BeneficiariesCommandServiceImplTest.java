@@ -70,7 +70,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountStatusEnumData;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
 import org.apache.fineract.consumer.otp.command.data.OtpConstants;
 import org.apache.fineract.consumer.otp.command.data.OtpDestination;
 import org.apache.fineract.consumer.otp.command.service.OtpCommandService;

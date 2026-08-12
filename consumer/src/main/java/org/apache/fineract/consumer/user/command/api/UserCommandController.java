@@ -23,7 +23,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
 import org.apache.fineract.consumer.authentication.command.data.SessionCommandData;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthCookiePayload;
 import org.apache.fineract.consumer.infrastructure.access.service.AuthCookieFactory;
 import org.apache.fineract.consumer.user.command.data.ConfirmPasswordChangeCommand;

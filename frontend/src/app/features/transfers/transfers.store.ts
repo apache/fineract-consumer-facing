@@ -41,8 +41,11 @@ export class TransfersStore {
       .pipe(tap(challenge => this.challenge.set(challenge)));
   }
 
-  confirm(request: ConfirmTransferCommandRequest): Observable<TransferCommandData> {
-    return this.command.confirmTransfer(deviceFingerprint(), request).pipe(
+  confirm(
+    idempotencyKey: string,
+    request: ConfirmTransferCommandRequest,
+  ): Observable<TransferCommandData> {
+    return this.command.confirmTransfer(deviceFingerprint(), idempotencyKey, request).pipe(
       tap(result => {
         this.result.set(result);
         this.challenge.set(null);

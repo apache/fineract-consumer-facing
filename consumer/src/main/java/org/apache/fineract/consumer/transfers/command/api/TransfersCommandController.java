@@ -22,7 +22,8 @@ package org.apache.fineract.consumer.transfers.command.api;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.apache.fineract.consumer.transfers.command.data.ConfirmTransferCommand;
 import org.apache.fineract.consumer.transfers.command.data.ConfirmTransferCommandRequest;
 import org.apache.fineract.consumer.transfers.command.data.InitiateTransferCommand;
@@ -68,7 +69,9 @@ public class TransfersCommandController {
     public ResponseEntity<TransferCommandData> confirm(
             @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(ConsumerHeaders.DEVICE_FINGERPRINT) String deviceFingerprint,
+            @RequestHeader(ConsumerHeaders.IDEMPOTENCY_KEY) String idempotencyKey,
             @Valid @RequestBody ConfirmTransferCommandRequest request) {
+        IdempotencyKeyPolicyEvaluator.validate(idempotencyKey);
         ConfirmTransferCommand command = ConfirmTransferCommand.builder()
                 .stepUpToken(request.getStepUpToken())
                 .otp(request.getOtp())
@@ -77,6 +80,7 @@ public class TransfersCommandController {
                 .toAccountType(request.getToAccountType())
                 .amount(request.getAmount())
                 .deviceFingerprint(deviceFingerprint)
+                .idempotencyKey(idempotencyKey)
                 .build();
         return ResponseEntity.ok(transfersCommandService.confirm(jwt, command));
     }

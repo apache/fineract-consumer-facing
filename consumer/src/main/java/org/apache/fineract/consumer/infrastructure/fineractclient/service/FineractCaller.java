@@ -17,13 +17,16 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.fineractclient;
+package org.apache.fineract.consumer.infrastructure.fineractclient.service;
 
 import feign.FeignException;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import org.springframework.http.HttpStatus;
 
 public final class FineractCaller {
+
+    private static final int STATUS_TOO_EARLY = HttpStatus.TOO_EARLY.value();
 
     private FineractCaller() {
     }
@@ -32,6 +35,14 @@ public final class FineractCaller {
             Function<FeignException, RuntimeException> onNotFound,
             Function<FeignException, RuntimeException> onBadRequest,
             Function<FeignException, RuntimeException> onUpstreamError) {
+        return call(upstream, onNotFound, onBadRequest, onUpstreamError, onUpstreamError);
+    }
+
+    public static <T> T call(Supplier<T> upstream,
+            Function<FeignException, RuntimeException> onNotFound,
+            Function<FeignException, RuntimeException> onBadRequest,
+            Function<FeignException, RuntimeException> onRequestInProgress,
+            Function<FeignException, RuntimeException> onUpstreamError) {
         try {
             return upstream.get();
         } catch (FeignException.NotFound e) {
@@ -39,6 +50,9 @@ public final class FineractCaller {
         } catch (FeignException.BadRequest e) {
             throw onBadRequest.apply(e);
         } catch (FeignException e) {
+            if (e.status() == STATUS_TOO_EARLY) {
+                throw onRequestInProgress.apply(e);
+            }
             throw onUpstreamError.apply(e);
         }
     }

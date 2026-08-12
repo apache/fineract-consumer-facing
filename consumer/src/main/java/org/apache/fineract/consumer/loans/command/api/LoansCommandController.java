@@ -22,6 +22,8 @@ package org.apache.fineract.consumer.loans.command.api;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.apache.fineract.consumer.loans.command.data.LoanApplicationCommandData;
 import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommand;
 import org.apache.fineract.consumer.loans.command.data.ModifyLoanApplicationCommandRequest;
@@ -40,6 +42,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -55,7 +58,9 @@ public class LoansCommandController {
     @PostMapping
     public ResponseEntity<LoanApplicationCommandData> submit(
             @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(ConsumerHeaders.IDEMPOTENCY_KEY) String idempotencyKey,
             @Valid @RequestBody SubmitLoanApplicationCommandRequest request) {
+        IdempotencyKeyPolicyEvaluator.validate(idempotencyKey);
         SubmitLoanApplicationCommand cmd = SubmitLoanApplicationCommand.builder()
                 .productId(request.getProductId())
                 .principal(request.getPrincipal())
@@ -71,6 +76,7 @@ public class LoansCommandController {
                 .transactionProcessingStrategyCode(request.getTransactionProcessingStrategyCode())
                 .expectedDisbursementDate(request.getExpectedDisbursementDate())
                 .submittedOnDate(request.getSubmittedOnDate())
+                .idempotencyKey(idempotencyKey)
                 .build();
         LoanApplicationCommandData data = loansCommandService.submitApplication(jwt, cmd);
         return ResponseEntity.status(HttpStatus.CREATED).body(data);
@@ -80,8 +86,10 @@ public class LoansCommandController {
     @PutMapping("/{loanId}")
     public ResponseEntity<LoanApplicationCommandData> modify(
             @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(ConsumerHeaders.IDEMPOTENCY_KEY) String idempotencyKey,
             @PathVariable Long loanId,
             @Valid @RequestBody ModifyLoanApplicationCommandRequest request) {
+        IdempotencyKeyPolicyEvaluator.validate(idempotencyKey);
         ModifyLoanApplicationCommand cmd = ModifyLoanApplicationCommand.builder()
                 .loanId(loanId)
                 .productId(request.getProductId())
@@ -98,6 +106,7 @@ public class LoansCommandController {
                 .transactionProcessingStrategyCode(request.getTransactionProcessingStrategyCode())
                 .expectedDisbursementDate(request.getExpectedDisbursementDate())
                 .submittedOnDate(request.getSubmittedOnDate())
+                .idempotencyKey(idempotencyKey)
                 .build();
         return ResponseEntity.ok(loansCommandService.modifyApplication(jwt, cmd));
     }
@@ -106,15 +115,18 @@ public class LoansCommandController {
     @PostMapping("/{loanId}")
     public ResponseEntity<LoanApplicationCommandData> withdraw(
             @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(ConsumerHeaders.IDEMPOTENCY_KEY) String idempotencyKey,
             @PathVariable Long loanId,
             @RequestParam("command") String command,
             @Valid @RequestBody WithdrawLoanApplicationCommandRequest request) {
         if (!LoansCommandService.WITHDRAW_COMMAND.equals(command)) {
             throw new LoanApplicationInvalidException();
         }
+        IdempotencyKeyPolicyEvaluator.validate(idempotencyKey);
         WithdrawLoanApplicationCommand cmd = WithdrawLoanApplicationCommand.builder()
                 .loanId(loanId)
                 .withdrawnOnDate(request.getWithdrawnOnDate())
+                .idempotencyKey(idempotencyKey)
                 .build();
         return ResponseEntity.ok(loansCommandService.withdrawApplication(jwt, cmd));
     }
