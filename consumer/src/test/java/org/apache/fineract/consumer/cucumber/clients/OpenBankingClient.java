@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.oauth2.data.OAuth2Constants;
-import org.apache.fineract.consumer.infrastructure.web.ConsumerHeaders;
+import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
