@@ -20,7 +20,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   IonButton,
   IonCard,
@@ -33,6 +33,10 @@ import {
 import { TranslatePipe } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth/auth.service';
 import { OtpComponent } from '../../shared/otp/otp.component';
+
+export function allowedReturnUrl(returnUrl: string | null): string | null {
+  return returnUrl !== null && returnUrl.startsWith('/api/v1/oauth2/') ? returnUrl : null;
+}
 
 @Component({
   selector: 'app-login',
@@ -107,6 +111,7 @@ export class LoginComponent {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly step = signal<'credentials' | 'otp'>('credentials');
@@ -150,8 +155,17 @@ export class LoginComponent {
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () => this.router.navigate(['/summary']),
+        next: () => this.navigateAfterLogin(),
         error: () => this.loading.set(false),
       });
+  }
+
+  private navigateAfterLogin(): void {
+    const returnUrl = allowedReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl'));
+    if (returnUrl) {
+      window.location.assign(returnUrl);
+    } else {
+      this.router.navigate(['/summary']);
+    }
   }
 }

@@ -48,19 +48,21 @@ class PrincipalUserLookupAdapterTest {
     private PrincipalUserLookupAdapter adapter;
 
     @Test
-    void findByPublicIdMapsUserToPrincipalData() {
-        UserQueryData user = UserQueryData.builder()
-                .id(USER_ID)
-                .publicId(PUBLIC_ID)
-                .fineractClientId(CLIENT_ID)
-                .email("user@test.com")
-                .status(UserStatus.BOUND)
-                .build();
-        when(userQueryRepository.findByPublicId(PUBLIC_ID)).thenReturn(Optional.of(user));
+    void findByPublicIdMapsBoundUserToPrincipalData() {
+        when(userQueryRepository.findByPublicId(PUBLIC_ID)).thenReturn(Optional.of(user(UserStatus.BOUND)));
 
         Optional<PrincipalUserData> result = adapter.findByPublicId(PUBLIC_ID);
 
-        assertThat(result).hasValue(new PrincipalUserData(USER_ID, CLIENT_ID));
+        assertThat(result).hasValue(new PrincipalUserData(USER_ID, CLIENT_ID, true));
+    }
+
+    @Test
+    void findByPublicIdMapsNotYetBoundUserAsUnbound() {
+        when(userQueryRepository.findByPublicId(PUBLIC_ID)).thenReturn(Optional.of(user(UserStatus.PENDING_OTP)));
+
+        Optional<PrincipalUserData> result = adapter.findByPublicId(PUBLIC_ID);
+
+        assertThat(result).hasValue(new PrincipalUserData(USER_ID, CLIENT_ID, false));
     }
 
     @Test
@@ -68,5 +70,15 @@ class PrincipalUserLookupAdapterTest {
         when(userQueryRepository.findByPublicId(PUBLIC_ID)).thenReturn(Optional.empty());
 
         assertThat(adapter.findByPublicId(PUBLIC_ID)).isEmpty();
+    }
+
+    private static UserQueryData user(UserStatus status) {
+        return UserQueryData.builder()
+                .id(USER_ID)
+                .publicId(PUBLIC_ID)
+                .fineractClientId(CLIENT_ID)
+                .email("user@test.com")
+                .status(status)
+                .build();
     }
 }

@@ -29,8 +29,7 @@ export type ClientAuditEventType =
   | 'CLIENT_ERROR'
   | 'API_FAILURE'
   | 'NAVIGATION'
-  | 'LOGOUT'
-  | 'SESSION_TIMEOUT_WARNING_SHOWN';
+  | 'LOGOUT';
 
 const FLUSH_THRESHOLD = 20;
 const FLUSH_INTERVAL_MS = 30_000;

@@ -27,16 +27,23 @@ import org.springframework.validation.annotation.Validated;
 
 @Getter
 @Validated
-@ConfigurationProperties(prefix = "consumer.rate-limit")
+@ConfigurationProperties(prefix = RateLimitProperties.PREFIX)
 public class RateLimitProperties {
+
+    static final String PREFIX = "consumer.rate-limit";
 
     private final boolean enabled;
 
     @Min(1)
     private final int perUserPerMinute;
 
-    public RateLimitProperties(boolean enabled, @DefaultValue("300") int perUserPerMinute) {
+    @Min(1)
+    private final int perTppClientPerMinute;
+
+    public RateLimitProperties(boolean enabled, @DefaultValue("300") int perUserPerMinute,
+            @DefaultValue("60") int perTppClientPerMinute) {
         this.enabled = enabled;
         this.perUserPerMinute = perUserPerMinute;
+        this.perTppClientPerMinute = perTppClientPerMinute;
     }
 }

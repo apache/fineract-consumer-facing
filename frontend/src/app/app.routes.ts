@@ -37,6 +37,12 @@ export const routes: Routes = [
       import('./features/auth/forgot-password.component').then(m => m.ForgotPasswordComponent),
   },
   {
+    path: 'consent',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/consent/consent.component').then(m => m.ConsentComponent),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell.component').then(m => m.ShellComponent),

@@ -24,11 +24,12 @@ import lombok.Getter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
-@ConfigurationProperties("consumer.audit")
+@ConfigurationProperties(AuditRetentionProperties.PREFIX)
 public class AuditRetentionProperties {
 
+    static final String PREFIX = "consumer.audit";
     private static final String MISSING_RETENTION_ENTRY_MESSAGE =
-            "consumer.audit.retention-days is missing an entry for source ";
+            PREFIX + ".retention-days is missing an entry for source ";
 
     private final Map<AuditEventSource, Integer> retentionDays;
     private final String purgeCron;

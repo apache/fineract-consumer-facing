@@ -26,8 +26,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
 @RequiredArgsConstructor
-@ConfigurationProperties("authentication")
+@ConfigurationProperties(AuthenticationProperties.PREFIX)
 public class AuthenticationProperties {
+
+    static final String PREFIX = "authentication";
 
     private final Duration accessTokenTtl;
     private final Duration challengeTokenTtl;

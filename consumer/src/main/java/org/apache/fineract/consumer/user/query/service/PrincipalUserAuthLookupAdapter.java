@@ -24,7 +24,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsData;
 import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthData;
-import org.apache.fineract.consumer.authentication.command.service.PrincipalUserAuthLookup;
+import org.apache.fineract.consumer.authentication.command.service.PrincipalUserAuthLookupPort;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.exception.UserQueryNotFoundException;
 import org.apache.fineract.consumer.user.query.data.UserStatus;
@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class PrincipalUserAuthLookupAdapter implements PrincipalUserAuthLookup {
+public class PrincipalUserAuthLookupAdapter implements PrincipalUserAuthLookupPort {
 
     private final UserQueryRepository userQueryRepository;
 
@@ -63,6 +63,7 @@ public class PrincipalUserAuthLookupAdapter implements PrincipalUserAuthLookup {
         return PrincipalUserAuthData.builder()
                 .id(user.getId())
                 .publicId(user.getPublicId())
+                .fineractClientId(user.getFineractClientId())
                 .bound(user.getStatus() == UserStatus.BOUND)
                 .build();
     }

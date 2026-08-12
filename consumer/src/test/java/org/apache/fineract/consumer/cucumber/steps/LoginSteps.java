@@ -35,11 +35,13 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
+import org.apache.fineract.consumer.authentication.command.exception.AuthenticationKycRevokedException;
 import org.apache.fineract.consumer.authentication.command.exception.InvalidCredentialsException;
 import org.apache.fineract.consumer.authentication.command.exception.RefreshTokenInvalidException;
 import org.apache.fineract.consumer.authentication.command.exception.TwoFactorInvalidException;
 import org.apache.fineract.consumer.cucumber.clients.AuthenticationClient;
 import org.apache.fineract.consumer.cucumber.clients.MailpitClient;
+import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.RegistrationHelper;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -63,6 +65,7 @@ public class LoginSteps {
     public record AuthResponse(int status, JsonNode body, String accessCookie, String refreshCookie) {}
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
+    private final FineractSeeder fineractSeeder = new FineractSeeder();
     private final MailpitClient mailpit = new MailpitClient();
     private final AuthenticationClient authClient = new AuthenticationClient();
 
@@ -237,6 +240,17 @@ public class LoginSteps {
     public void refreshRejected() {
         assertThat(lastResponse.status()).isEqualTo(401);
         assertThat(lastResponse.body().path("code").asString()).isEqualTo(RefreshTokenInvalidException.CODE);
+    }
+
+    @When("the bound Fineract client is closed")
+    public void boundFineractClientIsClosed() {
+        fineractSeeder.closeClient(user.fineractClientId());
+    }
+
+    @Then("the refresh is denied because identity verification was revoked")
+    public void refreshDeniedForRevokedIdentityVerification() {
+        assertThat(lastResponse.status()).isEqualTo(403);
+        assertThat(lastResponse.body().path("code").asString()).isEqualTo(AuthenticationKycRevokedException.CODE);
     }
 
     private void login(String email, String password) {

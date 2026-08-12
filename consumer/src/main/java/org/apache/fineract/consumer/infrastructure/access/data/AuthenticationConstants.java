@@ -28,4 +28,6 @@ public final class AuthenticationConstants {
     public static final String REFRESH_TOKEN_COOKIE_NAME = "refresh_token";
     public static final String CHALLENGE_PURPOSE_VALUE = "2fa_challenge";
     public static final String SCOPE_CONSUMER_FULL = "consumer:full";
+    public static final String SCOPE_OPENBANKING_ACCOUNTS_READ = "openbanking:accounts.read";
+    public static final String SCOPE_OPENBANKING_CONSENTS = "openbanking:consents";
 }

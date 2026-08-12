@@ -70,3 +70,9 @@ Feature: Consumer login
     When I complete a login successfully
     And I refresh my session from a different device
     Then the refresh is rejected
+
+  Scenario: Refresh is denied after the bound Fineract client is closed
+    When I complete a login successfully
+    And the bound Fineract client is closed
+    And I refresh using the latest refresh cookie
+    Then the refresh is denied because identity verification was revoked

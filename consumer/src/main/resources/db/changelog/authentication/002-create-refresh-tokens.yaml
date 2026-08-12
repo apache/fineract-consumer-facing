@@ -16,7 +16,7 @@
 # under the License.
 
 databaseChangeLog:
-  - logicalFilePath: db/changelog/changes/002-create-refresh-tokens.yaml
+  - logicalFilePath: db/changelog/authentication/002-create-refresh-tokens.yaml
   - changeSet:
       id: 002-create-refresh-tokens
       author: fineract-consumer-facing

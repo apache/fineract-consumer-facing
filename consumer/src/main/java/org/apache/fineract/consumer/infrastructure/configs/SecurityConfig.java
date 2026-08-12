@@ -25,11 +25,13 @@ import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationCon
 import org.apache.fineract.consumer.infrastructure.access.filter.DeviceFingerprintFilter;
 import org.apache.fineract.consumer.infrastructure.access.filter.RateLimitFilter;
 import org.apache.fineract.consumer.infrastructure.access.service.RateLimitCounter;
+import org.apache.fineract.consumer.infrastructure.oauth2.data.OAuth2Constants;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -55,6 +57,7 @@ public class SecurityConfig {
     };
 
     @Bean
+    @Order(OAuth2Constants.LOGIN_CHAIN_ORDER)
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
             @Qualifier("accessTokenJwtDecoder") JwtDecoder accessTokenJwtDecoder,
             ObjectMapper objectMapper, ApplicationEventPublisher eventPublisher,
@@ -78,7 +81,7 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(SecurityConfig::resolveAccessTokenCookie)
                         .jwt(jwt -> jwt.decoder(accessTokenJwtDecoder)))
-                .addFilterAfter(new RateLimitFilter(rateLimitProperties, rateLimitCounter, objectMapper),
+                .addFilterAfter(RateLimitFilter.perUser(rateLimitProperties, rateLimitCounter, objectMapper),
                         BearerTokenAuthenticationFilter.class)
                 .addFilterAfter(new DeviceFingerprintFilter(objectMapper, eventPublisher),
                         RateLimitFilter.class)

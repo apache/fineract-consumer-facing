@@ -16,7 +16,7 @@
 # under the License.
 
 databaseChangeLog:
-  - logicalFilePath: db/changelog/changes/001-create-users-table.yaml
+  - logicalFilePath: db/changelog/user/001-create-users-table.yaml
   - changeSet:
       id: 001-create-users-table
       author: fineract-consumer-facing

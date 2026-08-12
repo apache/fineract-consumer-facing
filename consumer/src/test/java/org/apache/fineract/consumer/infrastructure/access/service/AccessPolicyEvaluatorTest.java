@@ -185,6 +185,14 @@ class AccessPolicyEvaluatorTest {
     }
 
     @Test
+    void authorizePassesOpenBankingScopeOnSavingsList() {
+        Jwt jwt = jwt(AuthenticationConstants.SCOPE_OPENBANKING_ACCOUNTS_READ, true);
+
+        assertThatCode(() -> evaluator.authorize(jwt, ConsumerAction.SAVINGS_LIST))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     void authorizeRejectsKycNotVerifiedOnUnownedAction() {
         Jwt jwt = jwt(AuthenticationConstants.SCOPE_CONSUMER_FULL, false);
 

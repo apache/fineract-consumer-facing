@@ -41,7 +41,7 @@ public class RegistrationHelper {
     private final MailpitClient mailpit = new MailpitClient();
     private final RegistrationCommandControllerApi bff = buildBffClient();
 
-    public record BoundUser(String email, String password) {}
+    public record BoundUser(String email, String password, long fineractClientId) {}
 
     public record BoundUserWithAccounts(
             String email, String password, String clientEmail, long savingsAccountId, long loanAccountId) {}
@@ -50,7 +50,7 @@ public class RegistrationHelper {
         FineractSeeder.SeededClient seededClient = fineractSeeder.seedClientWithPassport();
         String email = bindUser(seededClient.fineractClientId(),
                 seededClient.documentTypeName(), seededClient.documentKey());
-        return new BoundUser(email, PASSWORD);
+        return new BoundUser(email, PASSWORD, seededClient.fineractClientId());
     }
 
     public BoundUserWithAccounts registerBoundUserWithAccounts() {

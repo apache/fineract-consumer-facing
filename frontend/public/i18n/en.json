@@ -81,6 +81,17 @@
       "success": "Password reset. Please sign in."
     }
   },
+  "consent": {
+    "title": "Authorize access",
+    "intro": "{{tppClientId}} is asking for permission to access your account information.",
+    "permissionsTitle": "This application will be able to:",
+    "scope": {
+      "accountsRead": "View your accounts and balances"
+    },
+    "allowCta": "Allow",
+    "denyCta": "Deny",
+    "invalid": "This authorization request is invalid or incomplete."
+  },
   "registration": {
     "title": "Create your account",
     "backToLogin": "Back to sign in",
@@ -315,6 +326,24 @@
       "amountReleased": "Released",
       "empty": "No guaranteed loans."
     },
+    "connectedApps": {
+      "title": "Connected apps",
+      "app": "App",
+      "permissions": "Permissions",
+      "granted": "Granted",
+      "expires": "Expires",
+      "actions": "Actions",
+      "status": {
+        "AWAITING_AUTHORISATION": "Awaiting authorisation",
+        "AUTHORISED": "Authorised",
+        "REJECTED": "Rejected",
+        "REVOKED": "Revoked"
+      },
+      "revoke": "Revoke",
+      "revokeConfirm": "Confirm revoke",
+      "revokeCancel": "Cancel",
+      "empty": "No connected apps."
+    },
     "changePassword": {
       "title": "Change password",
       "currentLabel": "Current password",
@@ -329,5 +358,11 @@
   "error.msg.consumer.user.upstream.unavailable": "Profile service is temporarily unavailable.",
   "error.msg.consumer.user.charge.status.invalid": "Invalid charge status filter.",
   "error.msg.consumer.user.image.not.found": "No profile photo on file.",
-  "error.msg.consumer.summary.upstream.unavailable": "Account summary is temporarily unavailable."
+  "error.msg.consumer.summary.upstream.unavailable": "Account summary is temporarily unavailable.",
+  "error.msg.consumer.openbanking.consent.not.found": "Consent not found.",
+  "error.msg.consumer.openbanking.consent.not.revocable": "Only an authorised consent can be revoked.",
+  "error.msg.consumer.openbanking.consent.permissions.invalid": "The requested permissions are not valid.",
+  "error.msg.consumer.openbanking.consent.invalid": "This consent does not permit that request.",
+  "error.msg.consumer.openbanking.account.not.found": "Account not found.",
+  "error.msg.consumer.authentication.kyc.revoked": "Your identity verification is no longer valid. Please contact support."
 }

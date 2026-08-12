@@ -16,7 +16,7 @@
 # under the License.
 
 databaseChangeLog:
-  - logicalFilePath: db/changelog/changes/005-create-event-publication.yaml
+  - logicalFilePath: db/changelog/infrastructure/005-create-event-publication.yaml
   - changeSet:
       id: 005-create-event-publication
       author: fineract-consumer-facing

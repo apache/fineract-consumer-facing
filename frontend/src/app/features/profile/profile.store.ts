@@ -24,6 +24,10 @@ import {
   ConfirmPasswordChangeCommandRequest,
   ForgotPasswordCommandRequest,
   InitiatePasswordChangeCommandRequest,
+  OpenBankingConsentCommandData,
+  OpenBankingUserConsentQueryData,
+  OpenBankingUserConsentCommandControllerService,
+  OpenBankingUserConsentQueryControllerService,
   ResetPasswordCommandRequest,
   UserChargeQueryData,
   UserCommandControllerService,
@@ -48,12 +52,15 @@ export interface ChargesFilter {
 export class ProfileStore {
   private readonly query = inject(UserQueryControllerService);
   private readonly command = inject(UserCommandControllerService);
+  private readonly consentQuery = inject(OpenBankingUserConsentQueryControllerService);
+  private readonly consentCommand = inject(OpenBankingUserConsentCommandControllerService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly profile = signal<UserProfileQueryData | null>(null);
   readonly charges = signal<UserChargeQueryData[]>([]);
   readonly totalFilteredRecords = signal(0);
   readonly obligees = signal<UserObligeeQueryData[]>([]);
+  readonly consents = signal<OpenBankingUserConsentQueryData[]>([]);
   readonly image = signal<UserImageQueryData | null>(null);
   readonly passwordChangeChallenge = signal<UserPasswordChangeChallengeCommandData | null>(null);
   readonly loading = signal(false);
@@ -108,6 +115,21 @@ export class ProfileStore {
         next: rows => this.obligees.set(rows),
         error: () => {},
       });
+  }
+
+  loadConsents(): void {
+    this.consents.set([]);
+    this.consentQuery
+      .listConsents()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: rows => this.consents.set(rows),
+        error: () => {},
+      });
+  }
+
+  revokeConsent(consentId: string): Observable<OpenBankingConsentCommandData> {
+    return this.consentCommand.revokeConsent(consentId);
   }
 
   initiatePasswordChange(

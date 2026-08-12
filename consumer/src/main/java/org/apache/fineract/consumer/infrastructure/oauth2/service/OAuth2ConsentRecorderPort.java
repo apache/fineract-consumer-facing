@@ -17,18 +17,13 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.authentication.command.service;
+package org.apache.fineract.consumer.infrastructure.oauth2.service;
 
-import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsData;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthData;
 
-public interface PrincipalUserAuthLookup {
+public interface OAuth2ConsentRecorderPort {
 
-    Optional<PrincipalUserAuthCredentialsData> findCredentialsByEmail(String email);
+    void authorise(UUID consentId, UUID userId);
 
-    PrincipalUserAuthData findByPublicId(UUID publicId);
-
-    PrincipalUserAuthData findById(Long id);
+    void reject(UUID consentId, UUID userId);
 }

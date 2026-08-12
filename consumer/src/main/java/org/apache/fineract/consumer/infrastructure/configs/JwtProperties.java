@@ -26,8 +26,10 @@ import org.springframework.core.io.Resource;
 
 @Getter
 @RequiredArgsConstructor
-@ConfigurationProperties("jwt")
+@ConfigurationProperties(JwtProperties.PREFIX)
 public class JwtProperties {
+
+    static final String PREFIX = "jwt";
 
     private final Resource keyLocation;
     private final String issuer;

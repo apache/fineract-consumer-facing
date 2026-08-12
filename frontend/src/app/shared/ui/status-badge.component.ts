@@ -53,38 +53,7 @@ function humanize(status: string): string {
   selector: 'app-status-badge',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `<span class="badge" [class]="tone()">{{ label() }}</span>`,
-  styles: `
-    .badge {
-      display: inline-block;
-      padding: 0.125rem 0.5rem;
-      border-radius: var(--radius-full);
-      font-size: var(--text-xs);
-      font-weight: 600;
-      letter-spacing: 0.01em;
-      line-height: 1.4;
-      white-space: nowrap;
-    }
-    .success {
-      background-color: var(--success-tint);
-      color: var(--success);
-    }
-    .warning {
-      background-color: var(--warning-tint);
-      color: var(--warning);
-    }
-    .error {
-      background-color: var(--danger-tint);
-      color: var(--danger);
-    }
-    .info {
-      background-color: var(--info-tint);
-      color: var(--info);
-    }
-    .neutral {
-      background-color: var(--neutral-tint);
-      color: var(--neutral);
-    }
-  `,
+  styleUrls: ['../css/badge.scss'],
 })
 export class StatusBadgeComponent {
   readonly status = input.required<string>();

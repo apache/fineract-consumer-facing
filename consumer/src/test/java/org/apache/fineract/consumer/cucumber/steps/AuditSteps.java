@@ -26,11 +26,6 @@ import feign.FeignException;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +39,7 @@ import org.apache.fineract.consumer.client.model.AuditEventsSubmittedCommandData
 import org.apache.fineract.consumer.client.model.AuditEventCommandRequest;
 import org.apache.fineract.consumer.client.model.SubmitAuditEventsCommandRequest;
 import org.apache.fineract.consumer.cucumber.clients.AuthenticationClient;
+import org.apache.fineract.consumer.cucumber.helpers.AuditEventPoller;
 import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
 import org.apache.fineract.consumer.cucumber.helpers.RegistrationHelper;
@@ -67,13 +63,6 @@ public class AuditSteps {
     private static final String EXPECTED_LOGIN_REJECTED = "expected login to be rejected";
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
-    private static final long SERVER_EVENT_TIMEOUT_MILLIS = 5_000L;
-    private static final long POLL_INTERVAL_MILLIS = 200L;
-
-    private static final String JDBC_URL = System.getenv()
-            .getOrDefault("BFF_DB_URL", "jdbc:postgresql://localhost:5432/consumerapp");
-    private static final String JDBC_USER = System.getenv().getOrDefault("BFF_DB_USER", "consumerapp");
-    private static final String JDBC_PASSWORD = System.getenv().getOrDefault("BFF_DB_PASSWORD", "password");
     private static final String COUNT_BY_EVENT_UUID_AND_SOURCE_SQL =
             "SELECT count(*) FROM audit_events WHERE event_uuid = ? AND source = ?";
     private static final String COUNT_KNOWN_USER_SERVER_EVENT_SQL =
@@ -211,7 +200,7 @@ public class AuditSteps {
 
     @Then("a server-side login failure audit event is recorded for my user")
     public void serverLoginFailureEventRecorded() {
-        long rows = pollForRows(COUNT_KNOWN_USER_SERVER_EVENT_SQL,
+        long rows = AuditEventPoller.pollForRows(COUNT_KNOWN_USER_SERVER_EVENT_SQL,
                 AuditEventType.LOGIN_FAILURE.name(), AuditEventSource.SERVER.name(), DEVICE_FINGERPRINT);
         assertThat(rows)
                 .as("SERVER %s audit row linked to a known user", AuditEventType.LOGIN_FAILURE)
@@ -231,43 +220,8 @@ public class AuditSteps {
     }
 
     private long countClientRows(String eventUuid) {
-        return countRows(COUNT_BY_EVENT_UUID_AND_SOURCE_SQL,
+        return AuditEventPoller.countRows(COUNT_BY_EVENT_UUID_AND_SOURCE_SQL,
                 UUID.fromString(eventUuid), AuditEventSource.CLIENT.name());
-    }
-
-    private long pollForRows(String sql, Object... params) {
-        long deadline = System.currentTimeMillis() + SERVER_EVENT_TIMEOUT_MILLIS;
-        long count = countRows(sql, params);
-        while (count == 0 && System.currentTimeMillis() < deadline) {
-            sleep(POLL_INTERVAL_MILLIS);
-            count = countRows(sql, params);
-        }
-        return count;
-    }
-
-    private long countRows(String sql, Object... params) {
-        try (Connection connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASSWORD);
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            for (int i = 0; i < params.length; i++) {
-                statement.setObject(i + 1, params[i]);
-            }
-            try (ResultSet resultSet = statement.executeQuery()) {
-                resultSet.next();
-                return resultSet.getLong(1);
-            }
-        } catch (SQLException e) {
-            throw new IllegalStateException(
-                    "Failed to query audit_events at " + JDBC_URL + " — is the Docker Compose stack up?", e);
-        }
-    }
-
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted while waiting for a server audit row", e);
-        }
     }
 
     private static FeignException captureError(Runnable call) {
