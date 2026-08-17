@@ -58,12 +58,10 @@ describe('SavingsStore', () => {
 
   it('loadAccounts sorts the accounts by account number', () => {
     store.loadAccounts();
-    controller
-      .expectOne(SAVINGS_URL)
-      .flush([
-        { id: 2, accountNo: '000002' },
-        { id: 1, accountNo: '000001' },
-      ]);
+    controller.expectOne(SAVINGS_URL).flush([
+      { id: 2, accountNo: '000002' },
+      { id: 1, accountNo: '000001' },
+    ]);
 
     expect(store.accounts().map((row) => row.accountNo)).toEqual(['000001', '000002']);
   });

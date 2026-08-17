@@ -84,7 +84,7 @@ test('history page: the new-transfer button navigates to the form', async ({ pag
   );
 
   await page.goto('/transfers');
-  await page.getByRole('button', { name: /transfer money/i }).click();
+  await page.getByRole('link', { name: /transfer money/i }).click();
 
   await expect(page).toHaveURL(/\/transfers\/new$/);
   await expect(page.locator('ion-select[formControlName="fromAccountId"]')).toBeVisible();

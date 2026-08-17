@@ -128,7 +128,7 @@ test('loan detail: the make-a-payment button is hidden unless the loan is active
   await page.goto(`/loans/${LOAN_ID}`);
 
   await expect(page.getByText('L-001')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Make a payment' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Make a payment' })).toHaveCount(0);
 });
 
 test('logged-in: loan detail -> repay form -> OTP step-up -> confirm -> success', async ({
@@ -152,7 +152,7 @@ test('logged-in: loan detail -> repay form -> OTP step-up -> confirm -> success'
   );
 
   await page.goto(`/loans/${LOAN_ID}`);
-  await page.getByRole('button', { name: 'Make a payment' }).click();
+  await page.getByRole('link', { name: 'Make a payment' }).click();
 
   await expect(page).toHaveURL(new RegExp(`/loans/${LOAN_ID}/repay$`));
   await fillRepayForm(page);
