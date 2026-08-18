@@ -21,12 +21,12 @@ import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { ToastController } from '@ionic/angular/standalone';
-import { TranslateService } from '@ngx-translate/core';
 import { catchError, switchMap, throwError } from 'rxjs';
 import { ConsumerApiError } from '../../api/consumer-api-error';
 import { AUDIT_EVENTS_PATH, AuditService } from '../audit/audit.service';
 import { buildDetails } from '../audit/pii-scrub';
 import { AuthService } from '../auth/auth.service';
+import { I18nService } from '../i18n/i18n.service';
 
 const REFRESH_URL = '/api/v1/authentication/refresh';
 const GENERIC_ERROR_KEY = 'common.error.generic';
@@ -39,7 +39,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const audit = inject(AuditService);
   const router = inject(Router);
-  const translate = inject(TranslateService);
+  const i18n = inject(I18nService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -51,14 +51,18 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         return throwError(() => error);
       }
 
-      if (error.status === 403 && (error.error as ConsumerApiError | null)?.code === DEVICE_MISMATCH_CODE) {
+      if (
+        error.status === 403 &&
+        (error.error as ConsumerApiError | null)?.code === DEVICE_MISMATCH_CODE
+      ) {
         recordApiFailure(audit, req.url, error.status);
         auth.clearSession();
         router.navigate(['/login']);
         return throwError(() => error);
       }
 
-      if (error.status === 401) {
+      const hasApiErrorCode = Boolean((error.error as ConsumerApiError | null)?.code);
+      if (error.status === 401 && !hasApiErrorCode) {
         return auth.refresh().pipe(
           switchMap(() => next(req)),
           catchError((retryError: HttpErrorResponse) => {
@@ -69,7 +73,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
               return throwError(() => error);
             }
             if (retryError.status === 429) {
-              showToast(toast, translate, translate.instant(RATE_LIMITED_KEY));
+              showToast(toast, i18n, i18n.translate(RATE_LIMITED_KEY));
             }
             return throwError(() => retryError);
           }),
@@ -78,12 +82,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
       if (error.status === 429) {
         recordApiFailure(audit, req.url, error.status);
-        showToast(toast, translate, translate.instant(RATE_LIMITED_KEY));
+        showToast(toast, i18n, i18n.translate(RATE_LIMITED_KEY));
         return throwError(() => error);
       }
 
       recordApiFailure(audit, req.url, error.status);
-      notify(toast, translate, error);
+      notify(toast, i18n, error);
       return throwError(() => error);
     }),
   );
@@ -99,29 +103,29 @@ function endpointTemplate(url: string): string {
   const path = url.split('?')[0].replace(/^https?:\/\/[^/]+/, '');
   return path
     .split('/')
-    .map(segment => (/^\d+$/.test(segment) || UUID_SEGMENT.test(segment) ? ':id' : segment))
+    .map((segment) => (/^\d+$/.test(segment) || UUID_SEGMENT.test(segment) ? ':id' : segment))
     .join('/');
 }
 
-function notify(toast: ToastController, translate: TranslateService, error: HttpErrorResponse): void {
+function notify(toast: ToastController, i18n: I18nService, error: HttpErrorResponse): void {
   const body = error.error as ConsumerApiError | null;
-  showToast(toast, translate, resolveMessage(translate, body));
+  showToast(toast, i18n, resolveMessage(i18n, body));
 }
 
-function showToast(toast: ToastController, translate: TranslateService, message: string): void {
+function showToast(toast: ToastController, i18n: I18nService, message: string): void {
   void toast
     .create({
       message,
       duration: 5000,
       position: 'bottom',
-      buttons: [{ text: translate.instant(DISMISS_KEY), role: 'cancel' }],
+      buttons: [{ text: i18n.translate(DISMISS_KEY), role: 'cancel' }],
     })
     .then((t) => t.present());
 }
 
-function resolveMessage(translate: TranslateService, body: ConsumerApiError | null): string {
+function resolveMessage(i18n: I18nService, body: ConsumerApiError | null): string {
   if (body?.code) {
-    const translated = translate.instant(body.code);
+    const translated = i18n.translate(body.code);
     if (translated !== body.code) {
       return translated;
     }
@@ -129,5 +133,5 @@ function resolveMessage(translate: TranslateService, body: ConsumerApiError | nu
   if (body?.defaultMessage) {
     return body.defaultMessage;
   }
-  return translate.instant(GENERIC_ERROR_KEY);
+  return i18n.translate(GENERIC_ERROR_KEY);
 }

@@ -53,7 +53,7 @@ describe('RegistrationService', () => {
         documentTypeName: 'SSN',
         documentKey: '123-45-6789',
       })
-      .subscribe(data => (registrationId = data.registrationId));
+      .subscribe((data) => (registrationId = data.registrationId));
 
     const req = controller.expectOne('/api/v1/registration/submit');
     expect(req.request.method).toBe('POST');
@@ -67,7 +67,7 @@ describe('RegistrationService', () => {
     let status: string | undefined;
     service
       .verifyOtp({ registrationId: 'reg-1', token: 'ABC123' })
-      .subscribe(data => (status = data.status));
+      .subscribe((data) => (status = data.status));
 
     const req = controller.expectOne('/api/v1/registration/otp/verify');
     expect(req.request.method).toBe('POST');

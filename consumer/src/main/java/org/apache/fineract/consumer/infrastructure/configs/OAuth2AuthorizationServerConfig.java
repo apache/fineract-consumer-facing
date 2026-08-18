@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
 import org.apache.fineract.consumer.infrastructure.access.filter.RateLimitFilter;
 import org.apache.fineract.consumer.infrastructure.access.repository.PrincipalUserLookupPort;
 import org.apache.fineract.consumer.infrastructure.access.service.RateLimitCounter;
@@ -61,9 +60,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.CsrfConfigurer;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
@@ -83,12 +79,8 @@ import org.springframework.security.oauth2.server.authorization.authentication.O
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationCodeRequestAuthenticationValidator;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationConsentAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2RefreshTokenAuthenticationProvider;
-import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
-import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
-import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
-import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.security.oauth2.server.authorization.token.DelegatingOAuth2TokenGenerator;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.JwtGenerator;
@@ -184,32 +176,6 @@ public class OAuth2AuthorizationServerConfig {
                 .oidcUserInfoEndpoint(OAuth2Constants.OIDC_USER_INFO_ENDPOINT)
                 .oidcLogoutEndpoint(OAuth2Constants.OIDC_LOGOUT_ENDPOINT)
                 .build();
-    }
-
-    @Bean
-    public RegisteredClientRepository registeredClientRepository(OAuth2ConsumerProperties oauth2Properties) {
-        OAuth2ConsumerProperties.TppClient tppClient = oauth2Properties.getTppClient();
-        RegisteredClient demoTpp = RegisteredClient.withId(tppClient.getId())
-                .clientId(tppClient.getId())
-                .clientSecret(PasswordEncoderFactories.createDelegatingPasswordEncoder().encode(tppClient.getSecret()))
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                .redirectUri(tppClient.getRedirectUri())
-                .scope(AuthenticationConstants.SCOPE_OPENBANKING_CONSENTS)
-                .scope(AuthenticationConstants.SCOPE_OPENBANKING_ACCOUNTS_READ)
-                .clientSettings(ClientSettings.builder()
-                        .requireProofKey(true)
-                        .requireAuthorizationConsent(true)
-                        .build())
-                .tokenSettings(TokenSettings.builder()
-                        .accessTokenTimeToLive(oauth2Properties.getAccessTokenTtl())
-                        .refreshTokenTimeToLive(oauth2Properties.getRefreshTokenTtl())
-                        .reuseRefreshTokens(false)
-                        .build())
-                .build();
-        return new InMemoryRegisteredClientRepository(demoTpp);
     }
 
     @Bean
@@ -352,15 +318,19 @@ public class OAuth2AuthorizationServerConfig {
 
         @Override
         public void save(OAuth2AuthorizationConsent authorizationConsent) {
+            // override default Spring Authorization Server methods to no-ops
         }
 
         @Override
         public void remove(OAuth2AuthorizationConsent authorizationConsent) {
+            // override default Spring Authorization Server methods to no-ops
         }
 
         @Override
         public OAuth2AuthorizationConsent findById(String registeredClientId, String principalName) {
+
             return null;
+
         }
     }
 }

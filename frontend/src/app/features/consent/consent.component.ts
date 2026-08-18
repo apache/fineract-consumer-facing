@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import { NgOptimizedImage } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import {
@@ -40,10 +41,26 @@ function csrfTokenFromCookie(): string {
 @Component({
   selector: 'app-consent',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IonButton, IonCard, IonCardContent, IonCardHeader, IonCardTitle, TranslatePipe],
+  imports: [
+    NgOptimizedImage,
+    IonButton,
+    IonCard,
+    IonCardContent,
+    IonCardHeader,
+    IonCardTitle,
+    TranslatePipe,
+  ],
   template: `
     <ion-card class="page-card">
       <ion-card-header>
+        <img
+          ngSrc="/apache-fineract-logo.png"
+          width="64"
+          height="64"
+          alt=""
+          class="page-logo"
+          priority
+        />
         <ion-card-title>{{ 'consent.title' | translate }}</ion-card-title>
       </ion-card-header>
 
@@ -83,11 +100,21 @@ function csrfTokenFromCookie(): string {
   `,
   styleUrls: ['../../shared/css/centered-page.scss'],
   styles: `
+    ion-card-header,
+    ion-card-content {
+      text-align: center;
+    }
+
+    .permissions {
+      list-style-position: inside;
+      padding-inline-start: 0;
+    }
+
     .actions {
       display: flex;
-      justify-content: flex-end;
+      justify-content: center;
       gap: 0.5rem;
-      margin-top: 1rem;
+      margin-top: 1.5rem;
     }
   `,
 })
@@ -98,7 +125,7 @@ export class ConsentComponent {
   protected readonly state = this.route.snapshot.queryParamMap.get('state') ?? '';
   protected readonly scopes = (this.route.snapshot.queryParamMap.get('scope') ?? '')
     .split(' ')
-    .filter(scope => scope.length > 0);
+    .filter((scope) => scope.length > 0);
   protected readonly csrfToken = csrfTokenFromCookie();
   protected readonly valid = this.tppClientId !== '' && this.state !== '';
 

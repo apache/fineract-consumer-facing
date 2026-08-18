@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import { NgOptimizedImage } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -35,13 +36,44 @@ import {
 } from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 import { VerifyOtpCommandData } from '@bff/client';
+import { NotificationService } from '../../core/notifications/notification.service';
 import { OtpComponent } from '../../shared/otp/otp.component';
 import { RegistrationService } from './registration.service';
+
+type IdentityField = 'fineractClientId' | 'email' | 'password' | 'documentTypeName' | 'documentKey';
+
+const IDENTITY_ERRORS: readonly { field: IdentityField; error: string; key: string }[] = [
+  {
+    field: 'fineractClientId',
+    error: 'required',
+    key: 'registration.identity.error.clientIdRequired',
+  },
+  { field: 'fineractClientId', error: 'min', key: 'registration.identity.error.clientIdInvalid' },
+  { field: 'email', error: 'required', key: 'registration.identity.error.emailRequired' },
+  { field: 'email', error: 'email', key: 'registration.identity.error.emailInvalid' },
+  { field: 'password', error: 'required', key: 'registration.identity.error.passwordRequired' },
+  { field: 'password', error: 'minlength', key: 'common.error.passwordRules' },
+  { field: 'password', error: 'maxlength', key: 'common.error.passwordRules' },
+  { field: 'password', error: 'pattern', key: 'common.error.passwordRules' },
+  {
+    field: 'documentTypeName',
+    error: 'required',
+    key: 'registration.identity.error.documentTypeRequired',
+  },
+  {
+    field: 'documentKey',
+    error: 'required',
+    key: 'registration.identity.error.documentKeyRequired',
+  },
+];
+
+const GENERIC_ERROR_KEY = 'registration.identity.error.invalid';
 
 @Component({
   selector: 'app-registration',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    NgOptimizedImage,
     ReactiveFormsModule,
     RouterLink,
     IonButton,
@@ -61,6 +93,14 @@ import { RegistrationService } from './registration.service';
     <ion-card class="page-card">
       @if (step() !== 'done') {
         <ion-card-header>
+          <img
+            ngSrc="/apache-fineract-logo.png"
+            width="64"
+            height="64"
+            alt=""
+            class="page-logo"
+            priority
+          />
           <ion-card-title>{{ 'registration.title' | translate }}</ion-card-title>
         </ion-card-header>
       }
@@ -116,7 +156,7 @@ import { RegistrationService } from './registration.service';
                 [label]="'registration.identity.documentNumberLabel' | translate"
                 autocomplete="off"
               />
-              <ion-button type="submit" [disabled]="loading() || identityForm.invalid">
+              <ion-button type="submit" [disabled]="loading()">
                 {{ 'common.action.continue' | translate }}
               </ion-button>
             </form>
@@ -187,6 +227,7 @@ export class RegistrationComponent {
   private readonly fb = inject(NonNullableFormBuilder);
   private readonly registration = inject(RegistrationService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notifications = inject(NotificationService);
 
   protected readonly step = signal<'identity' | 'otp' | 'done'>('identity');
   protected readonly loading = signal(false);
@@ -221,7 +262,11 @@ export class RegistrationComponent {
   }
 
   protected submitIdentity(): void {
-    if (this.identityForm.invalid) {
+    const problem = IDENTITY_ERRORS.find(({ field, error }) =>
+      this.identityForm.controls[field].hasError(error),
+    );
+    if (problem || this.identityForm.invalid) {
+      this.notifications.showError(problem?.key ?? GENERIC_ERROR_KEY);
       return;
     }
     const raw = this.identityForm.getRawValue();
@@ -236,7 +281,7 @@ export class RegistrationComponent {
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: data => {
+        next: (data) => {
           this.registrationId.set(data.registrationId ?? null);
           this.maskedLastFour.set(data.maskedLastFour ?? null);
           this.step.set('otp');
@@ -257,7 +302,7 @@ export class RegistrationComponent {
       .verifyOtp({ registrationId: id, token: code })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: data => {
+        next: (data) => {
           if (data.status === VerifyOtpCommandData.StatusEnum.Bound) {
             this.clearCooldown();
             this.step.set('done');
@@ -291,7 +336,7 @@ export class RegistrationComponent {
       .sendOtp({ registrationId: id, deliveryMethod: 'email' })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: data => {
+        next: (data) => {
           this.sentTo.set(data.sentTo ?? null);
           this.startCooldown(data.tokenLiveTimeInSec ?? 0);
           this.loading.set(false);
@@ -308,7 +353,7 @@ export class RegistrationComponent {
       return;
     }
     this.cooldownHandle = setInterval(() => {
-      this.resendCooldown.update(remaining => {
+      this.resendCooldown.update((remaining) => {
         if (remaining <= 1) {
           this.clearCooldown();
           return 0;

@@ -19,21 +19,13 @@
 
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Observable, tap } from 'rxjs';
+import { Observable } from 'rxjs';
 import {
-  ConfirmPasswordChangeCommandRequest,
   ForgotPasswordCommandRequest,
-  InitiatePasswordChangeCommandRequest,
-  OpenBankingConsentCommandData,
-  OpenBankingUserConsentQueryData,
-  OpenBankingUserConsentCommandControllerService,
-  OpenBankingUserConsentQueryControllerService,
   ResetPasswordCommandRequest,
   UserChargeQueryData,
   UserCommandControllerService,
   UserImageQueryData,
-  UserObligeeQueryData,
-  UserPasswordChangeChallengeCommandData,
   UserProfileQueryData,
   UserQueryControllerService,
 } from '@bff/client';
@@ -52,17 +44,12 @@ export interface ChargesFilter {
 export class ProfileStore {
   private readonly query = inject(UserQueryControllerService);
   private readonly command = inject(UserCommandControllerService);
-  private readonly consentQuery = inject(OpenBankingUserConsentQueryControllerService);
-  private readonly consentCommand = inject(OpenBankingUserConsentCommandControllerService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly profile = signal<UserProfileQueryData | null>(null);
   readonly charges = signal<UserChargeQueryData[]>([]);
   readonly totalFilteredRecords = signal(0);
-  readonly obligees = signal<UserObligeeQueryData[]>([]);
-  readonly consents = signal<OpenBankingUserConsentQueryData[]>([]);
   readonly image = signal<UserImageQueryData | null>(null);
-  readonly passwordChangeChallenge = signal<UserPasswordChangeChallengeCommandData | null>(null);
   readonly loading = signal(false);
 
   loadProfile(): void {
@@ -72,7 +59,7 @@ export class ProfileStore {
       .getUserProfile()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: profile => {
+        next: (profile) => {
           this.profile.set(profile);
           this.loading.set(false);
         },
@@ -87,7 +74,7 @@ export class ProfileStore {
       .getUserCharges(filter.status, filter.page, filter.size)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: response => {
+        next: (response) => {
           this.charges.set(response.charges ?? []);
           this.totalFilteredRecords.set(response.totalFilteredRecords ?? 0);
         },
@@ -101,49 +88,9 @@ export class ProfileStore {
       .getUserImage(IMAGE_MAX_WIDTH, IMAGE_MAX_HEIGHT)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: image => this.image.set(image),
+        next: (image) => this.image.set(image),
         error: () => {},
       });
-  }
-
-  loadObligees(): void {
-    this.obligees.set([]);
-    this.query
-      .getUserObligees()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: rows => this.obligees.set(rows),
-        error: () => {},
-      });
-  }
-
-  loadConsents(): void {
-    this.consents.set([]);
-    this.consentQuery
-      .listConsents()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: rows => this.consents.set(rows),
-        error: () => {},
-      });
-  }
-
-  revokeConsent(consentId: string): Observable<OpenBankingConsentCommandData> {
-    return this.consentCommand.revokeConsent(consentId);
-  }
-
-  initiatePasswordChange(
-    request: InitiatePasswordChangeCommandRequest,
-  ): Observable<UserPasswordChangeChallengeCommandData> {
-    return this.command
-      .initiatePasswordChange(deviceFingerprint(), request)
-      .pipe(tap(challenge => this.passwordChangeChallenge.set(challenge)));
-  }
-
-  confirmPasswordChange(request: ConfirmPasswordChangeCommandRequest): Observable<unknown> {
-    return this.command
-      .confirmPasswordChange(deviceFingerprint(), request)
-      .pipe(tap(() => this.passwordChangeChallenge.set(null)));
   }
 
   forgotPassword(request: ForgotPasswordCommandRequest): Observable<unknown> {

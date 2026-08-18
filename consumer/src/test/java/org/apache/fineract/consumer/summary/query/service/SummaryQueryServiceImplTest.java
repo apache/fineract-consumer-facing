@@ -62,7 +62,7 @@ class SummaryQueryServiceImplTest {
     private static final Long SAVINGS_ACCOUNT_ID = 42L;
     private static final String SAVINGS_ACCOUNT_NO = "000000042";
     private static final String SAVINGS_PRODUCT_NAME = "Regular Savings";
-    private static final String SAVINGS_STATUS = "Active";
+    private static final String SAVINGS_STATUS = "savingsAccountStatusType.active";
     private static final String CURRENCY_CODE = "USD";
     private static final String SAVINGS_BALANCE = "1500.50";
     private static final String SAVINGS_AVAILABLE_BALANCE = "1400.25";
@@ -101,7 +101,7 @@ class SummaryQueryServiceImplTest {
                 .id(SAVINGS_ACCOUNT_ID)
                 .accountNo(SAVINGS_ACCOUNT_NO)
                 .productName(SAVINGS_PRODUCT_NAME)
-                .status(new GetClientsSavingsAccountsStatus().value(SAVINGS_STATUS))
+                .status(new GetClientsSavingsAccountsStatus().code(SAVINGS_STATUS).active(true))
                 .currency(new GetClientsSavingsAccountsCurrency().code(CURRENCY_CODE))
                 .accountBalance(new BigDecimal(SAVINGS_BALANCE))
                 .availableBalance(new BigDecimal(SAVINGS_AVAILABLE_BALANCE));
@@ -126,6 +126,7 @@ class SummaryQueryServiceImplTest {
         assertThat(savingsItem.getAccountNo()).isEqualTo(SAVINGS_ACCOUNT_NO);
         assertThat(savingsItem.getProductName()).isEqualTo(SAVINGS_PRODUCT_NAME);
         assertThat(savingsItem.getStatus()).isEqualTo(SAVINGS_STATUS);
+        assertThat(savingsItem.isActive()).isTrue();
         assertThat(savingsItem.getCurrency()).isEqualTo(CURRENCY_CODE);
         assertThat(savingsItem.getAccountBalance()).isEqualByComparingTo(SAVINGS_BALANCE);
         assertThat(savingsItem.getAvailableBalance()).isEqualByComparingTo(SAVINGS_AVAILABLE_BALANCE);
@@ -136,6 +137,7 @@ class SummaryQueryServiceImplTest {
         assertThat(loanItem.getAccountNo()).isEqualTo(LOAN_ACCOUNT_NO);
         assertThat(loanItem.getProductName()).isEqualTo(LOAN_PRODUCT_NAME);
         assertThat(loanItem.getStatus()).isEqualTo(LOAN_STATUS_CODE);
+        assertThat(loanItem.isActive()).isFalse();
         assertThat(loanItem.getCurrency()).isEqualTo(CURRENCY_CODE);
         assertThat(loanItem.getLoanBalance()).isEqualByComparingTo(LOAN_BALANCE);
         assertThat(loanItem.getAmountPaid()).isEqualByComparingTo(LOAN_AMOUNT_PAID);

@@ -22,7 +22,6 @@ package org.apache.fineract.consumer.infrastructure.configs;
 import java.time.Duration;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
@@ -32,22 +31,9 @@ public class OAuth2ConsumerProperties {
 
     static final String PREFIX = "consumer.oauth2";
 
-    private final TppClient tppClient;
     private final Duration accessTokenTtl;
     private final Duration refreshTokenTtl;
     private final Duration consentTtl;
     private final String frontendBaseUrl;
     private final String kid;
-
-    @Getter
-    @RequiredArgsConstructor
-    @ToString(onlyExplicitlyIncluded = true)
-    public static class TppClient {
-
-        @ToString.Include
-        private final String id;
-        private final String secret;
-        @ToString.Include
-        private final String redirectUri;
-    }
 }

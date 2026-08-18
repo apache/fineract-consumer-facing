@@ -25,11 +25,14 @@ import feign.FeignException;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
 import org.apache.fineract.consumer.client.model.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.client.model.SavingsAccountQueryData;
+import org.apache.fineract.consumer.client.model.SavingsChargeQueryData;
+import org.apache.fineract.consumer.client.model.SavingsTransactionQueryResponse;
 import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
@@ -40,6 +43,7 @@ public class SavingsSteps {
     private static final String DEVICE_FINGERPRINT = "cucumber-savings-device";
     private static final int UNAUTHORIZED = 401;
     private static final int FORBIDDEN = 403;
+    private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("125.00");
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final FineractSeeder fineractSeeder = new FineractSeeder();
@@ -51,6 +55,8 @@ public class SavingsSteps {
 
     private List<SavingsAccountListItemQueryData> listResult;
     private SavingsAccountQueryData accountResult;
+    private List<SavingsChargeQueryData> chargesResult;
+    private SavingsTransactionQueryResponse transactionsResult;
     private int errorStatus;
 
     @Given("a logged-in savings customer with seeded accounts")
@@ -80,6 +86,31 @@ public class SavingsSteps {
         assertThat(accountResult).isNotNull();
         assertThat(accountResult.getId()).isEqualTo(user.savingsAccountId());
         assertThat(accountResult.getBalance()).isNotNull();
+        assertThat(accountResult.getCurrency()).isNotBlank();
+    }
+
+    @Given("my savings account has a deposit")
+    public void savingsAccountHasDeposit() {
+        fineractSeeder.depositToSavings(user.savingsAccountId(), DEPOSIT_AMOUNT);
+    }
+
+    @When("I list my savings account charges")
+    public void listSavingsCharges() {
+        chargesResult = savingsApi.getSavingsCharges(user.savingsAccountId());
+    }
+
+    @When("I list my savings account transactions")
+    public void listSavingsTransactions() {
+        transactionsResult = savingsApi.searchSavingsTransactions(
+                user.savingsAccountId(), null, null, null, null, null);
+    }
+
+    @Then("the savings amounts carry a currency")
+    public void savingsAmountsCarryCurrency() {
+        assertThat(accountResult.getCurrency()).isNotBlank();
+        assertThat(chargesResult).allSatisfy(charge -> assertThat(charge.getCurrency()).isNotBlank());
+        assertThat(transactionsResult.getContent()).isNotEmpty()
+                .allSatisfy(transaction -> assertThat(transaction.getCurrency()).isNotBlank());
     }
 
     @When("I list savings accounts without a session")

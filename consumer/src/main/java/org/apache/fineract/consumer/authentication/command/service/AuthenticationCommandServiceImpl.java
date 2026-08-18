@@ -58,9 +58,9 @@ import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.jwt.service.JwtIssuer;
 import org.apache.fineract.consumer.infrastructure.kyc.service.ClientStandingChecker;
 import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
-import org.apache.fineract.consumer.otp.command.data.OtpConstants;
-import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
+import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -85,7 +85,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
     private static final String REFRESH_REASON_DEVICE_MISMATCH = "device_mismatch";
 
     private final PrincipalUserAuthLookupPort principalUserAuthLookup;
-    private final OtpCommandService otpCommandService;
+    private final OtpService otpService;
     private final PasswordEncoder passwordEncoder;
     private final JwtIssuer jwtIssuer;
     private final JwtDecoder jwtDecoder;
@@ -111,7 +111,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
                 .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
                 .target(command.getEmail())
                 .build();
-        otpCommandService.createOtp(user.getPublicId(), destination);
+        otpService.createOtp(user.getPublicId(), destination);
 
         IssuedJwt challenge = jwtIssuer.issue(
                 user.getPublicId().toString(),
@@ -140,7 +140,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         }
 
         UUID publicId = UUID.fromString(challenge.getSubject());
-        otpCommandService.validateOtp(publicId, command.getToken(), TwoFactorInvalidException::new);
+        otpService.validateOtp(publicId, command.getToken(), TwoFactorInvalidException::new);
 
         PrincipalUserAuthData user = principalUserAuthLookup.findByPublicId(publicId);
         EstablishedSessionCommandData session = establishSession(user.getId(), publicId, user.isBound(),

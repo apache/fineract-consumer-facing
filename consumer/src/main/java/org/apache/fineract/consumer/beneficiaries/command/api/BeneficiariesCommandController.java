@@ -64,7 +64,6 @@ public class BeneficiariesCommandController {
                 .name(request.getName())
                 .officeName(request.getOfficeName())
                 .accountNumber(request.getAccountNumber())
-                .accountType(request.getAccountType())
                 .transferLimit(request.getTransferLimit())
                 .deviceFingerprint(deviceFingerprint)
                 .build();
@@ -83,7 +82,6 @@ public class BeneficiariesCommandController {
                 .name(request.getName())
                 .officeName(request.getOfficeName())
                 .accountNumber(request.getAccountNumber())
-                .accountType(request.getAccountType())
                 .transferLimit(request.getTransferLimit())
                 .deviceFingerprint(deviceFingerprint)
                 .build();

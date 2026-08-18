@@ -28,8 +28,7 @@ export class AuditErrorHandler extends ErrorHandler {
   override handleError(error: unknown): void {
     try {
       this.audit.record('CLIENT_ERROR', buildDetails(describeError(error)));
-    } catch {
-    }
+    } catch {}
     super.handleError(error);
   }
 }
@@ -44,6 +43,6 @@ function describeError(error: unknown): Record<string, string | undefined> {
 function topStackFrame(error: Error): string | undefined {
   return error.stack
     ?.split('\n')
-    .map(line => line.trim())
-    .find(line => line.startsWith('at '));
+    .map((line) => line.trim())
+    .find((line) => line.startsWith('at '));
 }

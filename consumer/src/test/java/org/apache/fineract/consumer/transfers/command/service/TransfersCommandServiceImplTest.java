@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,7 +41,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
@@ -57,9 +57,9 @@ import org.apache.fineract.consumer.infrastructure.idempotency.service.Idempoten
 import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyHolder;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
 import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
-import org.apache.fineract.consumer.otp.command.data.OtpConstants;
-import org.apache.fineract.consumer.otp.command.data.OtpDestination;
-import org.apache.fineract.consumer.otp.command.service.OtpCommandService;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
+import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
+import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
 import org.apache.fineract.consumer.transfers.command.data.ConfirmTransferCommand;
 import org.apache.fineract.consumer.transfers.command.data.InitiateTransferCommand;
 import org.apache.fineract.consumer.transfers.command.data.TransferChallengeCommandData;
@@ -103,6 +103,8 @@ class TransfersCommandServiceImplTest {
     private static final BigDecimal AMOUNT = new BigDecimal("100.00");
     private static final BigDecimal BENEFICIARY_LIMIT_ABOVE_AMOUNT = new BigDecimal("200.00");
     private static final BigDecimal BENEFICIARY_LIMIT_BELOW_AMOUNT = new BigDecimal("50.00");
+    private static final BigDecimal BENEFICIARY_LIMIT = new BigDecimal("500.00");
+    private static final BigDecimal AMOUNT_ABOVE_BENEFICIARY_LIMIT = new BigDecimal("501.00");
     private static final Long TRANSFER_ID = 999L;
     private static final String IDEMPOTENCY_KEY = "txn-key-1";
 
@@ -116,7 +118,7 @@ class TransfersCommandServiceImplTest {
     private BeneficiariesQueryService beneficiariesQueryService;
 
     @Mock
-    private OtpCommandService otpCommandService;
+    private OtpService otpService;
 
     @Mock
     private StepUpTokenService stepUpTokenService;
@@ -154,33 +156,64 @@ class TransfersCommandServiceImplTest {
                 .build();
     }
 
-    private static BeneficiaryQueryData beneficiary(BeneficiaryAccountType accountType, BigDecimal transferLimit) {
+    private static BeneficiaryQueryData beneficiary(BigDecimal transferLimit) {
         return BeneficiaryQueryData.builder()
                 .publicId(UUID.fromString("3f2c8a1e-0000-4000-8000-000000000002"))
                 .name("Alice")
-                .accountType(accountType)
+                .fineractAccountId(TO_SAVINGS_ID)
                 .transferLimit(transferLimit)
                 .build();
     }
 
     private static InitiateTransferCommand initiateSavingsCommand() {
+        return initiateSavingsCommand(AMOUNT);
+    }
+
+    private static InitiateTransferCommand initiateSavingsCommand(BigDecimal amount) {
         return InitiateTransferCommand.builder()
                 .fromAccountId(FROM_SAVINGS_ID)
                 .toAccountId(TO_SAVINGS_ID)
                 .toAccountType(TransferConstants.SAVINGS_TYPE_NAME)
+                .amount(amount)
+                .deviceFingerprint(DEVICE_FINGERPRINT)
+                .build();
+    }
+
+    private static InitiateTransferCommand initiateLoanCommand() {
+        return InitiateTransferCommand.builder()
+                .fromAccountId(FROM_SAVINGS_ID)
+                .toAccountId(TO_LOAN_ID)
+                .toAccountType(TransferConstants.LOAN_TYPE_NAME)
                 .amount(AMOUNT)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
     }
 
+    private static ConfirmTransferCommand confirmLoanCommand() {
+        return ConfirmTransferCommand.builder()
+                .stepUpToken(STEP_UP_TOKEN)
+                .otp(OTP)
+                .fromAccountId(FROM_SAVINGS_ID)
+                .toAccountId(TO_LOAN_ID)
+                .toAccountType(TransferConstants.LOAN_TYPE_NAME)
+                .amount(AMOUNT)
+                .deviceFingerprint(DEVICE_FINGERPRINT)
+                .idempotencyKey(IDEMPOTENCY_KEY)
+                .build();
+    }
+
     private static ConfirmTransferCommand confirmSavingsCommand() {
+        return confirmSavingsCommand(AMOUNT);
+    }
+
+    private static ConfirmTransferCommand confirmSavingsCommand(BigDecimal amount) {
         return ConfirmTransferCommand.builder()
                 .stepUpToken(STEP_UP_TOKEN)
                 .otp(OTP)
                 .fromAccountId(FROM_SAVINGS_ID)
                 .toAccountId(TO_SAVINGS_ID)
                 .toAccountType(TransferConstants.SAVINGS_TYPE_NAME)
-                .amount(AMOUNT)
+                .amount(amount)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .idempotencyKey(IDEMPOTENCY_KEY)
                 .build();
@@ -199,9 +232,8 @@ class TransfersCommandServiceImplTest {
                 .thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(false);
-        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID, BeneficiaryAccountType.SAVINGS))
-                .thenReturn(Optional.of(beneficiary(BeneficiaryAccountType.SAVINGS, BENEFICIARY_LIMIT_ABOVE_AMOUNT)));
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(BENEFICIARY_LIMIT_ABOVE_AMOUNT)));
         when(clientApi.retrieveOneClient(CLIENT_ID, false))
                 .thenReturn(new GetClientsClientIdResponse().officeId(CALLER_OFFICE_ID));
         when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false))
@@ -211,9 +243,13 @@ class TransfersCommandServiceImplTest {
     }
 
     private void stubSavingsFingerprintAndIssue() {
+        stubSavingsFingerprintAndIssue(AMOUNT);
+    }
+
+    private void stubSavingsFingerprintAndIssue(BigDecimal amount) {
         Instant expiresAt = Instant.now().plusSeconds(300);
         when(stepUpTokenService.actionFingerprint(
-                TransferConstants.ENDPOINT, FROM_SAVINGS_ID, TO_SAVINGS_ID, TransferConstants.SAVINGS_TYPE_CODE, AMOUNT))
+                TransferConstants.ENDPOINT, FROM_SAVINGS_ID, TO_SAVINGS_ID, TransferConstants.SAVINGS_TYPE_CODE, amount))
                 .thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.issue(eq(PUBLIC_ID), eq(DEVICE_FINGERPRINT), eq(ACTION_FINGERPRINT), any()))
                 .thenReturn(IssuedJwt.builder().tokenValue(STEP_UP_TOKEN).expiresAt(expiresAt).build());
@@ -223,9 +259,8 @@ class TransfersCommandServiceImplTest {
     void initiateSendsOtpIssuesTokenAndMasksDestination() {
         Instant expiresAt = Instant.now().plusSeconds(300);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(false);
-        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID, BeneficiaryAccountType.SAVINGS))
-                .thenReturn(Optional.of(beneficiary(BeneficiaryAccountType.SAVINGS, null)));
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(null)));
         when(stepUpTokenService.actionFingerprint(
                 TransferConstants.ENDPOINT, FROM_SAVINGS_ID, TO_SAVINGS_ID, TransferConstants.SAVINGS_TYPE_CODE, AMOUNT))
                 .thenReturn(ACTION_FINGERPRINT);
@@ -241,29 +276,27 @@ class TransfersCommandServiceImplTest {
         verify(accessPolicyEvaluator).authorize(any(), eq(ConsumerAction.TRANSFER_EXECUTE), eq(FROM_SAVINGS_ID), any());
 
         ArgumentCaptor<OtpDestination> destination = ArgumentCaptor.forClass(OtpDestination.class);
-        verify(otpCommandService).createOtp(eq(PUBLIC_ID), destination.capture());
+        verify(otpService).createOtp(eq(PUBLIC_ID), destination.capture());
         assertThat(destination.getValue().getDeliveryMethod()).isEqualTo(OtpConstants.EMAIL_DELIVERY_METHOD_NAME);
         assertThat(destination.getValue().getTarget()).isEqualTo(EMAIL);
     }
 
     @Test
-    void initiateAllowsOwnedDestinationWithoutBeneficiaryLookup() {
+    void initiateAllowsOwnedDestinationWithoutBeneficiaryRow() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID)).thenReturn(Optional.empty());
         when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(true);
         stubSavingsFingerprintAndIssue();
 
         service.initiate(jwt(), initiateSavingsCommand());
 
-        verify(beneficiariesQueryService, never()).findActiveByAccount(any(), any(), any());
-        verify(otpCommandService).createOtp(eq(PUBLIC_ID), any());
+        verify(otpService).createOtp(eq(PUBLIC_ID), any());
     }
 
     @Test
-    void initiateAllowsLoanBeneficiaryDestination() {
+    void initiateAllowsOwnLoanDestination() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.LOANS), eq(TO_LOAN_ID))).thenReturn(false);
-        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_LOAN_ID, BeneficiaryAccountType.LOAN))
-                .thenReturn(Optional.of(beneficiary(BeneficiaryAccountType.LOAN, null)));
+        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.LOANS), eq(TO_LOAN_ID))).thenReturn(true);
         Instant expiresAt = Instant.now().plusSeconds(300);
         when(stepUpTokenService.actionFingerprint(
                 TransferConstants.ENDPOINT, FROM_SAVINGS_ID, TO_LOAN_ID, TransferConstants.LOAN_TYPE_CODE, AMOUNT))
@@ -271,58 +304,91 @@ class TransfersCommandServiceImplTest {
         when(stepUpTokenService.issue(eq(PUBLIC_ID), eq(DEVICE_FINGERPRINT), eq(ACTION_FINGERPRINT), any()))
                 .thenReturn(IssuedJwt.builder().tokenValue(STEP_UP_TOKEN).expiresAt(expiresAt).build());
 
-        InitiateTransferCommand command = InitiateTransferCommand.builder()
-                .fromAccountId(FROM_SAVINGS_ID)
-                .toAccountId(TO_LOAN_ID)
-                .toAccountType(TransferConstants.LOAN_TYPE_NAME)
-                .amount(AMOUNT)
-                .deviceFingerprint(DEVICE_FINGERPRINT)
-                .build();
+        service.initiate(jwt(), initiateLoanCommand());
 
-        service.initiate(jwt(), command);
+        verify(beneficiariesQueryService, never()).findActiveByAccount(any(), any());
+        verify(otpService).createOtp(eq(PUBLIC_ID), any());
+    }
 
-        verify(otpCommandService).createOtp(eq(PUBLIC_ID), any());
+    @Test
+    void initiateDeniedWhenLoanDestinationNotOwned() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.LOANS), eq(TO_LOAN_ID))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.initiate(jwt(), initiateLoanCommand()))
+                .isInstanceOf(TransferAccessDeniedException.class)
+                .hasFieldOrPropertyWithValue("code", TransferAccessDeniedException.CODE);
+
+        verify(beneficiariesQueryService, never()).findActiveByAccount(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
     void initiateAllowsBeneficiaryWithinLimit() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(false);
-        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID, BeneficiaryAccountType.SAVINGS))
-                .thenReturn(Optional.of(beneficiary(BeneficiaryAccountType.SAVINGS, BENEFICIARY_LIMIT_ABOVE_AMOUNT)));
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(BENEFICIARY_LIMIT_ABOVE_AMOUNT)));
         stubSavingsFingerprintAndIssue();
 
         service.initiate(jwt(), initiateSavingsCommand());
 
-        verify(otpCommandService).createOtp(eq(PUBLIC_ID), any());
+        verify(otpService).createOtp(eq(PUBLIC_ID), any());
     }
 
     @Test
     void initiateDeniedWhenBeneficiaryLimitExceeded() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(false);
-        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID, BeneficiaryAccountType.SAVINGS))
-                .thenReturn(Optional.of(beneficiary(BeneficiaryAccountType.SAVINGS, BENEFICIARY_LIMIT_BELOW_AMOUNT)));
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(BENEFICIARY_LIMIT_BELOW_AMOUNT)));
 
         assertThatThrownBy(() -> service.initiate(jwt(), initiateSavingsCommand()))
                 .isInstanceOf(TransferBeneficiaryLimitExceededException.class)
                 .hasFieldOrPropertyWithValue("code", TransferBeneficiaryLimitExceededException.CODE);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
+    }
+
+    @Test
+    void initiateDeniedWhenOwnedDestinationExceedsBeneficiaryLimit() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        lenient().when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID)))
+                .thenReturn(true);
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(BENEFICIARY_LIMIT)));
+
+        assertThatThrownBy(() -> service.initiate(jwt(), initiateSavingsCommand(AMOUNT_ABOVE_BENEFICIARY_LIMIT)))
+                .isInstanceOf(TransferBeneficiaryLimitExceededException.class)
+                .hasFieldOrPropertyWithValue("code", TransferBeneficiaryLimitExceededException.CODE);
+
+        verify(otpService, never()).createOtp(any(), any());
+    }
+
+    @Test
+    void initiateAllowsOwnedDestinationAtBeneficiaryLimit() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        lenient().when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID)))
+                .thenReturn(true);
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(BENEFICIARY_LIMIT)));
+        stubSavingsFingerprintAndIssue(BENEFICIARY_LIMIT);
+
+        service.initiate(jwt(), initiateSavingsCommand(BENEFICIARY_LIMIT));
+
+        verify(otpService).createOtp(eq(PUBLIC_ID), any());
     }
 
     @Test
     void initiateDeniedWhenDestinationUnregistered() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(false);
-        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID, BeneficiaryAccountType.SAVINGS))
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.initiate(jwt(), initiateSavingsCommand()))
                 .isInstanceOf(TransferAccessDeniedException.class)
                 .hasFieldOrPropertyWithValue("code", TransferAccessDeniedException.CODE);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
@@ -335,8 +401,8 @@ class TransfersCommandServiceImplTest {
                 .isInstanceOf(TransferAccessDeniedException.class)
                 .hasFieldOrPropertyWithValue("code", TransferAccessDeniedException.CODE);
 
-        verify(beneficiariesQueryService, never()).findActiveByAccount(any(), any(), any());
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(beneficiariesQueryService, never()).findActiveByAccount(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
@@ -353,7 +419,7 @@ class TransfersCommandServiceImplTest {
                 .isInstanceOf(TransferInvalidException.class)
                 .hasFieldOrPropertyWithValue("code", TransferInvalidException.CODE);
 
-        verify(otpCommandService, never()).createOtp(any(), any());
+        verify(otpService, never()).createOtp(any(), any());
     }
 
     @Test
@@ -363,9 +429,8 @@ class TransfersCommandServiceImplTest {
                 .thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(false);
-        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID, BeneficiaryAccountType.SAVINGS))
-                .thenReturn(Optional.of(beneficiary(BeneficiaryAccountType.SAVINGS, BENEFICIARY_LIMIT_ABOVE_AMOUNT)));
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(BENEFICIARY_LIMIT_ABOVE_AMOUNT)));
         when(clientApi.retrieveOneClient(CLIENT_ID, false))
                 .thenReturn(new GetClientsClientIdResponse().officeId(CALLER_OFFICE_ID));
         when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false))
@@ -402,17 +467,80 @@ class TransfersCommandServiceImplTest {
     }
 
     @Test
+    void confirmCompletesTransferToOwnLoanDestination() {
+        when(stepUpTokenService.actionFingerprint(
+                TransferConstants.ENDPOINT, FROM_SAVINGS_ID, TO_LOAN_ID, TransferConstants.LOAN_TYPE_CODE, AMOUNT))
+                .thenReturn(ACTION_FINGERPRINT);
+        when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.LOANS), eq(TO_LOAN_ID))).thenReturn(true);
+        when(clientApi.retrieveOneClient(CLIENT_ID, false))
+                .thenReturn(new GetClientsClientIdResponse().officeId(CALLER_OFFICE_ID));
+        when(accountTransfersApi.createAccountTransfer(any()))
+                .thenReturn(new PostAccountTransfersResponse().resourceId(TRANSFER_ID));
+
+        TransferCommandData result = service.confirm(jwt(), confirmLoanCommand());
+
+        assertThat(result.getTransferId()).isEqualTo(TRANSFER_ID);
+        assertThat(result.getToAccountId()).isEqualTo(TO_LOAN_ID);
+
+        ArgumentCaptor<AccountTransferRequest> request = ArgumentCaptor.forClass(AccountTransferRequest.class);
+        verify(accountTransfersApi).createAccountTransfer(request.capture());
+        AccountTransferRequest sent = request.getValue();
+        assertThat(sent.getToAccountType()).isEqualTo(TransferConstants.LOAN_TYPE_CODE);
+        assertThat(sent.getToClientId()).isEqualTo(String.valueOf(CLIENT_ID));
+        assertThat(sent.getToOfficeId()).isEqualTo(String.valueOf(CALLER_OFFICE_ID));
+        verify(beneficiariesQueryService, never()).findActiveByAccount(any(), any());
+    }
+
+    @Test
+    void confirmDeniedWhenLoanDestinationNotOwned() {
+        when(stepUpTokenService.actionFingerprint(
+                TransferConstants.ENDPOINT, FROM_SAVINGS_ID, TO_LOAN_ID, TransferConstants.LOAN_TYPE_CODE, AMOUNT))
+                .thenReturn(ACTION_FINGERPRINT);
+        when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.LOANS), eq(TO_LOAN_ID))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.confirm(jwt(), confirmLoanCommand()))
+                .isInstanceOf(TransferAccessDeniedException.class)
+                .hasFieldOrPropertyWithValue("code", TransferAccessDeniedException.CODE);
+
+        verify(beneficiariesQueryService, never()).findActiveByAccount(any(), any());
+        verify(accountTransfersApi, never()).createAccountTransfer(any());
+    }
+
+    @Test
     void confirmDeniedWhenBeneficiaryLimitExceeded() {
         when(stepUpTokenService.actionFingerprint(
                 TransferConstants.ENDPOINT, FROM_SAVINGS_ID, TO_SAVINGS_ID, TransferConstants.SAVINGS_TYPE_CODE, AMOUNT))
                 .thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(false);
-        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID, BeneficiaryAccountType.SAVINGS))
-                .thenReturn(Optional.of(beneficiary(BeneficiaryAccountType.SAVINGS, BENEFICIARY_LIMIT_BELOW_AMOUNT)));
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(BENEFICIARY_LIMIT_BELOW_AMOUNT)));
 
         assertThatThrownBy(() -> service.confirm(jwt(), confirmSavingsCommand()))
+                .isInstanceOf(TransferBeneficiaryLimitExceededException.class)
+                .hasFieldOrPropertyWithValue("code", TransferBeneficiaryLimitExceededException.CODE);
+
+        verify(accountTransfersApi, never()).createAccountTransfer(any());
+    }
+
+    @Test
+    void confirmDeniedWhenOwnedDestinationExceedsBeneficiaryLimit() {
+        when(stepUpTokenService.actionFingerprint(
+                TransferConstants.ENDPOINT, FROM_SAVINGS_ID, TO_SAVINGS_ID, TransferConstants.SAVINGS_TYPE_CODE,
+                AMOUNT_ABOVE_BENEFICIARY_LIMIT))
+                .thenReturn(ACTION_FINGERPRINT);
+        when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        lenient().when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID)))
+                .thenReturn(true);
+        when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(BENEFICIARY_LIMIT)));
+
+        assertThatThrownBy(() -> service.confirm(jwt(), confirmSavingsCommand(AMOUNT_ABOVE_BENEFICIARY_LIMIT)))
                 .isInstanceOf(TransferBeneficiaryLimitExceededException.class)
                 .hasFieldOrPropertyWithValue("code", TransferBeneficiaryLimitExceededException.CODE);
 
@@ -440,7 +568,7 @@ class TransfersCommandServiceImplTest {
                 .thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        doAnswer(throwsCallerSuppliedException(2)).when(otpCommandService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
+        doAnswer(throwsCallerSuppliedException(2)).when(otpService).validateOtp(eq(PUBLIC_ID), eq(OTP), any());
 
         assertThatThrownBy(() -> service.confirm(jwt(), confirmSavingsCommand()))
                 .isInstanceOf(TransferStepUpInvalidException.class)

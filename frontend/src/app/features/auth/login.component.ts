@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import { NgOptimizedImage } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -42,6 +43,7 @@ export function allowedReturnUrl(returnUrl: string | null): string | null {
   selector: 'app-login',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    NgOptimizedImage,
     ReactiveFormsModule,
     IonButton,
     IonCard,
@@ -57,6 +59,14 @@ export function allowedReturnUrl(returnUrl: string | null): string | null {
   template: `
     <ion-card class="page-card">
       <ion-card-header>
+        <img
+          ngSrc="/apache-fineract-logo.png"
+          width="64"
+          height="64"
+          alt=""
+          class="page-logo"
+          priority
+        />
         <ion-card-title>{{ 'auth.login.title' | translate }}</ion-card-title>
       </ion-card-header>
 
@@ -133,7 +143,7 @@ export class LoginComponent {
       .login(this.credentialsForm.getRawValue())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: challenge => {
+        next: (challenge) => {
           this.challengeToken = challenge.challengeToken ?? null;
           this.sentTo.set(challenge.sentTo ?? null);
           this.step.set('otp');

@@ -39,4 +39,5 @@ public final class SavingsSummaryItemQueryData {
     private final String currency;
     private final BigDecimal accountBalance;
     private final BigDecimal availableBalance;
+    private final boolean active;
 }

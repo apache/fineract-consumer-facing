@@ -27,12 +27,21 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.List;
+import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
 import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
 import org.apache.fineract.consumer.client.api.TransfersCommandControllerApi;
+import org.apache.fineract.consumer.client.api.TransfersQueryControllerApi;
+import org.apache.fineract.consumer.client.model.BeneficiaryChallengeCommandData;
+import org.apache.fineract.consumer.client.model.ConfirmAddBeneficiaryCommandRequest;
 import org.apache.fineract.consumer.client.model.ConfirmTransferCommandRequest;
+import org.apache.fineract.consumer.client.model.InitiateAddBeneficiaryCommandRequest;
 import org.apache.fineract.consumer.client.model.InitiateTransferCommandRequest;
 import org.apache.fineract.consumer.client.model.TransferChallengeCommandData;
 import org.apache.fineract.consumer.client.model.TransferCommandData;
+import org.apache.fineract.consumer.client.model.TransferQueryData;
+import org.apache.fineract.consumer.client.model.TransferQueryResponse;
+import org.apache.fineract.consumer.transfers.query.data.TransferDirection;
 import org.apache.fineract.consumer.cucumber.clients.MailpitClient;
 import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
@@ -47,6 +56,9 @@ public class TransfersSteps {
     private static final int FORBIDDEN = 403;
     private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("1000.00");
     private static final BigDecimal TRANSFER_AMOUNT = new BigDecimal("100.00");
+    private static final String BENEFICIARY_NAME = "Cuke Transfer Beneficiary";
+    private static final Integer FIRST_PAGE = 0;
+    private static final Integer PAGE_SIZE = 20;
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final FineractSeeder fineractSeeder = new FineractSeeder();
@@ -54,9 +66,13 @@ public class TransfersSteps {
     private final MailpitClient mailpit = new MailpitClient();
 
     private RegistrationHelper.BoundUserWithAccounts user;
+    private String accessToken;
     private TransfersCommandControllerApi transfersApi;
     private SavingsQueryControllerApi savingsApi;
+    private BeneficiariesCommandControllerApi beneficiariesApi;
+    private FineractSeeder.SeededTransferTarget beneficiaryTarget;
     private long foreignSavingsId;
+    private long foreignLoanId;
     private TransferCommandData transferResult;
     private TransferCommandData secondTransferResult;
     private int errorStatus;
@@ -65,15 +81,41 @@ public class TransfersSteps {
     public void loggedInCustomerWithFundedSavingsAndLoan() {
         user = registrationHelper.registerBoundUserWithAccounts();
         fineractSeeder.depositToSavings(user.savingsAccountId(), DEPOSIT_AMOUNT);
-        String accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
+        accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
         transfersApi = authenticatedClient(accessToken);
         savingsApi = ConsumerApiClientFactory.authenticated(
                 SavingsQueryControllerApi.class, accessToken, DEVICE_FINGERPRINT);
+        beneficiariesApi = ConsumerApiClientFactory.authenticated(
+                BeneficiariesCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
     }
 
     @When("I transfer money from my savings account to my loan")
     public void transferSavingsToLoan() {
         transferResult = confirmTransferToLoan(UUID.randomUUID().toString());
+    }
+
+    @Given("another client owns a savings account I registered as a beneficiary")
+    public void anotherClientOwnsSavingsRegisteredAsBeneficiary() {
+        beneficiaryTarget = fineractSeeder.seedTransferTarget();
+        mailpit.deleteMessages(user.email());
+        BeneficiaryChallengeCommandData challenge = beneficiariesApi.initiateAddBeneficiary(DEVICE_FINGERPRINT,
+                new InitiateAddBeneficiaryCommandRequest()
+                        .name(BENEFICIARY_NAME)
+                        .officeName(beneficiaryTarget.officeName())
+                        .accountNumber(beneficiaryTarget.savingsAccountNumber()));
+        String otp = mailpit.waitForOtp(user.email());
+        beneficiariesApi.confirmAddBeneficiary(DEVICE_FINGERPRINT,
+                new ConfirmAddBeneficiaryCommandRequest()
+                        .stepUpToken(challenge.getStepUpToken())
+                        .otp(otp)
+                        .name(BENEFICIARY_NAME)
+                        .officeName(beneficiaryTarget.officeName())
+                        .accountNumber(beneficiaryTarget.savingsAccountNumber()));
+    }
+
+    @When("I transfer money from my savings account to the beneficiary")
+    public void transferSavingsToBeneficiary() {
+        transferResult = confirmTransferToBeneficiary();
     }
 
     @When("I confirm the transfer twice with the same idempotency key")
@@ -132,6 +174,25 @@ public class TransfersSteps {
                         .amount(TRANSFER_AMOUNT));
     }
 
+    private TransferCommandData confirmTransferToBeneficiary() {
+        mailpit.deleteMessages(user.email());
+        TransferChallengeCommandData challenge = transfersApi.initiateTransfer(DEVICE_FINGERPRINT,
+                new InitiateTransferCommandRequest()
+                        .fromAccountId(user.savingsAccountId())
+                        .toAccountId(beneficiaryTarget.savingsAccountId())
+                        .toAccountType(TransferConstants.SAVINGS_TYPE_NAME)
+                        .amount(TRANSFER_AMOUNT));
+        String otp = mailpit.waitForOtp(user.email());
+        return transfersApi.confirmTransfer(DEVICE_FINGERPRINT, UUID.randomUUID().toString(),
+                new ConfirmTransferCommandRequest()
+                        .stepUpToken(challenge.getStepUpToken())
+                        .otp(otp)
+                        .fromAccountId(user.savingsAccountId())
+                        .toAccountId(beneficiaryTarget.savingsAccountId())
+                        .toAccountType(TransferConstants.SAVINGS_TYPE_NAME)
+                        .amount(TRANSFER_AMOUNT));
+    }
+
     @Then("the transfer is accepted with a transfer id")
     public void transferAccepted() {
         assertThat(transferResult).isNotNull();
@@ -161,6 +222,21 @@ public class TransfersSteps {
         foreignSavingsId = fineractSeeder.seedActiveClientWithAccounts().savingsAccountId();
     }
 
+    @Given("another client owns a loan I can target")
+    public void anotherClientOwnsLoan() {
+        foreignLoanId = fineractSeeder.seedActiveClientWithAccounts().loanAccountId();
+    }
+
+    @When("I initiate a transfer to the other client's loan")
+    public void initiateTransferToForeignLoan() {
+        errorStatus = captureErrorStatus(() -> transfersApi.initiateTransfer(DEVICE_FINGERPRINT,
+                new InitiateTransferCommandRequest()
+                        .fromAccountId(user.savingsAccountId())
+                        .toAccountId(foreignLoanId)
+                        .toAccountType(TransferConstants.LOAN_TYPE_NAME)
+                        .amount(TRANSFER_AMOUNT)));
+    }
+
     @When("I initiate a transfer from the other client's savings account")
     public void initiateTransferFromForeignSavings() {
         errorStatus = captureErrorStatus(() -> transfersApi.initiateTransfer(DEVICE_FINGERPRINT,
@@ -169,6 +245,51 @@ public class TransfersSteps {
                         .toAccountId(user.savingsAccountId())
                         .toAccountType(TransferConstants.SAVINGS_TYPE_NAME)
                         .amount(TRANSFER_AMOUNT)));
+    }
+
+    @Then("my transfer history contains the transfer as an outgoing entry")
+    public void transferHistoryContainsOutgoingEntry() {
+        TransferQueryData entry = transferHistory().stream()
+                .filter(item -> transferResult.getTransferId().equals(item.getTransferId()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("expected the completed transfer in the history"));
+        assertThat(entry.getAmount()).isEqualByComparingTo(TRANSFER_AMOUNT);
+        assertThat(entry.getDirection().getValue()).isEqualTo(TransferDirection.OUTGOING.name());
+        assertThat(entry.getFromAccount()).isNotNull();
+        assertThat(entry.getDate()).isNotNull();
+    }
+
+    @Then("my transfer history does not contain the transfer")
+    public void transferHistoryExcludesTransfer() {
+        assertThat(transferHistory())
+                .extracting(TransferQueryData::getTransferId)
+                .doesNotContain(transferResult.getTransferId());
+    }
+
+    @Then("my transfer history reports that no further page exists")
+    public void transferHistoryReportsNoFurtherPage() {
+        TransferQueryResponse page = transferHistoryPage();
+        assertThat(page.getPage()).isEqualTo(FIRST_PAGE);
+        assertThat(page.getSize()).isEqualTo(PAGE_SIZE);
+        assertThat(page.getTotalElements()).isEqualTo(page.getContent().size());
+        assertThat(page.getTotalPages()).isEqualTo(1);
+    }
+
+    private List<TransferQueryData> transferHistory() {
+        return transferHistoryPage().getContent();
+    }
+
+    private TransferQueryResponse transferHistoryPage() {
+        return ConsumerApiClientFactory
+                .authenticated(TransfersQueryControllerApi.class, accessToken, DEVICE_FINGERPRINT)
+                .listTransfers(null, null, FIRST_PAGE, PAGE_SIZE);
+    }
+
+    @When("I request my transfer history without a session")
+    public void requestTransferHistoryWithoutSession() {
+        errorStatus = captureErrorStatus(() -> ConsumerApiClientFactory
+                .unauthenticated(TransfersQueryControllerApi.class)
+                .listTransfers(null, null, FIRST_PAGE, PAGE_SIZE));
     }
 
     @Then("the transfer request is denied as forbidden")

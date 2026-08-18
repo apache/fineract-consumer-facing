@@ -18,7 +18,7 @@
  */
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   IonButton,
@@ -43,22 +43,27 @@ import { SavingsStore } from './savings.store';
     IonCardTitle,
     RouterLink,
     DatePipe,
-    DecimalPipe,
+    CurrencyPipe,
     TranslatePipe,
   ],
   template: `
     @if (store.selectedTransaction(); as tx) {
       <ion-card>
         <ion-card-header>
-          <ion-card-title>{{ 'common.transaction.title' | translate: { id: tx.id } }}</ion-card-title>
+          <ion-card-title>{{
+            'common.transaction.title' | translate: { id: tx.id }
+          }}</ion-card-title>
           <ion-card-subtitle>{{ tx.date | date: 'mediumDate' }}</ion-card-subtitle>
         </ion-card-header>
         <ion-card-content>
-          <p>{{ 'savings.transaction.typeLabel' | translate }} {{ tx.type }}</p>
-          <p>{{ 'savings.transaction.amountLabel' | translate }} {{ tx.amount | number: '1.2-2' }}</p>
+          <p>{{ 'savings.transaction.typeLabel' | translate }} {{ tx.type | translate }}</p>
+          <p>
+            {{ 'savings.transaction.amountLabel' | translate }}
+            {{ tx.amount | currency: tx.currency }}
+          </p>
           <p>
             {{ 'savings.transaction.runningBalanceLabel' | translate }}
-            {{ tx.runningBalance | number: '1.2-2' }}
+            {{ tx.runningBalance | currency: tx.currency }}
           </p>
           <div class="card-actions">
             <ion-button fill="outline" [routerLink]="['/savings', savingsId]">

@@ -28,6 +28,13 @@ Feature: Consumer savings reads
     When I get my seeded savings account
     Then my savings account details are returned
 
+  Scenario: Savings amounts carry a currency
+    Given my savings account has a deposit
+    When I get my seeded savings account
+    And I list my savings account charges
+    And I list my savings account transactions
+    Then the savings amounts carry a currency
+
   Scenario: Listing savings without a session is rejected
     When I list savings accounts without a session
     Then the savings request is rejected as unauthorized

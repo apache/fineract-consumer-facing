@@ -44,13 +44,13 @@ export class AuthService {
   verifyTwoFactor(request: VerifyTwoFactorCommandRequest): Observable<SessionCommandData> {
     return this.api
       .verifyTwoFactor(deviceFingerprint(), request)
-      .pipe(tap(session => this.adoptSession(session)));
+      .pipe(tap((session) => this.adoptSession(session)));
   }
 
   refresh(): Observable<SessionCommandData> {
     if (!this.refreshInFlight) {
       this.refreshInFlight = this.api.refreshSession(deviceFingerprint()).pipe(
-        tap(session => this.adoptSession(session)),
+        tap((session) => this.adoptSession(session)),
         finalize(() => (this.refreshInFlight = null)),
         shareReplay(1),
       );

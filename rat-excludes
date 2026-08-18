@@ -11,3 +11,4 @@ LICENSE
 SECURITY.md
 *.jar
 **/.nvmrc
+**/.prettierignore

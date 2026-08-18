@@ -1,9 +1,5 @@
 {
   "common": {
-    "accountType": {
-      "savings": "Savings",
-      "loan": "Loan"
-    },
     "action": {
       "applyFilter": "Apply filter",
       "backToAccount": "Back to account",
@@ -11,11 +7,14 @@
       "changeLanguage": "Change language",
       "continue": "Continue",
       "dismiss": "Dismiss",
+      "next": "Next",
+      "prev": "Previous",
       "verify": "Verify"
     },
     "error": {
       "generic": "Something went wrong. Please try again.",
-      "rateLimited": "Too many requests — please wait a moment and try again."
+      "rateLimited": "Too many requests — please wait a moment and try again.",
+      "passwordRules": "Your password must be 15–64 characters and include upper and lower case, a digit and a special character."
     },
     "field": {
       "email": "Email",
@@ -25,7 +24,8 @@
       "from": "From",
       "to": "To",
       "page": "Page",
-      "size": "Page size"
+      "size": "Page size",
+      "date": "Date"
     },
     "language": {
       "en": "English",
@@ -35,6 +35,9 @@
       "prompt": "Enter the verification code.",
       "promptSentTo": "Enter the verification code sent to {{target}}.",
       "codeLabel": "Verification code"
+    },
+    "pagination": {
+      "showing": "Showing {{from}}–{{to}} of {{total}}"
     },
     "placeholder": {
       "date": "yyyy-MM-dd"
@@ -66,23 +69,30 @@
   },
   "auth": {
     "login": {
-      "title": "Sign in",
+      "title": "Sign In",
       "registerPrompt": "Need to register?",
       "registerLink": "Create an account",
       "forgotPasswordLink": "Forgot password?"
     },
     "forgotPassword": {
-      "title": "Reset password",
+      "title": "Reset Password",
       "sendCta": "Send reset code",
       "sentNotice": "If the email is registered, a verification code has been sent.",
       "newPasswordLabel": "New password",
       "resetCta": "Reset password",
       "backToLogin": "Back to sign in",
-      "success": "Password reset. Please sign in."
+      "success": "Password reset. Please sign in.",
+      "error": {
+        "emailRequired": "Enter your email address.",
+        "emailInvalid": "Enter a valid email address.",
+        "otpRequired": "Enter the verification code we sent you.",
+        "otpInvalid": "The verification code is 6 letters and numbers.",
+        "passwordRequired": "Enter a new password."
+      }
     }
   },
   "consent": {
-    "title": "Authorize access",
+    "title": "Authorize Access",
     "intro": "{{tppClientId}} is asking for permission to access your account information.",
     "permissionsTitle": "This application will be able to:",
     "scope": {
@@ -93,13 +103,23 @@
     "invalid": "This authorization request is invalid or incomplete."
   },
   "registration": {
-    "title": "Create your account",
+    "title": "Create Your Account",
     "backToLogin": "Back to sign in",
     "identity": {
       "clientIdLabel": "Fineract client ID",
       "passwordHint": "15–64 chars, with upper, lower, digit and special character.",
       "documentTypeLabel": "Document type",
-      "documentNumberLabel": "Document number"
+      "documentNumberLabel": "Document number",
+      "error": {
+        "clientIdRequired": "Enter your Fineract client ID.",
+        "clientIdInvalid": "Fineract client ID must be 1 or higher.",
+        "emailRequired": "Enter your email address.",
+        "emailInvalid": "Enter a valid email address.",
+        "passwordRequired": "Enter a password.",
+        "documentTypeRequired": "Select a document type.",
+        "documentKeyRequired": "Enter your document number.",
+        "invalid": "Check the form and try again."
+      }
     },
     "otp": {
       "resend": "Resend code",
@@ -113,12 +133,11 @@
   },
   "savings": {
     "list": {
-      "title": "Savings accounts",
-      "empty": "No savings accounts yet.",
-      "tryForbidden": "Try a forbidden savings account"
+      "title": "Savings Accounts",
+      "empty": "No savings accounts yet."
     },
     "detail": {
-      "title": "Savings account",
+      "title": "Savings Account",
       "balanceLabel": "Balance:",
       "availableLabel": "Available:",
       "interestRateLabel": "Interest rate:"
@@ -131,20 +150,37 @@
   },
   "loans": {
     "list": {
-      "title": "Loan accounts",
+      "title": "Loan Accounts",
       "applyCta": "Apply for a loan",
-      "empty": "No loan accounts yet.",
-      "tryForbidden": "Try a forbidden loan"
+      "empty": "No loan accounts yet."
     },
     "detail": {
-      "title": "Loan account",
+      "title": "Loan Account",
       "principalDisbursedLabel": "Principal disbursed:",
       "totalOutstandingLabel": "Total outstanding:",
       "interestOutstandingLabel": "Interest outstanding:",
       "annualInterestRateLabel": "Annual interest rate:",
       "nextDueLabel": "Next due:",
       "nextDueOn": "on",
-      "noGuarantors": "No guarantors."
+      "noGuarantors": "No guarantors.",
+      "repayCta": "Make a payment"
+    },
+    "repay": {
+      "title": "Make a Payment",
+      "fromAccountLabel": "Pay from",
+      "amountLabel": "Amount",
+      "submitCta": "Make payment",
+      "error": {
+        "selectAccount": "Choose the account you want to pay from.",
+        "amountRequired": "Enter an amount greater than zero.",
+        "exceedsOutstanding": "That amount is more than the outstanding balance on this loan.",
+        "notActive": "This loan is not active, so it cannot take a payment."
+      },
+      "done": {
+        "complete": "Payment complete.",
+        "reference": "Reference",
+        "amount": "Amount"
+      }
     },
     "transaction": {
       "typeLabel": "Type:",
@@ -153,7 +189,7 @@
       "backToLoan": "Back to loan"
     },
     "apply": {
-      "title": "Apply for a loan",
+      "title": "Apply for a Loan",
       "productLabel": "Product",
       "principalLabel": "Principal",
       "numberOfRepaymentsLabel": "Number of repayments",
@@ -164,9 +200,9 @@
       "submittedOnDateLabel": "Submitted on date",
       "previewCta": "Preview schedule",
       "submitCta": "Submit application",
-      "scheduleTitle": "Repayment schedule",
+      "scheduleTitle": "Repayment Schedule",
       "totalRepaymentExpected": "Total repayment expected: {{amount}} {{currency}}",
-      "draftTitle": "Draft application #{{id}}",
+      "draftTitle": "Draft Application #{{id}}",
       "draftHint": "Edit the terms above, then modify or withdraw this draft.",
       "modifyCta": "Modify draft",
       "withdrawCta": "Withdraw draft",
@@ -174,29 +210,66 @@
         "period": "#",
         "dueDate": "Due date",
         "totalDue": "Total due"
+      },
+      "error": {
+        "productRequired": "Choose a loan product.",
+        "principalRequired": "Enter a principal amount greater than zero.",
+        "numberOfRepaymentsRequired": "Enter a number of repayments of at least 1.",
+        "repaymentEveryRequired": "Enter a repayment interval of at least 1.",
+        "loanTermFrequencyRequired": "Enter a loan term of at least 1.",
+        "interestRateRequired": "Enter an interest rate of zero or more.",
+        "expectedDisbursementDateRequired": "Enter the expected disbursement date.",
+        "submittedOnDateRequired": "Enter the submitted-on date.",
+        "draftUnavailable": "This draft is no longer available."
       }
+    },
+    "obligees": {
+      "title": "Loans You Guarantee",
+      "borrower": "Borrower",
+      "loanAmount": "Loan amount",
+      "guaranteeAmount": "Guarantee amount",
+      "amountReleased": "Released",
+      "empty": "No guaranteed loans."
     }
   },
   "transfers": {
-    "title": "Transfer money",
+    "title": "Transfer Money",
+    "newCta": "Transfer Money",
+    "backCta": "Back to transfers",
     "form": {
       "fromAccountLabel": "From account",
       "toAccountLabel": "To account",
-      "toAccountTypeLabel": "To account type",
+      "toGroup": {
+        "mySavings": "My savings",
+        "beneficiaries": "Beneficiaries"
+      },
       "amountLabel": "Amount",
-      "submitCta": "Send transfer"
+      "submitCta": "Send transfer",
+      "error": {
+        "selectFromAccount": "Choose the account you want to send from.",
+        "selectToAccount": "Choose where the money should go.",
+        "amountRequired": "Enter an amount greater than zero."
+      }
     },
     "done": {
       "complete": "Transfer complete.",
       "reference": "Reference",
       "amount": "Amount"
+    },
+    "history": {
+      "title": "Transfer History",
+      "empty": "No transfers yet.",
+      "direction": {
+        "label": "Direction",
+        "OUTGOING": "Outgoing",
+        "INCOMING": "Incoming"
+      }
     }
   },
   "beneficiaries": {
     "title": "Beneficiaries",
     "list": {
       "nameColumn": "Name",
-      "accountTypeColumn": "Account type",
       "transferLimitColumn": "Transfer limit",
       "actionsColumn": "Actions",
       "empty": "No beneficiaries yet.",
@@ -206,17 +279,22 @@
       "nameLabel": "Name",
       "officeNameLabel": "Office name",
       "accountNumberLabel": "Account number",
-      "accountTypeLabel": "Account type",
       "transferLimitLabel": "Transfer limit (optional)",
       "submitCta": "Continue",
-      "cancelCta": "Cancel"
+      "cancelCta": "Cancel",
+      "error": {
+        "nameRequired": "Enter the beneficiary's name.",
+        "nameTooLong": "The name must be 50 characters or fewer.",
+        "officeNameRequired": "Enter the beneficiary's office name.",
+        "accountNumberRequired": "Enter the beneficiary's account number.",
+        "transferLimitTooSmall": "The transfer limit must be at least 0.01."
+      }
     },
     "edit": {
-      "title": "Edit beneficiary"
+      "title": "Edit Beneficiary"
     },
     "delete": {
-      "confirm": "Confirm delete",
-      "cancel": "Cancel"
+      "action": "Delete"
     },
     "snackbar": {
       "added": "Beneficiary added.",
@@ -225,7 +303,9 @@
     }
   },
   "summary": {
-    "title": "Account summary",
+    "title": "Account Summary",
+    "accountsCount": "{{count}} accounts",
+    "viewAll": "View all {{count}} accounts",
     "section": {
       "savings": "Savings",
       "loans": "Loans"
@@ -249,32 +329,137 @@
       "loans": "Loans",
       "transfers": "Transfers",
       "beneficiaries": "Beneficiaries",
-      "profile": "Profile"
+      "profile": "Profile",
+      "settings": "Settings",
+      "demo": "Demo"
     }
+  },
+  "savingsAccountStatusType": {
+    "active": "Active",
+    "approved": "Approved",
+    "closed": "Closed",
+    "invalid": "Invalid",
+    "matured": "Matured",
+    "pre.mature.closure": "Prematurely closed",
+    "rejected": "Rejected",
+    "submitted.and.pending.approval": "Pending approval",
+    "transfer.in.progress": "Transfer in progress",
+    "transfer.on.hold": "Transfer on hold",
+    "withdrawn.by.applicant": "Withdrawn by applicant"
+  },
+  "savingsAccountTransactionType": {
+    "accrual": "Accrual",
+    "annualFee": "Annual fee",
+    "approveTransfer": "Transfer approved",
+    "deposit": "Deposit",
+    "dividendPayout": "Dividend payout",
+    "escheat": "Escheat",
+    "initiateTransfer": "Transfer initiated",
+    "interestPosting": "Interest posting",
+    "invalid": "Invalid",
+    "onHold": "On hold",
+    "overdraftInterest": "Overdraft interest",
+    "payCharge": "Charge payment",
+    "rejectTransfer": "Transfer rejected",
+    "release": "Release",
+    "waiveCharge": "Charge waived",
+    "withdrawal": "Withdrawal",
+    "withdrawalFee": "Withdrawal fee",
+    "withdrawTransfer": "Transfer withdrawn",
+    "withholdTax": "Withholding tax",
+    "writtenoff": "Written off"
+  },
+  "loanStatusType": {
+    "active": "Active",
+    "approved": "Approved",
+    "closed.obligations.met": "Closed",
+    "closed.reschedule.outstanding.amount": "Closed",
+    "closed.written.off": "Closed",
+    "invalid": "Invalid",
+    "overpaid": "Overpaid",
+    "rejected": "Rejected",
+    "submitted.and.pending.approval": "Pending approval",
+    "transfer.in.progress": "Transfer in progress",
+    "transfer.on.hold": "Transfer on hold",
+    "withdrawn.by.client": "Withdrawn by client"
+  },
+  "loanTransactionType": {
+    "accrual": "Accrual",
+    "accrualActivity": "Accrual activity",
+    "accrualAdjustment": "Accrual adjustment",
+    "approveTransfer": "Transfer approved",
+    "buyDownFee": "Buy-down fee",
+    "buyDownFeeAdjustment": "Buy-down fee adjustment",
+    "buyDownFeeAmortization": "Buy-down fee amortization",
+    "buyDownFeeAmortizationAdjustment": "Buy-down fee amortization adjustment",
+    "capitalizedIncome": "Capitalized income",
+    "capitalizedIncomeAdjustment": "Capitalized income adjustment",
+    "capitalizedIncomeAmortization": "Capitalized income amortization",
+    "capitalizedIncomeAmortizationAdjustment": "Capitalized income amortization adjustment",
+    "chargeAdjustment": "Charge adjustment",
+    "chargeback": "Chargeback",
+    "chargeOff": "Charge-off",
+    "chargePayment": "Charge payment",
+    "chargeRefund": "Charge refund",
+    "contra": "Contra",
+    "contractTermination": "Contract termination",
+    "creditBalanceRefund": "Credit balance refund",
+    "disbursement": "Disbursement",
+    "downPayment": "Down payment",
+    "goodwillCredit": "Goodwill credit",
+    "incomePosting": "Income posting",
+    "initiateTransfer": "Transfer initiated",
+    "interestPaymentWaiver": "Interest payment waiver",
+    "interestRefund": "Interest refund",
+    "invalid": "Invalid",
+    "marked.for.rescheduling": "Marked for rescheduling",
+    "merchantIssuedRefund": "Merchant-issued refund",
+    "payoutRefund": "Payout refund",
+    "reAge": "Re-age",
+    "reAmortize": "Re-amortize",
+    "recoveryRepayment": "Recovery repayment",
+    "refund": "Refund",
+    "rejectTransfer": "Transfer rejected",
+    "repayment": "Repayment",
+    "repaymentAtDisbursement": "Repayment at disbursement",
+    "undoWaiveCharge": "Charge waiver undone",
+    "waiveCharges": "Charges waived"
+  },
+  "guarantor": {
+    "existing.customer": "Existing customer",
+    "existing.group": "Existing group",
+    "external": "External",
+    "staff": "Staff"
   },
   "error.msg.consumer.auth.invalid.credentials": "Incorrect email or password.",
   "error.msg.consumer.auth.refresh.token.invalid": "Your session has expired. Please sign in again.",
   "error.msg.consumer.auth.two.factor.invalid": "That verification code is invalid or has expired.",
   "error.msg.consumer.auth.device.fingerprint.mismatch": "This session is tied to a different device. Please log in again.",
   "error.msg.consumer.auth.device.fingerprint.forbidden": "This session is tied to a different device. Please log in again.",
+  "error.msg.consumer.auth.device.fingerprint.invalid": "We couldn't verify your device. Please log in again.",
   "error.msg.consumer.access.denied": "You are not allowed to perform this action.",
   "error.msg.consumer.access.scope.insufficient": "Your access level does not permit this action.",
   "error.msg.consumer.access.kyc.required": "Identity verification is required before you can do this.",
+  "error.msg.consumer.access.user.not.found": "We couldn't find your account.",
+  "error.msg.consumer.rate.limit.exceeded": "Too many requests. Please wait a moment and try again.",
   "error.msg.consumer.beneficiaries.command.not.found": "We couldn't find that beneficiary.",
   "error.msg.consumer.beneficiaries.command.name.duplicate": "You already have a beneficiary with that name.",
   "error.msg.consumer.beneficiaries.command.account.invalid": "We couldn't find an account matching that office and account number.",
   "error.msg.consumer.beneficiaries.command.upstream.unavailable": "Beneficiaries are temporarily unavailable. Please try again later.",
-  "error.msg.consumer.beneficiaries.command.invalid": "This request couldn't be processed. Please review the details and try again.",
+  "error.msg.consumer.beneficiaries.command.account.self": "You can't add one of your own accounts as a beneficiary.",
   "error.msg.consumer.beneficiaries.command.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
   "error.msg.consumer.internal.error": "Something went wrong on our end. Please try again.",
   "error.msg.consumer.request.body.malformed": "We couldn't read your request. Please try again.",
   "error.msg.consumer.request.validation.failed": "Please check the form for errors and try again.",
   "error.msg.consumer.request.header.missing": "Your request is missing required information. Please try again.",
+  "error.msg.consumer.idempotency.key.malformed": "We couldn't process your request. Please try again.",
+  "error.msg.consumer.audit.batch.too.large": "Too many activity events were sent at once.",
   "error.msg.consumer.loans.command.access.denied": "You don't have access to this loan.",
   "error.msg.consumer.loans.command.application.invalid": "We couldn't process this loan application. Please review the details and try again.",
   "error.msg.consumer.loans.command.not.found": "We couldn't find that loan.",
   "error.msg.consumer.loans.command.upstream.unavailable": "Loans are temporarily unavailable. Please try again later.",
-  "error.msg.consumer.loans.access.denied": "You don't have access to this loan.",
+  "error.msg.consumer.loans.query.access.denied": "You don't have access to this loan.",
+  "error.msg.consumer.loans.request.in.progress": "Your previous loan request is still processing. Please try again shortly.",
   "error.msg.consumer.loans.not.found": "We couldn't find that loan.",
   "error.msg.consumer.loans.product.not.found": "We couldn't find that loan product.",
   "error.msg.consumer.loans.query.schedule.invalid": "We couldn't generate a repayment schedule. Please review the details and try again.",
@@ -284,17 +469,20 @@
   "error.msg.consumer.otp.invalid": "That verification code is invalid or has expired.",
   "error.msg.consumer.registration.identity.not.verified": "We couldn't verify your identity with the details provided.",
   "error.msg.consumer.identity.verification.unavailable": "Identity verification is temporarily unavailable. Please try again later.",
-  "error.msg.consumer.savings.account.access.denied": "You don't have access to this savings account.",
+  "error.msg.consumer.savings.query.access.denied": "You don't have access to this savings account.",
   "error.msg.consumer.savings.account.not.found": "We couldn't find that savings account.",
   "error.msg.consumer.savings.product.not.found": "We couldn't find that savings product.",
   "error.msg.consumer.savings.request.invalid": "Please review the details and try again.",
   "error.msg.consumer.savings.upstream.unavailable": "Savings are temporarily unavailable. Please try again later.",
   "error.msg.consumer.transfers.command.access.denied": "You don't have access to one of these accounts.",
-  "error.msg.consumer.transfers.command.beneficiary.limit.exceeded": "You have reached the maximum number of beneficiaries.",
+  "error.msg.consumer.transfers.command.beneficiary.limit.exceeded": "That amount is over the transfer limit set for this beneficiary.",
   "error.msg.consumer.transfers.command.invalid": "This transfer couldn't be processed. Please review the details and try again.",
   "error.msg.consumer.transfers.command.not.found": "We couldn't find that transfer.",
   "error.msg.consumer.transfers.command.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
   "error.msg.consumer.transfers.command.upstream.unavailable": "Transfers are temporarily unavailable. Please try again later.",
+  "error.msg.consumer.transfers.request.in.progress": "Your previous transfer is still processing. Please try again shortly.",
+  "error.msg.consumer.transfers.query.access.denied": "You don't have access to this transfer history.",
+  "error.msg.consumer.transfers.query.upstream.unavailable": "Transfer history is temporarily unavailable. Please try again later.",
   "error.msg.consumer.user.binding.state.invalid": "Your account isn't in the right state for this action.",
   "error.msg.consumer.user.already.exists": "An account with these details already exists.",
   "error.msg.consumer.user.not.found": "We couldn't find your account.",
@@ -308,26 +496,33 @@
       "memberSince": "Member since:",
       "email": "Email:",
       "mobile": "Mobile:",
-      "kyc": "KYC:",
+      "kyc": "Identity:",
       "kycVerified": "Verified",
       "kycPending": "Not verified",
       "photoAlt": "Profile photo"
     },
     "charges": {
       "statusAll": "All",
-      "statusActive": "Active",
-      "statusInactive": "Inactive",
+      "stateOpen": "Open",
+      "stateClosed": "Closed",
       "total": "Total records: {{total}}"
-    },
-    "obligees": {
-      "title": "Loans you guarantee",
-      "loanAmount": "Loan amount",
-      "guaranteeAmount": "Guarantee amount",
-      "amountReleased": "Released",
-      "empty": "No guaranteed loans."
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "changePassword": {
+      "title": "Change Password",
+      "currentLabel": "Current password",
+      "newLabel": "New password",
+      "submitCta": "Send verification code",
+      "success": "Password changed successfully",
+      "error": {
+        "currentRequired": "Enter your current password.",
+        "newRequired": "Enter a new password."
+      }
     },
     "connectedApps": {
-      "title": "Connected apps",
+      "title": "Connected Apps",
       "app": "App",
       "permissions": "Permissions",
       "granted": "Granted",
@@ -340,16 +535,27 @@
         "REVOKED": "Revoked"
       },
       "revoke": "Revoke",
-      "revokeConfirm": "Confirm revoke",
-      "revokeCancel": "Cancel",
       "empty": "No connected apps."
+    }
+  },
+  "demo": {
+    "title": "Demo",
+    "note": "This page exists only for the GSoC demo.",
+    "audit": {
+      "title": "Audit Activity",
+      "empty": "No audit events.",
+      "columns": {
+        "eventType": "Event type",
+        "severity": "Severity",
+        "source": "Source",
+        "receivedAt": "Received at"
+      }
     },
-    "changePassword": {
-      "title": "Change password",
-      "currentLabel": "Current password",
-      "newLabel": "New password",
-      "submitCta": "Send verification code",
-      "success": "Password changed successfully"
+    "abac": {
+      "title": "ABAC Denial",
+      "explanation": "Each button requests an account this user does not own — the denial comes from the BFF, proving that authorization is enforced by the backend, not the frontend.",
+      "tryForbiddenSavings": "Try a forbidden savings account",
+      "tryForbiddenLoan": "Try a forbidden loan"
     }
   },
   "error.msg.consumer.user.password.invalid": "Current password is incorrect.",
@@ -358,11 +564,11 @@
   "error.msg.consumer.user.upstream.unavailable": "Profile service is temporarily unavailable.",
   "error.msg.consumer.user.charge.status.invalid": "Invalid charge status filter.",
   "error.msg.consumer.user.image.not.found": "No profile photo on file.",
-  "error.msg.consumer.summary.upstream.unavailable": "Account summary is temporarily unavailable.",
   "error.msg.consumer.openbanking.consent.not.found": "Consent not found.",
   "error.msg.consumer.openbanking.consent.not.revocable": "Only an authorised consent can be revoked.",
   "error.msg.consumer.openbanking.consent.permissions.invalid": "The requested permissions are not valid.",
   "error.msg.consumer.openbanking.consent.invalid": "This consent does not permit that request.",
   "error.msg.consumer.openbanking.account.not.found": "Account not found.",
-  "error.msg.consumer.authentication.kyc.revoked": "Your identity verification is no longer valid. Please contact support."
+  "error.msg.consumer.authentication.kyc.revoked": "Your identity verification is no longer valid. Please contact support.",
+  "error.msg.consumer.summary.upstream.unavailable": "Account summary is temporarily unavailable."
 }

@@ -19,7 +19,6 @@
 package org.apache.fineract.consumer.beneficiaries.command.data;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -51,9 +50,6 @@ public final class ConfirmAddBeneficiaryCommandRequest {
 
     @NotBlank
     private final String accountNumber;
-
-    @NotNull
-    private final BeneficiaryAccountType accountType;
 
     @Positive
     private final BigDecimal transferLimit;

@@ -21,7 +21,10 @@
     "e2e:docker:down": "docker compose -f ../docker-compose.e2e.yml down -v",
     "e2e:docker:logs": "docker compose -f ../docker-compose.e2e.yml logs -f",
     "e2e:docker:ps": "docker compose -f ../docker-compose.e2e.yml ps",
-    "e2e:stack:run": "npm run e2e:docker:up && npm run e2e && npm run e2e:docker:down"
+    "e2e:stack:run": "npm run e2e:docker:up && npm run e2e && npm run e2e:docker:down",
+    "lint": "ng lint",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src"
   },
   "prettier": {
     "printWidth": 100,
@@ -57,9 +60,14 @@
     "@angular/build": "^22.0.1",
     "@angular/cli": "^22.0.1",
     "@angular/compiler-cli": "^22.0.1",
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
+    "angular-eslint": "22.1.0",
+    "eslint": "^10.6.0",
     "jsdom": "^29.1.1",
+    "prettier": "3.9.6",
     "typescript": "~6.0.3",
+    "typescript-eslint": "8.62.1",
     "vitest": "^4.1.9"
   }
 }

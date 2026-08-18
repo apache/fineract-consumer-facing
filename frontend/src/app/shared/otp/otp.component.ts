@@ -47,7 +47,12 @@ import { TranslatePipe } from '@ngx-translate/core';
       />
       <div class="actions-end">
         @if (showCancel()) {
-          <ion-button fill="outline" type="button" [disabled]="loading()" (click)="cancelled.emit()">
+          <ion-button
+            fill="outline"
+            type="button"
+            [disabled]="loading()"
+            (click)="cancelled.emit()"
+          >
             {{ 'common.action.cancel' | translate }}
           </ion-button>
         }
@@ -59,7 +64,9 @@ import { TranslatePipe } from '@ngx-translate/core';
   `,
   styleUrls: ['../css/form.scss', '../css/actions.scss'],
   styles: `
-    p { margin-bottom: 1.25rem; }
+    p {
+      margin-bottom: 1.25rem;
+    }
   `,
 })
 export class OtpComponent {

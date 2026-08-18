@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import { NgOptimizedImage } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -31,7 +32,9 @@ import {
   IonProgressBar,
   ToastController,
 } from '@ionic/angular/standalone';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
+import { I18nService } from '../../core/i18n/i18n.service';
+import { NotificationService } from '../../core/notifications/notification.service';
 import { ProfileStore } from '../profile/profile.store';
 
 const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
@@ -41,6 +44,7 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
   selector: 'app-forgot-password',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    NgOptimizedImage,
     ReactiveFormsModule,
     IonButton,
     IonCard,
@@ -55,6 +59,14 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
   template: `
     <ion-card class="page-card">
       <ion-card-header>
+        <img
+          ngSrc="/apache-fineract-logo.png"
+          width="64"
+          height="64"
+          alt=""
+          class="page-logo"
+          priority
+        />
         <ion-card-title>{{ 'auth.forgotPassword.title' | translate }}</ion-card-title>
       </ion-card-header>
 
@@ -73,7 +85,7 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
               [label]="'common.field.email' | translate"
               autocomplete="username"
             />
-            <ion-button type="submit" [disabled]="loading() || emailForm.invalid">
+            <ion-button type="submit" [disabled]="loading()">
               {{ 'auth.forgotPassword.sendCta' | translate }}
             </ion-button>
           </form>
@@ -100,7 +112,7 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
               [helperText]="'registration.identity.passwordHint' | translate"
               autocomplete="new-password"
             />
-            <ion-button type="submit" [disabled]="loading() || resetForm.invalid">
+            <ion-button type="submit" [disabled]="loading()">
               {{ 'auth.forgotPassword.resetCta' | translate }}
             </ion-button>
           </form>
@@ -118,7 +130,8 @@ export class ForgotPasswordComponent {
   private readonly store = inject(ProfileStore);
   private readonly router = inject(Router);
   private readonly toastCtrl = inject(ToastController);
-  private readonly translate = inject(TranslateService);
+  private readonly i18n = inject(I18nService);
+  private readonly notifications = inject(NotificationService);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly step = signal<'email' | 'reset'>('email');
@@ -142,7 +155,13 @@ export class ForgotPasswordComponent {
   });
 
   protected requestReset(): void {
-    if (this.emailForm.invalid) {
+    const email = this.emailForm.controls.email;
+    if (email.hasError('required')) {
+      this.notifications.showError('auth.forgotPassword.error.emailRequired');
+      return;
+    }
+    if (email.hasError('email')) {
+      this.notifications.showError('auth.forgotPassword.error.emailInvalid');
       return;
     }
     this.loading.set(true);
@@ -159,7 +178,25 @@ export class ForgotPasswordComponent {
   }
 
   protected reset(): void {
-    if (this.resetForm.invalid) {
+    const controls = this.resetForm.controls;
+    if (controls.otp.hasError('required')) {
+      this.notifications.showError('auth.forgotPassword.error.otpRequired');
+      return;
+    }
+    if (controls.otp.hasError('pattern')) {
+      this.notifications.showError('auth.forgotPassword.error.otpInvalid');
+      return;
+    }
+    if (controls.newPassword.hasError('required')) {
+      this.notifications.showError('auth.forgotPassword.error.passwordRequired');
+      return;
+    }
+    if (
+      controls.newPassword.hasError('minlength') ||
+      controls.newPassword.hasError('maxlength') ||
+      controls.newPassword.hasError('pattern')
+    ) {
+      this.notifications.showError('common.error.passwordRules');
       return;
     }
     const { otp, newPassword } = this.resetForm.getRawValue();
@@ -184,10 +221,10 @@ export class ForgotPasswordComponent {
   private presentSuccessToast(): void {
     this.toastCtrl
       .create({
-        message: this.translate.instant('auth.forgotPassword.success'),
+        message: this.i18n.translate('auth.forgotPassword.success'),
         duration: 5000,
-        buttons: [{ text: this.translate.instant('common.action.dismiss'), role: 'cancel' }],
+        buttons: [{ text: this.i18n.translate('common.action.dismiss'), role: 'cancel' }],
       })
-      .then(toast => toast.present());
+      .then((toast) => toast.present());
   }
 }

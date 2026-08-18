@@ -74,4 +74,63 @@ describe('TransfersStore', () => {
     expect(store.result()?.transferId).toBe(9);
     expect(store.challenge()).toBeNull();
   });
+
+  it('loadHistory forwards paging as query params and stores the rows and totals', () => {
+    store.loadHistory(1, 10);
+
+    const req = controller.expectOne((r) => r.url === '/api/v1/transfers');
+    expect(req.request.params.get('page')).toBe('1');
+    expect(req.request.params.get('size')).toBe('10');
+    req.flush({
+      content: [
+        {
+          transferId: 9,
+          date: '2026-08-01',
+          amount: 50,
+          currency: 'USD',
+          fromAccount: '000000001',
+          toAccount: '000000002',
+          direction: 'OUTGOING',
+        },
+      ],
+      page: 1,
+      size: 10,
+      totalElements: 11,
+      totalPages: 2,
+    });
+
+    expect(store.history().length).toBe(1);
+    expect(store.historyPage()).toBe(1);
+    expect(store.historySize()).toBe(10);
+    expect(store.historyTotalElements()).toBe(11);
+    expect(store.historyTotalPages()).toBe(2);
+    expect(store.historyLoading()).toBe(false);
+  });
+
+  it('loadHistory reports the last page when the total is an exact multiple of the size', () => {
+    store.loadHistory(1, 10);
+
+    const req = controller.expectOne((r) => r.url === '/api/v1/transfers');
+    req.flush({
+      content: Array.from({ length: 10 }, (_, i) => ({ transferId: i, amount: 50 })),
+      page: 1,
+      size: 10,
+      totalElements: 20,
+      totalPages: 2,
+    });
+
+    expect(store.history().length).toBe(10);
+    expect(store.historyPage()).toBe(store.historyTotalPages() - 1);
+  });
+
+  it('loadHistory reports zero total pages when there are no transfers', () => {
+    store.loadHistory(0, 10);
+
+    controller
+      .expectOne((r) => r.url === '/api/v1/transfers')
+      .flush({ content: [], page: 0, size: 10, totalElements: 0, totalPages: 0 });
+
+    expect(store.history()).toEqual([]);
+    expect(store.historyTotalPages()).toBe(0);
+  });
 });

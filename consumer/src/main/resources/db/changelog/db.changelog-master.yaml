@@ -30,3 +30,5 @@ databaseChangeLog:
       file: db/changelog/openbanking/006-create-open-banking-consents.yaml
   - include:
       file: db/changelog/infrastructure/007-create-oauth2-authorization.yaml
+  - include:
+      file: db/changelog/infrastructure/008-create-registered-tpps.yaml

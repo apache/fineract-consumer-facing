@@ -23,7 +23,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
-import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryTemplateQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -43,11 +42,5 @@ public class BeneficiariesQueryController {
     @GetMapping
     public List<BeneficiaryQueryData> listBeneficiaries(@AuthenticationPrincipal Jwt jwt) {
         return beneficiariesQueryService.listBeneficiaries(jwt);
-    }
-
-    @Operation(operationId = "getBeneficiaryTemplate")
-    @GetMapping("/template")
-    public BeneficiaryTemplateQueryData getTemplate(@AuthenticationPrincipal Jwt jwt) {
-        return beneficiariesQueryService.getTemplate(jwt);
     }
 }

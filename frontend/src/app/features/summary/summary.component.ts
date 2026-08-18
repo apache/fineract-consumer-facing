@@ -20,16 +20,10 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import {
-  IonCard,
-  IonCardContent,
-  IonCardHeader,
-  IonCardSubtitle,
-  IonCardTitle,
-  IonProgressBar,
-} from '@ionic/angular/standalone';
+import { IonCard, IonProgressBar } from '@ionic/angular/standalone';
 import { TranslatePipe } from '@ngx-translate/core';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
+import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
 import { SummaryStore } from './summary.store';
 
 @Component({
@@ -38,14 +32,11 @@ import { SummaryStore } from './summary.store';
   imports: [
     RouterLink,
     IonCard,
-    IonCardContent,
-    IonCardHeader,
-    IonCardSubtitle,
-    IonCardTitle,
     IonProgressBar,
     CurrencyPipe,
     TranslatePipe,
     PageHeaderComponent,
+    StatusBadgeComponent,
   ],
   template: `
     <app-page-header [title]="'summary.title' | translate" />
@@ -54,87 +45,184 @@ import { SummaryStore } from './summary.store';
       <ion-progress-bar type="indeterminate" />
     }
 
-    <section>
-      <h2>{{ 'summary.section.savings' | translate }}</h2>
-      <div class="cards">
-        @for (card of store.savingsCards(); track card.id) {
-          <ion-card [routerLink]="['/savings', card.id]" role="link" tabindex="0">
-            <ion-card-header>
-              <ion-card-title>{{ card.productName }}</ion-card-title>
-              <ion-card-subtitle>{{ card.accountNo }}</ion-card-subtitle>
-            </ion-card-header>
-            <ion-card-content>
-              <p class="amount">{{ card.balance | currency: card.currency }}</p>
-            </ion-card-content>
-          </ion-card>
-        } @empty {
-          <p class="empty">{{ 'summary.savings.empty' | translate }}</p>
-        }
-      </div>
-    </section>
+    <ion-card>
+      <header class="section-header">
+        <h2>{{ 'summary.section.savings' | translate }}</h2>
+        <span class="count">
+          {{ 'summary.accountsCount' | translate: { count: store.savingsCount() } }}
+        </span>
+      </header>
 
-    <section>
-      <h2>{{ 'summary.section.loans' | translate }}</h2>
-      <div class="cards">
-        @for (card of store.loanCards(); track card.id) {
-          <ion-card [routerLink]="['/loans', card.id]" role="link" tabindex="0">
-            <ion-card-header>
-              <ion-card-title>{{ card.productName }}</ion-card-title>
-              <ion-card-subtitle>{{ card.accountNo }}</ion-card-subtitle>
-            </ion-card-header>
-            <ion-card-content>
-              <p class="amount">{{ card.totalOutstanding | currency: card.currency }}</p>
-            </ion-card-content>
-          </ion-card>
-        } @empty {
-          <p class="empty">{{ 'summary.loan.empty' | translate }}</p>
-        }
-      </div>
-    </section>
+      @for (row of store.topSavings(); track row.id) {
+        <a class="account-row" [routerLink]="['/savings', row.id]">
+          <span class="row-main">
+            <span class="product-line">
+              <span class="product">{{ row.productName }}</span>
+              @if (row.status) {
+                <app-status-badge [status]="row.status" />
+              }
+            </span>
+            <span class="account-no">{{ row.accountNo }}</span>
+          </span>
+          <span class="row-end">
+            <span class="amount">{{ row.balance | currency: row.currency }}</span>
+          </span>
+        </a>
+      } @empty {
+        <p class="empty">{{ 'summary.savings.empty' | translate }}</p>
+      }
+
+      @if (store.savingsCount() > 0) {
+        <a class="view-all" routerLink="/savings">
+          {{ 'summary.viewAll' | translate: { count: store.savingsCount() } }} &rarr;
+        </a>
+      }
+    </ion-card>
+
+    <ion-card>
+      <header class="section-header">
+        <h2>{{ 'summary.section.loans' | translate }}</h2>
+        <span class="count">
+          {{ 'summary.accountsCount' | translate: { count: store.loansCount() } }}
+        </span>
+      </header>
+
+      @for (row of store.topLoans(); track row.id) {
+        <a class="account-row" [routerLink]="['/loans', row.id]">
+          <span class="row-main">
+            <span class="product-line">
+              <span class="product">{{ row.productName }}</span>
+              @if (row.status) {
+                <app-status-badge [status]="row.status" />
+              }
+            </span>
+            <span class="account-no">{{ row.accountNo }}</span>
+          </span>
+          <span class="row-end">
+            <span class="amount">{{ row.totalOutstanding | currency: row.currency }}</span>
+          </span>
+        </a>
+      } @empty {
+        <p class="empty">{{ 'summary.loan.empty' | translate }}</p>
+      }
+
+      @if (store.loansCount() > 0) {
+        <a class="view-all" routerLink="/loans">
+          {{ 'summary.viewAll' | translate: { count: store.loansCount() } }} &rarr;
+        </a>
+      }
+    </ion-card>
   `,
   styles: `
     :host {
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
-    }
-    section {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
       gap: 1rem;
     }
-    ion-card ion-card-content {
-      padding-top: 1rem;
-      padding-bottom: 1.75rem;
-    }
     ion-card {
-      cursor: pointer;
-      transition:
-        box-shadow var(--dur-base) var(--ease-out),
-        transform var(--dur-base) var(--ease-out);
+      margin: 0;
     }
-    ion-card:hover,
-    ion-card:focus-visible {
-      box-shadow: var(--shadow-md);
-      transform: translateY(-2px);
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-header h2 {
+      margin: 0;
+      font-size: var(--text-lg);
+      font-weight: 600;
+      letter-spacing: var(--tracking-snug);
+      color: var(--ink);
+    }
+    .count {
+      font-size: var(--text-xs);
+      color: var(--slate-400);
+      white-space: nowrap;
+    }
+    .account-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.75rem 1.25rem;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background-color var(--dur-base) var(--ease-out);
+    }
+    .account-row + .account-row {
+      border-top: 1px solid var(--border);
+    }
+    .account-row:hover,
+    .account-row:focus-visible {
+      background-color: var(--page-bg);
+    }
+    .row-main {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+      min-width: 0;
+    }
+    .product-line {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+    .product {
+      font-weight: 600;
+      font-size: var(--text-base);
+      color: var(--ink);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .product-line app-status-badge {
+      flex-shrink: 0;
+    }
+    .account-no {
+      font-size: var(--text-xs);
+      color: var(--slate-400);
+      font-variant-numeric: tabular-nums;
+    }
+    .row-end {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+    .amount {
+      font-size: var(--text-base);
+      font-weight: 600;
+      letter-spacing: var(--tracking-snug);
+      color: var(--ink);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
     .empty {
-      grid-column: 1 / -1;
+      margin: 0;
       padding: 2rem 1rem;
       text-align: center;
       color: var(--slate-400);
     }
-    .amount {
-      font-size: var(--text-xl);
+    .view-all {
+      display: block;
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--border);
+      font-size: var(--text-sm);
       font-weight: 600;
-      letter-spacing: var(--tracking-snug);
-      color: var(--ink);
-      font-variant-numeric: tabular-nums;
+      color: var(--cobalt-600);
+      text-decoration: none;
+      cursor: pointer;
+      transition: background-color var(--dur-base) var(--ease-out);
+    }
+    .view-all:hover,
+    .view-all:focus-visible {
+      background-color: var(--cobalt-50);
+      color: var(--cobalt-700);
     }
   `,
 })

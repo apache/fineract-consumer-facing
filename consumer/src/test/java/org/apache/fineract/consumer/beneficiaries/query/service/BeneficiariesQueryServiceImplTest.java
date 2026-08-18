@@ -36,7 +36,6 @@ import java.util.UUID;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryQueryEntity;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
-import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryTemplateQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.repository.BeneficiaryQueryRepository;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
@@ -80,18 +79,17 @@ class BeneficiariesQueryServiceImplTest {
                 .build();
     }
 
-    private static BeneficiaryQueryEntity beneficiary(String name, BeneficiaryAccountType accountType,
-            BigDecimal transferLimit) {
+    private static BeneficiaryQueryEntity beneficiary(String name, BigDecimal transferLimit) {
         return BeneficiaryQueryEntity.of(PUBLIC_ID, USER_ID, name, OFFICE_ID, CLIENT_ID, ACCOUNT_ID,
-                accountType, transferLimit);
+                BeneficiaryAccountType.SAVINGS, transferLimit);
     }
 
     @Test
     void listBeneficiariesMapsEntitiesToQueryData() {
-        BeneficiaryQueryEntity savings = beneficiary(ALICE_NAME, BeneficiaryAccountType.SAVINGS, TRANSFER_LIMIT);
-        BeneficiaryQueryEntity loan = beneficiary(BOB_NAME, BeneficiaryAccountType.LOAN, null);
+        BeneficiaryQueryEntity alice = beneficiary(ALICE_NAME, TRANSFER_LIMIT);
+        BeneficiaryQueryEntity bob = beneficiary(BOB_NAME, null);
         when(userClientResolver.resolveUserId(any(Jwt.class))).thenReturn(USER_ID);
-        when(repository.findAllByUserIdAndActiveTrueOrderByNameAsc(USER_ID)).thenReturn(List.of(savings, loan));
+        when(repository.findAllByUserIdAndActiveTrueOrderByNameAsc(USER_ID)).thenReturn(List.of(alice, bob));
 
         List<BeneficiaryQueryData> result = service.listBeneficiaries(jwt());
 
@@ -100,13 +98,13 @@ class BeneficiariesQueryServiceImplTest {
                 BeneficiaryQueryData.builder()
                         .publicId(PUBLIC_ID)
                         .name(ALICE_NAME)
-                        .accountType(BeneficiaryAccountType.SAVINGS)
+                        .fineractAccountId(ACCOUNT_ID)
                         .transferLimit(TRANSFER_LIMIT)
                         .build(),
                 BeneficiaryQueryData.builder()
                         .publicId(PUBLIC_ID)
                         .name(BOB_NAME)
-                        .accountType(BeneficiaryAccountType.LOAN)
+                        .fineractAccountId(ACCOUNT_ID)
                         .transferLimit(null)
                         .build());
     }
@@ -132,37 +130,17 @@ class BeneficiariesQueryServiceImplTest {
     }
 
     @Test
-    void getTemplateReturnsAllAccountTypeOptions() {
-        BeneficiaryTemplateQueryData template = service.getTemplate(jwt());
-
-        verify(accessPolicyEvaluator).authorize(any(Jwt.class), eq(ConsumerAction.BENEFICIARY_LIST));
-        assertThat(template.getAccountTypeOptions()).containsExactly(
-                BeneficiaryAccountType.SAVINGS.name(),
-                BeneficiaryAccountType.LOAN.name());
-    }
-
-    @Test
-    void getTemplateDeniedWhenPolicyRejects() {
-        doThrow(new AccessScopeInsufficientException())
-                .when(accessPolicyEvaluator).authorize(any(Jwt.class), eq(ConsumerAction.BENEFICIARY_LIST));
-
-        assertThatThrownBy(() -> service.getTemplate(jwt()))
-                .isInstanceOf(AccessScopeInsufficientException.class);
-    }
-
-    @Test
     void findActiveByAccountMapsMatchWithoutAuthorize() {
-        BeneficiaryQueryEntity match = beneficiary(ALICE_NAME, BeneficiaryAccountType.SAVINGS, TRANSFER_LIMIT);
+        BeneficiaryQueryEntity match = beneficiary(ALICE_NAME, TRANSFER_LIMIT);
         when(repository.findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
                 USER_ID, ACCOUNT_ID, BeneficiaryAccountType.SAVINGS)).thenReturn(Optional.of(match));
 
-        Optional<BeneficiaryQueryData> result =
-                service.findActiveByAccount(USER_ID, ACCOUNT_ID, BeneficiaryAccountType.SAVINGS);
+        Optional<BeneficiaryQueryData> result = service.findActiveByAccount(USER_ID, ACCOUNT_ID);
 
         assertThat(result).contains(BeneficiaryQueryData.builder()
                 .publicId(PUBLIC_ID)
                 .name(ALICE_NAME)
-                .accountType(BeneficiaryAccountType.SAVINGS)
+                .fineractAccountId(ACCOUNT_ID)
                 .transferLimit(TRANSFER_LIMIT)
                 .build());
         verify(accessPolicyEvaluator, never()).authorize(any(Jwt.class), any());
@@ -171,8 +149,8 @@ class BeneficiariesQueryServiceImplTest {
     @Test
     void findActiveByAccountReturnsEmptyWhenNoMatch() {
         when(repository.findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
-                USER_ID, ACCOUNT_ID, BeneficiaryAccountType.LOAN)).thenReturn(Optional.empty());
+                USER_ID, ACCOUNT_ID, BeneficiaryAccountType.SAVINGS)).thenReturn(Optional.empty());
 
-        assertThat(service.findActiveByAccount(USER_ID, ACCOUNT_ID, BeneficiaryAccountType.LOAN)).isEmpty();
+        assertThat(service.findActiveByAccount(USER_ID, ACCOUNT_ID)).isEmpty();
     }
 }

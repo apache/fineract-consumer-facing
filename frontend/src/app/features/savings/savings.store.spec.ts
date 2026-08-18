@@ -56,14 +56,41 @@ describe('SavingsStore', () => {
     expect(store.accounts()).toEqual(rows);
   });
 
-  it('loadTransactions forwards the date-range filter as query params', () => {
-    store.loadTransactions(SAVINGS_ID, { fromDate: '2026-01-01', toDate: '2026-02-01', page: 1, size: 10 });
+  it('loadAccounts sorts the accounts by account number', () => {
+    store.loadAccounts();
+    controller.expectOne(SAVINGS_URL).flush([
+      { id: 2, accountNo: '000002' },
+      { id: 1, accountNo: '000001' },
+    ]);
 
-    const req = controller.expectOne(r => r.url === SAVINGS_TRANSACTIONS_URL);
+    expect(store.accounts().map((row) => row.accountNo)).toEqual(['000001', '000002']);
+  });
+
+  it('loadTransactions forwards the date-range filter and unwraps the page envelope', () => {
+    store.loadTransactions(SAVINGS_ID, {
+      fromDate: '2026-01-01',
+      toDate: '2026-02-01',
+      page: 1,
+      size: 10,
+    });
+
+    const req = controller.expectOne((r) => r.url === SAVINGS_TRANSACTIONS_URL);
     expect(req.request.params.get('fromDate')).toBe('2026-01-01');
     expect(req.request.params.get('toDate')).toBe('2026-02-01');
     expect(req.request.params.get('page')).toBe('1');
     expect(req.request.params.get('size')).toBe('10');
-    req.flush([]);
+    req.flush({
+      content: [{ id: 11, amount: 100 }],
+      page: 1,
+      size: 10,
+      totalElements: 25,
+      totalPages: 3,
+    });
+
+    expect(store.transactions()).toEqual([{ id: 11, amount: 100 }]);
+    expect(store.transactionsPage()).toBe(1);
+    expect(store.transactionsSize()).toBe(10);
+    expect(store.transactionsTotalElements()).toBe(25);
+    expect(store.transactionsTotalPages()).toBe(3);
   });
 });

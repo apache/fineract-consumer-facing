@@ -25,6 +25,7 @@ import org.apache.fineract.consumer.savings.query.data.SavingsAccountQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsApplicationTemplateQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsChargeQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryData;
+import org.apache.fineract.consumer.savings.query.data.SavingsTransactionQueryResponse;
 import org.apache.fineract.consumer.savings.query.data.SavingsTransactionSearchQuery;
 import org.springframework.security.oauth2.jwt.Jwt;
 
@@ -36,7 +37,7 @@ public interface SavingsQueryService {
 
     List<SavingsChargeQueryData> getCharges(Jwt jwt, Long savingsId);
 
-    List<SavingsTransactionQueryData> searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query);
+    SavingsTransactionQueryResponse searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query);
 
     SavingsTransactionQueryData getTransaction(Jwt jwt, Long savingsId, Long transactionId);
 

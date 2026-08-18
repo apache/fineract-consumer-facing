@@ -39,7 +39,7 @@ public final class BeneficiaryQueryData {
 
     private final String name;
 
-    private final BeneficiaryAccountType accountType;
+    private final Long fineractAccountId;
 
     private final BigDecimal transferLimit;
 }

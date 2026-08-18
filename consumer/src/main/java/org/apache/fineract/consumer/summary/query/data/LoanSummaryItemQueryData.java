@@ -39,4 +39,5 @@ public final class LoanSummaryItemQueryData {
     private final String currency;
     private final BigDecimal loanBalance;
     private final BigDecimal amountPaid;
+    private final boolean active;
 }

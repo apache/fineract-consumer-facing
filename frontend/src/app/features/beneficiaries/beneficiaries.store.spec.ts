@@ -47,19 +47,11 @@ describe('BeneficiariesStore', () => {
     store.load().subscribe();
     controller
       .expectOne('/api/v1/beneficiaries')
-      .flush([{ publicId: 'b1', name: 'Asha', accountType: 'SAVINGS', transferLimit: 100 }]);
+      .flush([{ publicId: 'b1', name: 'Asha', fineractAccountId: 2, transferLimit: 100 }]);
 
     expect(store.beneficiaries().length).toBe(1);
     expect(store.beneficiaries()[0].name).toBe('Asha');
-  });
-
-  it('loadTemplate populates account type options', () => {
-    store.loadTemplate().subscribe();
-    controller
-      .expectOne('/api/v1/beneficiaries/template')
-      .flush({ accountTypeOptions: ['SAVINGS', 'LOAN'] });
-
-    expect(store.accountTypeOptions()).toEqual(['SAVINGS', 'LOAN']);
+    expect(store.beneficiaries()[0].fineractAccountId).toBe(2);
   });
 
   it('initiateAdd stores the challenge', () => {
@@ -68,7 +60,6 @@ describe('BeneficiariesStore', () => {
         name: 'Asha',
         officeName: 'Head Office',
         accountNumber: '000000001',
-        accountType: 'SAVINGS',
       })
       .subscribe();
     controller
@@ -88,12 +79,9 @@ describe('BeneficiariesStore', () => {
         name: 'Asha',
         officeName: 'Head Office',
         accountNumber: '000000001',
-        accountType: 'SAVINGS',
       })
       .subscribe();
-    controller
-      .expectOne('/api/v1/beneficiaries/confirm')
-      .flush({ publicId: 'b1', name: 'Asha', accountType: 'SAVINGS' });
+    controller.expectOne('/api/v1/beneficiaries/confirm').flush({ publicId: 'b1', name: 'Asha' });
 
     expect(store.challenge()).toBeNull();
   });

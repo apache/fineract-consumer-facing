@@ -74,7 +74,6 @@ class OpenBankingConsentCommandServiceImplTest {
     private AccessPolicyEvaluator accessPolicyEvaluator;
 
     private final OAuth2ConsumerProperties oauth2Properties = new OAuth2ConsumerProperties(
-            new OAuth2ConsumerProperties.TppClient(TPP_CLIENT_ID, "secret", "https://tpp.example/callback"),
             Duration.ofMinutes(5), Duration.ofHours(12), CONSENT_TTL, "http://localhost:4200", "ob-key");
 
     private OpenBankingConsentCommandServiceImpl service() {

@@ -36,6 +36,7 @@ public final class SavingsTransactionQueryData {
     private final Long id;
     private final String type;
     private final BigDecimal amount;
+    private final String currency;
     private final BigDecimal runningBalance;
     private final LocalDate date;
 }

@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.loans.query.service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,7 @@ import org.apache.fineract.consumer.loans.query.data.LoanProductOptionQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanScheduleQueryData;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionListQuery;
 import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryData;
+import org.apache.fineract.consumer.loans.query.data.LoanTransactionQueryResponse;
 import org.apache.fineract.consumer.loans.query.exception.LoanProductNotFoundException;
 import org.apache.fineract.consumer.loans.query.exception.LoanQueryAccessDeniedException;
 import org.apache.fineract.consumer.loans.query.exception.LoanQueryNotFoundException;
@@ -74,6 +76,7 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     private static final String LOCALE = "en";
     private static final String DATE_FORMAT = "yyyy-MM-dd";
     private static final String LOAN_TYPE = "individual";
+    static final int FETCH_ALL_PAGE_SIZE = 10_000;
 
     private final LoansApi loansApi;
     private final LoanTransactionsApi loanTransactionsApi;
@@ -114,15 +117,67 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     }
 
     @Override
-    public List<LoanTransactionQueryData> listTransactions(Jwt jwt, LoanTransactionListQuery query) {
+    public LoanTransactionQueryResponse listTransactions(Jwt jwt, LoanTransactionListQuery query) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.LOANS_VIEW, query.getLoanId(),
                 LoanQueryAccessDeniedException::new);
+        if (query.getFromDate() == null && query.getToDate() == null) {
+            return listTransactionsPassthrough(query);
+        }
+        return listTransactionsDateFiltered(query);
+    }
+
+    private LoanTransactionQueryResponse listTransactionsPassthrough(LoanTransactionListQuery query) {
         GetLoansLoanIdTransactionsResponse response = fetch(() -> loanTransactionsApi.retrieveTransactionsByLoanId(
                 query.getLoanId(), null, query.getPage(), query.getSize(), query.getSort()));
         if (response == null || response.getContent() == null) {
-            return List.of();
+            return toTransactionPage(List.of(), query.getPage(), query.getSize(), 0L, 0);
         }
-        return response.getContent().stream().map(this::toTransactionData).toList();
+        List<LoanTransactionQueryData> content =
+                response.getContent().stream().map(this::toTransactionData).toList();
+        long totalElements = response.getTotalElements() == null ? 0L : response.getTotalElements();
+        int totalPages = response.getTotalPages() == null ? 0 : response.getTotalPages();
+        return toTransactionPage(content, query.getPage(), query.getSize(), totalElements, totalPages);
+    }
+
+    private LoanTransactionQueryResponse listTransactionsDateFiltered(LoanTransactionListQuery query) {
+        int page = query.getPage();
+        int size = query.getSize();
+        GetLoansLoanIdTransactionsResponse response = fetch(() -> loanTransactionsApi.retrieveTransactionsByLoanId(
+                query.getLoanId(), null, 0, FETCH_ALL_PAGE_SIZE, query.getSort()));
+        if (response == null || response.getContent() == null) {
+            return toTransactionPage(List.of(), page, size, 0L, 0);
+        }
+        List<LoanTransactionQueryData> filtered = response.getContent().stream()
+                .filter(transaction -> isWithinDates(transaction.getDate(), query.getFromDate(), query.getToDate()))
+                .map(this::toTransactionData)
+                .toList();
+        int fromIndex = page * size;
+        List<LoanTransactionQueryData> content = fromIndex >= filtered.size()
+                ? List.of()
+                : filtered.subList(fromIndex, Math.min(fromIndex + size, filtered.size()));
+        int totalPages = (int) Math.ceil(filtered.size() / (double) size);
+        return toTransactionPage(content, page, size, filtered.size(), totalPages);
+    }
+
+    private static boolean isWithinDates(LocalDate date, LocalDate fromDate, LocalDate toDate) {
+        if (date == null) {
+            return false;
+        }
+        if (fromDate != null && date.isBefore(fromDate)) {
+            return false;
+        }
+        return toDate == null || !date.isAfter(toDate);
+    }
+
+    private static LoanTransactionQueryResponse toTransactionPage(
+            List<LoanTransactionQueryData> content, int page, int size, long totalElements, int totalPages) {
+        return LoanTransactionQueryResponse.builder()
+                .content(content)
+                .page(page)
+                .size(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .build();
     }
 
     @Override
@@ -250,6 +305,7 @@ public class LoansQueryServiceImpl implements LoansQueryService {
                 .accountNo(account.getAccountNo())
                 .productName(account.getProductName())
                 .status(account.getStatus() == null ? null : account.getStatus().getCode())
+                .active(account.getStatus() != null && Boolean.TRUE.equals(account.getStatus().getActive()))
                 .currency(account.getCurrency() == null ? null : account.getCurrency().getCode())
                 .build();
     }
@@ -262,6 +318,7 @@ public class LoansQueryServiceImpl implements LoansQueryService {
                 .accountNo(loan.getAccountNo())
                 .productName(loan.getLoanProductName())
                 .status(loan.getStatus() == null ? null : loan.getStatus().getCode())
+                .active(loan.getStatus() != null && Boolean.TRUE.equals(loan.getStatus().getActive()))
                 .principalDisbursed(summary == null ? null : summary.getPrincipalDisbursed())
                 .totalOutstanding(summary == null ? null : summary.getTotalOutstanding())
                 .interestOutstanding(summary == null ? null : summary.getInterestOutstanding())
@@ -310,7 +367,7 @@ public class LoansQueryServiceImpl implements LoansQueryService {
     private LoanGuarantorQueryData toGuarantorData(GuarantorData guarantor) {
         return LoanGuarantorQueryData.builder()
                 .id(guarantor.getId())
-                .guarantorType(guarantor.getGuarantorType() == null ? null : guarantor.getGuarantorType().getValue())
+                .guarantorType(guarantor.getGuarantorType() == null ? null : guarantor.getGuarantorType().getCode())
                 .displayName(displayName(guarantor.getFirstname(), guarantor.getLastname()))
                 .relationship(guarantor.getClientRelationshipType() == null
                         ? null

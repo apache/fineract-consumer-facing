@@ -22,23 +22,15 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Configuration } from '@bff/client';
-import { deviceFingerprint } from '../../core/auth/device-fingerprint';
 import { ProfileStore } from './profile.store';
 
 const PROFILE_URL = '/api/v1/user/profile';
 const CHARGES_URL = '/api/v1/user/charges';
 const IMAGE_URL = '/api/v1/user/image';
-const OBLIGEES_URL = '/api/v1/user/obligees';
-const PASSWORD_CHANGE_INITIATE_URL = '/api/v1/user/password/change/initiate';
-const CONSENTS_URL = '/api/v1/openbanking/consents';
-const CONSENT_ID = '4f9a2c1e-8b3d-4e6f-9a0b-1c2d3e4f5a6b';
-const CONSENT_TPP_CLIENT_ID = 'demo-tpp';
 const DISPLAY_NAME = 'Asha Kumar';
 const MASKED_EMAIL = 'a***@example.com';
 const CHARGE_NAME = 'Annual Fee';
 const IMAGE_DATA_URI = 'data:image/png;base64,AAAA';
-const OBLIGEE_NAME = 'Ravi Patel';
-const STEP_UP_TOKEN = 'tok';
 
 describe('ProfileStore', () => {
   let store: ProfileStore;
@@ -82,7 +74,7 @@ describe('ProfileStore', () => {
     store.loadCharges({ status: 'active', page: 2, size: 5 });
 
     const req = controller.expectOne(
-      r =>
+      (r) =>
         r.url === CHARGES_URL &&
         r.params.get('status') === 'active' &&
         r.params.get('page') === '2' &&
@@ -111,7 +103,7 @@ describe('ProfileStore', () => {
     store.loadImage();
 
     const req = controller.expectOne(
-      r =>
+      (r) =>
         r.url === IMAGE_URL &&
         r.params.get('maxWidth') === '256' &&
         r.params.get('maxHeight') === '256',
@@ -119,91 +111,5 @@ describe('ProfileStore', () => {
     req.flush({ imageDataUri: IMAGE_DATA_URI });
 
     expect(store.image()?.imageDataUri).toBe(IMAGE_DATA_URI);
-  });
-
-  it('loadObligees sets the obligees signal', () => {
-    store.loadObligees();
-
-    controller.expectOne(OBLIGEES_URL).flush([
-      {
-        displayName: OBLIGEE_NAME,
-        accountNumber: 'L-42',
-        loanAmount: 1000,
-        guaranteeAmount: 250,
-        amountReleased: 0,
-      },
-    ]);
-
-    expect(store.obligees().length).toBe(1);
-    expect(store.obligees()[0].displayName).toBe(OBLIGEE_NAME);
-  });
-
-  it('loadConsents sets the consents signal', () => {
-    store.loadConsents();
-
-    controller.expectOne(CONSENTS_URL).flush([
-      {
-        consentId: CONSENT_ID,
-        tppClientId: CONSENT_TPP_CLIENT_ID,
-        permissions: ['ReadAccountsBasic', 'ReadBalances'],
-        status: 'AUTHORISED',
-        creationDateTime: '2026-08-08T10:00:00Z',
-        expirationDateTime: '2026-11-06T10:00:00Z',
-        statusUpdateDateTime: '2026-08-08T10:05:00Z',
-      },
-    ]);
-
-    expect(store.consents().length).toBe(1);
-    expect(store.consents()[0].consentId).toBe(CONSENT_ID);
-    expect(store.consents()[0].status).toBe('AUTHORISED');
-  });
-
-  it('loadConsents leaves the consents signal empty on error', () => {
-    store.loadConsents();
-
-    controller
-      .expectOne(CONSENTS_URL)
-      .flush(
-        { code: 'error.msg.consumer.unexpected', defaultMessage: 'unexpected error' },
-        { status: 500, statusText: 'Internal Server Error' },
-      );
-
-    expect(store.consents()).toEqual([]);
-  });
-
-  it('revokeConsent posts to the revoke endpoint and emits the updated status', () => {
-    let revoked: string | undefined;
-    store.revokeConsent(CONSENT_ID).subscribe(result => (revoked = result.status));
-
-    const req = controller.expectOne(`${CONSENTS_URL}/${CONSENT_ID}/revoke`);
-    expect(req.request.method).toBe('POST');
-    req.flush({ consentId: CONSENT_ID, status: 'REVOKED' });
-
-    expect(revoked).toBe('REVOKED');
-    expect(store.consents()).toEqual([]);
-  });
-
-  it('revokeConsent propagates errors to the subscriber', () => {
-    let status: number | undefined;
-    store.revokeConsent(CONSENT_ID).subscribe({ error: err => (status = err.status) });
-
-    controller
-      .expectOne(`${CONSENTS_URL}/${CONSENT_ID}/revoke`)
-      .flush(
-        { code: 'error.msg.consumer.openbanking.consent.not.revocable', defaultMessage: 'not revocable' },
-        { status: 409, statusText: 'Conflict' },
-      );
-
-    expect(status).toBe(409);
-  });
-
-  it('initiatePasswordChange sends the device fingerprint and stores the challenge', () => {
-    store.initiatePasswordChange({ currentPassword: 'Current-password-1!' }).subscribe();
-
-    const req = controller.expectOne(PASSWORD_CHANGE_INITIATE_URL);
-    expect(req.request.headers.get('X-Device-Fingerprint')).toBe(deviceFingerprint());
-    req.flush({ stepUpToken: STEP_UP_TOKEN, sentTo: MASKED_EMAIL });
-
-    expect(store.passwordChangeChallenge()?.stepUpToken).toBe(STEP_UP_TOKEN);
   });
 });
