@@ -117,9 +117,11 @@ services:
       CONSUMER_AUDIT_QUERY_ENABLED: "true"
       SERVER_FORWARD_HEADERS_STRATEGY: framework
       JWT_KEY_LOCATION: file:/etc/bff/jwt-key.pem
-      JAVA_TOOL_OPTIONS: "-Xmx768m -Xms256m"
+      JAVA_TOOL_OPTIONS: "-Xmx768m -Xms256m ${BFF_JACOCO_OPTS:-}"
     volumes:
       - ./dev-jwt-key.pem:/etc/bff/jwt-key.pem:ro
+      - ./build/jacoco-agent:/jacoco-agent:ro
+      - ./build/jacoco:/jacoco-report
     ports:
       - "8080:8080"
     healthcheck:
@@ -128,7 +130,7 @@ services:
       timeout: 5s
       retries: 60
       start_period: 60s
-    mem_limit: 1g
+    mem_limit: ${BFF_MEM_LIMIT:-2g}
 
   mailpit:
     image: axllent/mailpit:v1.30.2

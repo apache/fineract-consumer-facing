@@ -17,21 +17,26 @@
  * under the License.
  */
 
-import { defineConfig } from 'vitest/config';
+import type { CoverageReportOptions } from 'monocart-coverage-reports';
 
-// Force Ionic/Stencil packages through Vite's resolver
-export default defineConfig({
-  test: {
-    server: {
-      deps: {
-        inline: [/@ionic/, /ionicons/, /@stencil/],
-      },
-    },
+const EXCLUDED_SOURCES = [
+  /^src\/openapi-client\//,
+  /^src\/main\.ts$/,
+  /^src\/app\/app\.config\.ts$/,
+  /^src\/app\/app\.ts$/,
+  /\.routes\.ts$/,
+  /^src\/environments\//,
+  /^src\/app\/api\/consumer-api-error\.ts$/,
+];
 
-    coverage: {
-      provider: 'v8',
-      reportsDirectory: 'coverage/unit',
-      reporter: ['lcov', 'text-summary'],
-    },
-  },
-});
+const coverageOptions: CoverageReportOptions = {
+  name: 'frontend e2e coverage',
+  outputDir: './coverage/e2e',
+  reports: ['v8', 'lcovonly'],
+  entryFilter: (entry) =>
+    new URL(entry.url).pathname.endsWith('.js') && !!entry.source?.includes('sourceMappingURL'),
+  sourceFilter: (sourcePath) =>
+    sourcePath.startsWith('src/') && !EXCLUDED_SOURCES.some((pattern) => pattern.test(sourcePath)),
+};
+
+export default coverageOptions;

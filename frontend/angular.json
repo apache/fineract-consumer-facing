@@ -92,7 +92,20 @@
             "tsConfig": "tsconfig.spec.json",
             "buildTarget": "::development",
             "runner": "vitest",
-            "runnerConfig": "vitest.config.ts"
+            "runnerConfig": "vitest.config.ts",
+            "coverageInclude": [
+              "src/**/*.ts"
+            ],
+            "coverageExclude": [
+              "src/openapi-client/**",
+              "src/main.ts",
+              "src/app/app.config.ts",
+              "src/app/app.ts",
+              "**/*.routes.ts",
+              "src/environments/**",
+              "src/app/api/consumer-api-error.ts",
+              "**/*.spec.ts"
+            ]
           }
         },
         "lint": {

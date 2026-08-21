@@ -17,8 +17,7 @@
  * under the License.
  */
 
-import { expect, test } from '@playwright/test';
-
+import { expect, test } from '../support/fixtures';
 import { JSON_CONTENT_TYPE } from './constants';
 
 const OTP_CODE = 'ABC123';

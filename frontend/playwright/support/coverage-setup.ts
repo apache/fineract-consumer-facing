@@ -17,21 +17,12 @@
  * under the License.
  */
 
-import { defineConfig } from 'vitest/config';
+import { rmSync } from 'node:fs';
 
-// Force Ionic/Stencil packages through Vite's resolver
-export default defineConfig({
-  test: {
-    server: {
-      deps: {
-        inline: [/@ionic/, /ionicons/, /@stencil/],
-      },
-    },
+import coverageOptions from './coverage.config';
 
-    coverage: {
-      provider: 'v8',
-      reportsDirectory: 'coverage/unit',
-      reporter: ['lcov', 'text-summary'],
-    },
-  },
-});
+export default (): void => {
+  if (process.env.PW_COVERAGE) {
+    rmSync(coverageOptions.outputDir as string, { recursive: true, force: true });
+  }
+};

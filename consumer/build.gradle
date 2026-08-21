@@ -24,6 +24,7 @@ import com.github.jk1.license.filter.LicenseBundleNormalizer
 
 plugins {
 	id 'java'
+	id 'jacoco'
 	id 'org.springframework.boot' version '4.0.6'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'se.thinkcode.cucumber-runner' version '0.0.11'
@@ -113,8 +114,67 @@ tasks.named('compileJava') {
 	dependsOn 'generateFineractClient'
 }
 
+def jacocoExcludes = [
+	'org/apache/fineract/consumer/**/data/**',
+	'org/apache/fineract/consumer/**/exception/**',
+	'org/apache/fineract/consumer/infrastructure/fineractclient/generated/**',
+	'org/apache/fineract/consumer/ConsumerApplication*',
+	'org/apache/fineract/consumer/infrastructure/configs/**Properties*'
+]
+
+configurations {
+	jacocoAgentRuntime
+}
+
+dependencies {
+	jacocoAgentRuntime "org.jacoco:org.jacoco.agent:${jacoco.toolVersion}:runtime"
+}
+
+task copyJacocoAgent(type: Copy) {
+	description = 'Copy the standalone JaCoCo agent jar to build/jacoco-agent for bind-mounting into the bff container.'
+	group = 'verification'
+	from configurations.jacocoAgentRuntime
+	into layout.buildDirectory.dir('jacoco-agent')
+	rename { 'jacocoagent.jar' }
+}
+
+task extractContainerClasses {
+	description = 'Extract BOOT-INF/classes from the running bff container into build/jacoco/container. Run while the compose stack is still up.'
+	group = 'verification'
+	doLast {
+		def containerJar = layout.buildDirectory.file('jacoco/app.jar').get().asFile
+		containerJar.parentFile.mkdirs()
+		exec {
+			commandLine 'docker', 'cp', 'bff:/app/app.jar', containerJar.absolutePath
+		}
+		copy {
+			from zipTree(containerJar)
+			include 'BOOT-INF/classes/**'
+			into layout.buildDirectory.dir('jacoco/container')
+		}
+	}
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
+	finalizedBy 'jacocoTestReport'
+}
+
+tasks.named('jacocoTestReport') {
+	dependsOn 'test'
+	reports {
+		html.required = true
+		xml.required = false
+	}
+	executionData fileTree(layout.buildDirectory.dir('jacoco')) { include 'cucumber.exec' }
+	def containerClasses = layout.buildDirectory.dir('jacoco/container/BOOT-INF/classes').get().asFile
+	if (containerClasses.exists()) {
+		classDirectories.setFrom(fileTree(dir: containerClasses, exclude: jacocoExcludes))
+	} else {
+		classDirectories.setFrom(
+			classDirectories.files.collect { fileTree(dir: it, exclude: jacocoExcludes) }
+		)
+	}
 }
 
 cucumber {

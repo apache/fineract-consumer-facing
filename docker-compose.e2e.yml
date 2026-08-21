@@ -25,6 +25,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        BUILD_CONFIGURATION: ${FRONTEND_BUILD_CONFIG:-production}
     container_name: frontend
     depends_on:
       bff:
