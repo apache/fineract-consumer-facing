@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../support/fixtures';
 
 test('savings route is guarded: redirects to /login when unauthenticated', async ({ page }) => {
   await page.goto('/savings');

@@ -17,8 +17,9 @@
  * under the License.
  */
 
-import { type Page, expect, test } from '@playwright/test';
+import { type Page } from '@playwright/test';
 
+import { expect, test } from '../support/fixtures';
 import { JSON_CONTENT_TYPE } from './constants';
 
 const LOAN_ID = 1;

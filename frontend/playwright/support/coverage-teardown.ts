@@ -17,21 +17,12 @@
  * under the License.
  */
 
-import { defineConfig } from 'vitest/config';
+import MCR from 'monocart-coverage-reports';
 
-// Force Ionic/Stencil packages through Vite's resolver
-export default defineConfig({
-  test: {
-    server: {
-      deps: {
-        inline: [/@ionic/, /ionicons/, /@stencil/],
-      },
-    },
+import coverageOptions from './coverage.config';
 
-    coverage: {
-      provider: 'v8',
-      reportsDirectory: 'coverage/unit',
-      reporter: ['lcov', 'text-summary'],
-    },
-  },
-});
+export default async (): Promise<void> => {
+  if (process.env.PW_COVERAGE) {
+    await MCR(coverageOptions).generate();
+  }
+};
