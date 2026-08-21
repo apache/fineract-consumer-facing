@@ -61,6 +61,9 @@ jobs:
       - name: Generate dev JWT signing key
         run: ./scripts/generate-dev-jwt-key.sh
 
+      - name: Pre-create JaCoCo mount directories
+        run: mkdir -p build/jacoco-agent build/jacoco
+
       - name: Start application stack
         run: docker compose up -d --build --wait --wait-timeout 180
 

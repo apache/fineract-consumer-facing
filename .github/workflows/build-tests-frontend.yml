@@ -70,6 +70,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Pre-create JaCoCo mount directories
+        run: mkdir -p ../consumer/build/jacoco-agent ../consumer/build/jacoco
+
       - name: Generate BFF client
         run: npm run e2e:docker:up:backend && npm run generate:client
 
@@ -141,6 +144,9 @@ jobs:
       - name: Install Playwright system deps (cache hit)
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
+
+      - name: Pre-create JaCoCo mount directories
+        run: mkdir -p ../consumer/build/jacoco-agent ../consumer/build/jacoco
 
       - name: Bring up e2e stack (generates BFF client mid-bring-up)
         run: npm run e2e:docker:up
