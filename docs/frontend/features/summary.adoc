@@ -1,0 +1,48 @@
+= Account summary
+
+== Purpose
+
+The summary screen is the dashboard a user lands on after login: one page showing their savings and loan accounts at a glance, with links into the detailed views. Code lives in `frontend/src/app/features/summary/`: a single component plus `SummaryStore`.
+
+== Screens and routes
+
+[cols="2,3,4", options="header"]
+|===
+| Route | Component | Purpose
+
+| `/summary`
+| `SummaryComponent`
+| Dashboard with a savings card and a loans card, each showing the top accounts and a view-all link.
+|===
+
+The route sits inside the authenticated layout shell and is the default destination after a successful login.
+
+== Flows
+
+The component calls `SummaryStore.load()` in its constructor. The store makes a single aggregated call to the BFF and splits the response into two signals, `savingsCards` and `loanCards`. Each entry is mapped down to what the cards render: id, account number, product name, status, currency, and one money figure (the account balance for savings, the outstanding loan balance for loans). Rows missing an id are dropped, and both lists are sorted by account number (`byAccountNo` in `shared/utils/account-sort.ts`) so ordering is stable across reloads.
+
+Everything else on the page is derived with `computed` signals on the store, so the template contains no logic:
+
+* `topSavings` and `topLoans` hold the first three entries of each list; only these are rendered as rows.
+* `savingsCount` and `loansCount` hold the full counts, shown as "_n_ accounts" in each card header and inside the "view all" links.
+
+Each card renders its top-3 rows as links: product name with a status badge, the account number underneath, and the money figure on the right, formatted with the account's own currency. Clicking a row navigates to `/savings/:id` or `/loans/:id`. When a list has more than zero accounts a "view all (_n_)" footer links to the full `/savings` or `/loans` list; when it is empty, the card shows a translated empty-state message instead. A progress bar is shown while the single load is in flight.
+
+The screen is read-only and holds no state beyond the store's signals. There are no filters, pagination, or actions here; those belong to the savings and loans features.
+
+== BFF endpoints used
+
+[cols="3,4", options="header"]
+|===
+| User action | Client call
+
+| Open the dashboard
+| `SummaryQueryControllerService.getAccountsSummary`
+|===
+
+One request paints the whole page; the BFF does the aggregation across savings and loans server-side. The server side is documented in `docs/consumer/features/summary.adoc`.
+
+== Test coverage
+
+* Vitest: `frontend/src/app/features/summary/summary.store.spec.ts` covers `SummaryStore` against a mocked HTTP layer: mapping the single summary response into savings and loan cards, sorting and top-three slicing, rendering null balances as zero, and handling an empty summary.
+* Playwright: `frontend/playwright/tests/summary.spec.ts` covers the route guard: an unauthenticated visit to the dashboard redirects to `/login`.

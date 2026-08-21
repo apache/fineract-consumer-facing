@@ -1,0 +1,48 @@
+= Consent screen
+
+== Purpose
+
+The consent screen is the page where the customer approves or denies a third-party's request to read their account data. It is the browser-facing half of the open banking authorization ceremony: a TPP (third-party provider, an external app such as an account aggregator) sends the customer's browser to the BFF's OAuth2 authorize endpoint, the BFF authenticates the customer and then renders this Angular route so the customer can decide.
+
+Code lives under `frontend/src/app/features/consent/`. Unlike every other feature, this screen makes no `@bff/client` call at all. Its only outbound traffic is a classic HTML form post, because the decision must land on the authorization endpoint as a normal browser navigation so the BFF can answer with the OAuth2 redirect back to the TPP.
+
+== Screens and routes
+
+[cols="2,3,4", options="header"]
+|===
+| Route | Component | Purpose
+
+| `/consent`
+| `ConsentComponent` (`consent.component.ts`)
+| Shows who is asking and for what, and posts the allow/deny decision back to the BFF.
+|===
+
+The route is guarded by `authGuard` but deliberately rendered outside the shell layout (no sidenav or toolbar), because the customer is mid-ceremony rather than browsing the app.
+
+== Flows
+
+*How the browser lands here.* The TPP redirects the customer to `GET /api/v1/oauth2/authorize` with the standard OAuth2 parameters plus a `consent_id`. If the customer has no session, the BFF bounces them to `/login` first; once authenticated, the BFF sends the browser to `/consent` carrying three query parameters that this component reads from the route snapshot:
+
+[cols="1,4", options="header"]
+|===
+| Query parameter | Use
+
+| `client_id`
+| The requesting TPP's client id, shown in the intro text ("`<client_id>` is asking…").
+
+| `state`
+| Opaque ceremony state that must be echoed back on the decision post so the authorization server can correlate it.
+
+| `scope`
+| Space-separated list of requested scopes, split into individual entries for display.
+|===
+
+If `client_id` or `state` is missing, the component renders an invalid-request message instead of the decision buttons.
+
+*Scope label rendering.* Each scope is looked up in a small map (`SCOPE_LABEL_KEYS`) that turns machine scopes into translated, human-readable permission lines. The single mapped scope is `openbanking:accounts.read` → `consent.scope.accountsRead`. An unmapped scope falls back to displaying the raw scope string, so a new scope degrades visibly rather than silently.
+
+*Allow and deny.* Each button is its own plain HTML `<form method="post" action="/api/v1/oauth2/authorize">` containing hidden inputs for `client_id`, `state`, and `_csrf`. CSRF is cross-site request forgery, where another site tricks the browser into posting with your cookies; the token proves the post came from this page. It is read from the `XSRF-TOKEN` cookie that the BFF set, URL-decoded, and embedded as the `_csrf` field. The "allow" form additionally includes one hidden `scope` input per requested scope; the "deny" form includes none, because posting the decision with no approved scopes is how the authorization server records a denial. Because these are native form posts, the whole page navigates. The BFF records the decision, updates the consent row (`AUTHORISED` or `REJECTED`), emits a `CONSENT_GRANTED` or `CONSENT_DENIED` audit event, and redirects the browser to the TPP's registered redirect URI with the authorization code or error.
+
+== Relation to the open banking feature
+
+This screen is one step of the larger consent lifecycle: the TPP creates the consent via its own API, the customer decides here, and afterwards the consent appears (with status and expiry) in the connected-apps table on `/settings`, where it can be revoked. The full ceremony (consent statuses, token scoping, refresh behavior, and the audit trail) is documented in `docs/consumer/features/openbanking.adoc`. The connected-apps management surface is covered in xref:profile-settings[Profile and settings].

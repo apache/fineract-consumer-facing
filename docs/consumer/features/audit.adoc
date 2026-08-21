@@ -1,0 +1,231 @@
+= Audit
+
+The BFF (backend-for-frontend, the Spring Boot service in `consumer/` that sits between the Angular client and Fineract Core) records security-relevant and user-activity events in a dedicated PostgreSQL table, separate from application logs. Auditing spans two code areas that must not be confused:
+
+* `consumer.audit` (feature module): the command side is the HTTP surface that ingests batched audit events posted by the Angular client, plus the persistence and retention machinery for the shared `audit_events` table. The query side is a demo-only, flag-gated read endpoint over the same table (see "Query surface" below).
+* `consumer.infrastructure.audit` (infrastructure package): the in-process contract that server-side features use to emit their own audit events. It defines the event type catalog, the severity model, and two listener annotations. It contains no persistence code of its own.
+
+The two halves meet in the feature module: `ServerAuditEventListener` (in `consumer.audit.command.service`) subscribes to the infrastructure events and writes them into the same `audit_events` table that client submissions land in. Rows are distinguished by a `source` column: `CLIENT` for events reported by the browser, `SERVER` for events observed by the BFF itself. Server rows are trusted; client rows are best-effort telemetry and are validated accordingly.
+
+Responsibility is split with Fineract Core. Fineract, as the system of record, audits backend financial operations and keeps the authoritative record of every posted transaction. The BFF audits the consumer channel instead, covering security events observed at the gateway (logins, denials, OTP challenges, consent grants) and telemetry reported by the browser. Successful financial operations are therefore not duplicated into `audit_events`; a completed transfer, for example, is recorded by Fineract and re-read from there on demand.
+
+== Frontend event ingestion (consumer.audit, command side)
+
+The Angular client batches audit events (navigation, sensitive views and actions, client errors, API failures, logout) and posts them to one endpoint.
+
+[cols="1,3,4"]
+|===
+|Method |Path |Description
+
+|POST
+|`/api/v1/audit/events`
+|Accepts a batch of client audit events. Returns HTTP 202 with `{accepted, rejected}` counts. Requires an authenticated JWT (JSON Web Token, the signed access token the BFF issues at login) and the `X-Device-Fingerprint` header.
+|===
+
+Classes: `AuditCommandController`, `AuditCommandService` / `AuditCommandServiceImpl`, `AuditPiiScreen`, `AuditEventCommandRepository`, entity `AuditEvent`.
+
+=== Authorization
+
+The endpoint is covered by the deny-by-default rule in `SecurityConfig` (`anyRequest().authenticated()`), so an unauthenticated call is rejected before reaching the controller. `DeviceFingerprintFilter` additionally requires the `X-Device-Fingerprint` header to match the `device_fingerprint` claim in the JWT; a mismatch is rejected with 403 and itself emits a `DEVICE_FINGERPRINT_MISMATCH` server audit event. Inside the service, `AccessPolicyEvaluator.authorize(jwt, ConsumerAction.AUDIT_EVENT_SUBMIT)` applies the ABAC policy (attribute-based access control, authorization decided from attributes rather than fixed roles): the token must carry the `consumer:full` scope. KYC verification is deliberately not required, so pre-KYC users still produce audit trails. Open banking tokens cannot submit audit events.
+
+=== Batching and limits
+
+Batching happens on the client. `frontend/src/app/core/audit/audit.service.ts` buffers events in memory (buffer cap 50, oldest dropped first) and flushes up to 50 events per POST when any of the following occurs: the buffer reaches 20 events, a 30 second interval timer fires, the page becomes hidden, or a `LOGOUT` event is recorded. Failed flushes are requeued; after 3 consecutive failures the buffer is discarded so audit delivery can never wedge the app.
+
+The server enforces its own limits from `application.properties`:
+
+* `consumer.audit.max-batch-size=50`: a larger batch is rejected wholesale with HTTP 413 (`AuditBatchTooLargeException`, code `error.msg.consumer.audit.batch.too.large`).
+* `consumer.audit.max-details-bytes=2048`: an event whose serialized `details` JSON exceeds this is dropped (counted as rejected), the rest of the batch proceeds.
+
+=== Per-event validation
+
+Each event in a batch is validated independently; a bad event is silently counted in `rejected` while the rest are stored. An event is rejected when:
+
+* `eventUuid` is not a parseable UUID.
+* `eventType` is not a known `AuditEventType`, or is a server-only type. The enum carries a `clientSubmittable` flag; only the six client types listed below are accepted, so a browser can never forge a `LOGIN_SUCCESS` or consent row.
+* the serialized `details` exceed `max-details-bytes` or fail the PII screen.
+
+Replay is idempotent: `event_uuid` is unique in the database, and a duplicate-key violation on that constraint is treated as already stored and counted as accepted (`AuditCommandServiceImpl.saveDeduplicating`).
+
+=== Timestamps: client claims are never authoritative
+
+`AuditEvent.forClientEvent` stores the client-reported timestamp in the column `occurred_at_claimed` and always sets `received_at` to `Instant.now()` on the server. All server-side logic (retention purge, indexes, ordering) keys on `received_at`. The claimed time is retained only as forensic context and its column name marks it as untrusted.
+
+=== PII screening
+
+PII (personally identifiable information, data that identifies a person, such as an email address or a government ID number) must never enter the audit table. Two layers enforce this:
+
+* Client side, `frontend/src/app/core/audit/pii-scrub.ts`: `scrubPii` replaces email-, SSN-, Aadhaar-, and card-number-like patterns with `[REDACTED]`. `buildDetails` applies it to every value, drops blocked keys (`password`, `otp`, `ssn`, `token`, case-insensitive), and truncates each value to 300 characters before events are buffered.
+* Server side, `AuditPiiScreen`: the BFF does not trust the client scrub. It re-checks the serialized `details` JSON against regular expressions for email addresses, 9-digit runs (SSN-like), 12-digit runs (Aadhaar-like), 13 to 19 digit runs (card-like), and forbidden JSON keys (`password`, `otp`, `ssn`, `token`, case-insensitive). Any match drops that event (counted as rejected).
+
+Server-emitted events bypass `AuditPiiScreen`; their `details` maps are composed by BFF code and are trusted not to contain secrets.
+
+== Server-side audit sink (infrastructure.audit)
+
+`consumer.infrastructure.audit` is the emit-side contract. It holds four things: the `AuditEventType` catalog, the `AuditSeverity` enum, two immutable event payload classes (`TransactionalAuditEvent`, `NonTransactionalAuditEvent`), and two listener annotations. Features never write to the audit table directly; they publish a Spring application event and the audit feature module persists it. This keeps the dependency direction clean: every feature may depend on infrastructure, and only the audit module knows about storage.
+
+=== Emitting an event
+
+A feature injects Spring's `ApplicationEventPublisher` and publishes one of the two payloads, for example (from `AuthenticationCommandServiceImpl`):
+
+[source,java]
+----
+eventPublisher.publishEvent(TransactionalAuditEvent.of(AuditEventType.LOGIN_SUCCESS,
+        user.getId(), false, command.getDeviceFingerprint(), null));
+----
+
+Both payload types carry a generated `eventUuid`, the `AuditEventType`, an optional `userId`, an `unknownPrincipal` flag (set when the actor could not be resolved, for example a login failure for a nonexistent username), an optional device fingerprint, and a small `details` map. Severity is not passed by the caller; it is fixed per event type on the enum.
+
+The choice between the two payloads is about transactions:
+
+* `TransactionalAuditEvent`, consumed by methods annotated `@TransactionalAuditListener` (a meta-annotation for Spring Modulith's `@ApplicationModuleListener`). Spring Modulith is a library that enforces module boundaries and provides a persistent event bus: the event is written to the `event_publication` table inside the publisher's database transaction and delivered asynchronously after commit. Use this when the audit row must not appear if the business transaction rolls back, and must not be lost if the process crashes after commit. Used for `LOGIN_SUCCESS`, `PASSWORD_CHANGE_CONFIRMED`, `CONSENT_CREATED`, `CONSENT_REVOKED`.
+* `NonTransactionalAuditEvent`, consumed by methods annotated `@NonTransactionalAuditListener` (a meta-annotation combining `@Async` and `@EventListener`, enabled by `AsyncConfig`). Delivered immediately on a background thread with no transaction coupling. Used for failure paths and events that have no surrounding business transaction: login failures, OTP outcomes, refresh rejections, access denials, fingerprint mismatches, consent decisions (`CONSENT_GRANTED` / `CONSENT_DENIED`), and password-change initiation.
+
+`ServerAuditEventListener` implements one listener method per annotation, maps the payload to an `AuditEvent` row with `source=SERVER` and `received_at=now`, and saves it. A duplicate `eventUuid` (possible because Modulith may redeliver an incomplete publication) is ignored. Any other persistence failure is logged and swallowed: an audit write must never fail the business operation it describes.
+
+=== Event type catalog
+
+`AuditEventType` fixes severity and client submittability per type. Severity is a three-level enum, `AuditSeverity`: `INFO`, `WARN`, `CRITICAL`.
+
+[cols="2,1,1,3"]
+|===
+|Event type |Severity |Client submittable |Emitted by (verified call sites)
+
+|`LOGIN_SUCCESS` |INFO |no |`AuthenticationCommandServiceImpl`
+|`LOGIN_FAILURE` |WARN |no |`AuthenticationCommandServiceImpl`
+|`OTP_CHALLENGE_ISSUED` |INFO |no |`OtpServiceImpl` (`consumer.infrastructure.otp.service`)
+|`OTP_VALIDATION_FAILED` |WARN |no |`OtpServiceImpl`
+|`OTP_ATTEMPTS_EXCEEDED` |CRITICAL |no |`OtpServiceImpl`
+|`DEVICE_FINGERPRINT_MISMATCH` |CRITICAL |no |`DeviceFingerprintFilter`
+|`REFRESH_TOKEN_REJECTED` |WARN |no |`AuthenticationCommandServiceImpl`
+|`ACCESS_DENIED` |WARN |no |`AccessPolicyEvaluator` (every ABAC denial, with action and reason in details)
+|`PASSWORD_CHANGE_INITIATED` |INFO |no |`UserCommandServiceImpl`
+|`PASSWORD_CHANGE_CONFIRMED` |INFO |no |`UserCommandServiceImpl`
+|`SENSITIVE_VIEW` |INFO |yes |Angular shell (viewing balances and account detail)
+|`SENSITIVE_ACTION` |INFO |yes |Angular stores (for example beneficiary add)
+|`CLIENT_ERROR` |WARN |yes |Angular global error handler
+|`API_FAILURE` |WARN |yes |Angular error interceptor
+|`NAVIGATION` |INFO |yes |Angular shell router hook
+|`LOGOUT` |INFO |yes |Angular shell
+|`CONSENT_CREATED` |INFO |no |`OpenBankingConsentCommandServiceImpl`
+|`CONSENT_GRANTED` |INFO |no |`OAuth2ConsentDecisionCustomizer`
+|`CONSENT_DENIED` |WARN |no |`OAuth2ConsentDecisionCustomizer`
+|`CONSENT_REVOKED` |INFO |no |`OpenBankingConsentCommandServiceImpl`
+|===
+
+=== Separation from application logs
+
+Audit events are rows in `audit_events`, not log lines. Application logs (SLF4J) are used around the audit path only for operational failures, for example a row that could not be persisted or a purge run summary, and never contain OTP values or ID numbers. The audit trail therefore survives log rotation, is queryable with SQL, and has its own retention policy.
+
+== Retention
+
+`AuditRetentionJob` purges old rows on a schedule. Configuration lives in `application.properties` and binds to `AuditRetentionProperties` (prefix `consumer.audit`), which fails startup if a retention entry is missing for any source.
+
+[cols="2,1,3"]
+|===
+|Property |Default |Meaning
+
+|`consumer.audit.retention-days.server` |365 |Days to keep `SERVER` rows.
+|`consumer.audit.retention-days.client` |30 |Days to keep `CLIENT` rows.
+|`consumer.audit.purge-cron` |`0 30 3 * * *` |Cron for the `@Scheduled` purge (daily at 03:30).
+|`consumer.audit.purge-batch-size` |1000 |Rows deleted per SQL statement.
+|`consumer.audit.purge-enabled` |false |Master switch; when false the job runs but returns immediately.
+|===
+
+The job iterates both sources, computes a cutoff of `now minus retention-days`, and repeatedly calls `AuditEventCommandRepository.deleteChunkBySourceReceivedBefore` (a native `DELETE ... WHERE id IN (SELECT ... LIMIT :batchSize)`) until a chunk comes back smaller than the batch size. Chunked deletes keep transactions short on a large table. Each source is wrapped in its own try/catch so a failure purging one source does not skip the other. The retention and purge configuration model is documented in xref:properties-audit[Audit Properties].
+
+== Query surface (consumer.audit, query side)
+
+The `consumer.audit` module has a demo-only query side under `audit/query/`. It exists so the demo frontend can make a user's own audit trail visible; the endpoint's OpenAPI description states that audit trails are not a consumer product surface. The endpoint is purely for demoing the audit feature and should never be enabled in production; the `consumer.audit.query-enabled` flag that controls it defaults to off.
+
+[cols="1,3,4"]
+|===
+|Method |Path |Description
+
+|GET
+|`/api/v1/audit/events`
+|Lists the caller's own audit events, newest first (operation id `listAuditEvents`). Query parameters: `page` (zero-based, default 0) and `size` (default 20). No other filters exist: no event type, severity, source, or date filtering.
+|===
+
+Classes: `AuditQueryController`, `AuditQueryService` / `AuditQueryServiceImpl`, `AuditQueryRepository`, read-only entity `AuditEventQueryEntity`.
+
+=== Feature flag
+
+The controller is annotated `@ConditionalOnProperty(name = "consumer.audit.query-enabled", havingValue = "true")`, so the bean is not even created unless the flag is set. `application.properties` pins `consumer.audit.query-enabled=false`; a default deployment has no audit read endpoint. `consumer/compose.yaml` sets `CONSUMER_AUDIT_QUERY_ENABLED: "true"` on the BFF container, so the local Docker stack (local dev, Cucumber runs, the demo) has it on.
+
+=== Authorization and scoping
+
+Deny-by-default authentication and `DeviceFingerprintFilter` apply as on every endpoint. In the service, `AccessPolicyEvaluator.authorize(jwt, ConsumerAction.AUDIT_EVENT_LIST)` enforces the ABAC policy: the `consumer:full` scope plus a KYC-verified principal (stricter than `AUDIT_EVENT_SUBMIT`, which waives the KYC requirement). Open banking tokens are denied. Rows are scoped to the caller: `UserClientResolver` resolves the JWT to the internal user id and `AuditQueryRepository.findAllByUserIdOrderByReceivedAtDescIdDesc` filters on `user_id`, so a user can only ever list their own events.
+
+=== Read model
+
+Per the CQRS convention, the query side owns its own types. `AuditEventQueryEntity` is a read-only (`@Immutable`) JPA mapping of the same `audit_events` table exposing only `source`, `event_type`, `severity`, `user_id`, and `received_at`, and the query side carries its own copies of the `AuditEventType`, `AuditSeverity`, and `AuditEventSource` enums in `audit/query/data/`. The response DTO `AuditEventQueryData` carries `eventType`, `severity`, `source`, and `receivedAt`, nothing else: `details`, device fingerprints, user ids, and claimed timestamps are never returned. Ordering is `received_at` descending with `id` descending as a tiebreaker.
+
+=== Frontend surface
+
+The Angular demo page (`frontend/src/app/features/demo/`, route `demo`) renders the trail. `DemoStore` calls `AuditQueryControllerService.listAuditEvents(page, size)` from the generated `@bff/client` and the component pages through results 10 at a time.
+
+There is no admin surface; anything beyond a user's own trail is inspected directly in PostgreSQL.
+
+== Data model
+
+All schema is managed by Liquibase (a database migration tool that applies versioned changesets at startup); no Hibernate auto-DDL is used.
+
+[cols="2,3,3"]
+|===
+|Table |Changeset |Purpose
+
+|`audit_events`
+|`db/changelog/audit/004-create-audit-events.yaml`
+|Unified audit store for CLIENT and SERVER events.
+
+|`event_publication`
+|`db/changelog/infrastructure/005-create-event-publication.yaml`
+|Spring Modulith's persistent event registry, used by `@TransactionalAuditListener` delivery (shared infrastructure, not audit-specific).
+|===
+
+Columns of `audit_events` (matching the `AuditEvent` entity):
+
+[cols="2,2,4"]
+|===
+|Column |Type |Notes
+
+|`id` |BIGINT identity |Internal primary key.
+|`event_uuid` |UUID, unique |Idempotency and replay dedup key.
+|`source` |VARCHAR(10) |`CLIENT` or `SERVER`.
+|`event_type` |VARCHAR(50) |`AuditEventType` name.
+|`severity` |VARCHAR(10) |`INFO`, `WARN`, or `CRITICAL`, denormalized from the type.
+|`user_id` |BIGINT, FK to `users(id)` |Nullable; null for anonymous events.
+|`unknown_principal` |BOOLEAN |True when the actor could not be resolved (for example failed login for an unknown username).
+|`device_fingerprint` |VARCHAR(100) |Nullable.
+|`correlation_id` |VARCHAR(64) |Present in schema and entity but never populated by either factory method; always null.
+|`idempotency_key` |VARCHAR(64) |Same: schema and entity only, never populated.
+|`occurred_at_claimed` |TIMESTAMPTZ |Client-claimed time, untrusted, null for server events.
+|`received_at` |TIMESTAMPTZ |Server receive time, authoritative.
+|`details` |JSONB |Small screened JSON payload, nullable.
+|===
+
+Indexes: `(user_id, received_at)`, `(event_type, received_at)`, and `(received_at)` (the last supports the retention purge).
+
+== Testing
+
+Test coverage:
+
+* Unit tests (JUnit 5) in `consumer/src/test/java/.../audit/command/service/`: `AuditCommandServiceImplTest` (batch limits, per-event rejection, dedup), `AuditPiiScreenTest` (parameterized pattern checks), `AuditRetentionJobTest` (chunk looping, disabled switch, per-source isolation), `ServerAuditEventListenerTest` (mapping and failure swallowing).
+* End-to-end (Cucumber) `features/audit.feature` with step glue `AuditSteps` and the test helper `AuditEventPoller` (in `cucumber.helpers`): batch acceptance and storage, PII rejection within a batch, replay dedup, unauthenticated rejection, oversized batch rejection, device fingerprint mismatch denial, and a server-side `LOGIN_FAILURE` row after a wrong password. `AuditEventPoller` verifies rows via direct JDBC against the BFF database, not via the query endpoint.
+* Frontend unit test (Vitest) `frontend/src/app/features/demo/demo.store.spec.ts`: verifies that `DemoStore` forwards `page` and `size` as query parameters to `GET /api/v1/audit/events`, stores the returned rows, and clears state on error, against a mocked HTTP layer.
+
+== Design rationale
+
+* One table, two sources. Client telemetry and server security events share `audit_events` so retention, indexing, and querying are implemented once, while the `source` column and the `clientSubmittable` flag keep the trust boundary explicit: the browser can only ever create rows of the six client types.
+* Event-driven emit path. Features publish Spring events instead of calling an audit service directly, so audit persistence cannot fail or slow a business operation, and the audit module remains the only code that knows about the table. The transactional/non-transactional split exists because some events must be atomic with a business transaction (a login success row without a session would be a lie) while failure events have no transaction to join.
+* Server-received time as the only trusted clock. Client clocks are routinely wrong or hostile; keeping the claim in a separately named column preserves forensic value without letting it influence server behavior.
+* Defense in depth on PII. Client scrubbing improves data quality; server screening is the actual control. Rejecting rather than scrubbing on the server keeps the BFF out of the business of rewriting evidence.
+* Severity fixed on the enum. Callers cannot inflate or downplay an event's severity, and the catalog stays reviewable in one file.
+
+== Limitations and future work
+
+* *There is no KYC-related event type.* KYC submission is a security-relevant action, but `AuditEventType` contains no `KYC_*` entry and the identity module publishes no audit events.
+* *Rejected client events are dropped silently.* The drop happens per event; the `{accepted, rejected}` counts say how many were rejected but not which or why, which complicates client-side debugging.
+* *The client buffer is in memory only.* Events recorded just before a crash or hard tab close (outside the `visibilitychange` flush) are lost. That is acceptable for telemetry but worth noting for anyone tempted to treat CLIENT rows as complete.
+* *Server-emitted `details` maps bypass the PII screen.* They rely on the trust assumption that BFF code composes them safely.

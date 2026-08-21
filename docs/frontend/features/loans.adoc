@@ -1,0 +1,109 @@
+= Loans
+
+== Purpose
+
+The loans screens cover the widest surface in the client. They provide browsing of loan accounts (including loans the user guarantees for other people), a detail page with figures, charges, guarantors, and filterable transactions, a loan application flow with a live schedule preview and draft management, and a repayment flow that reuses the transfers step-up. Code lives in `frontend/src/app/features/loans/`: five route components, a `LoansStore`, and `loans.routes.ts` wiring them up as lazy children of `/loans`.
+
+`LoansStore` holds all read state in signals and wraps three generated services: the loans query and command controllers, plus the user query controller for the obligee list. The repay screen additionally pulls in `TransfersStore` and `SavingsStore`, because a repayment is a transfer from a savings account.
+
+== Screens and routes
+
+All routes are children of `/loans`, inside the authenticated shell.
+
+[cols="2,3,4", options="header"]
+|===
+| Route | Component | Purpose
+
+| `/loans`
+| `LoansListComponent`
+| Table of the user's loan accounts, an "apply" button, and the obligees table.
+
+| `/loans/apply`
+| `LoanApplyComponent`
+| Loan application: product select, terms form, schedule preview, submit/modify/withdraw a draft.
+
+| `/loans/:loanId`
+| `LoansDetailComponent`
+| Overview figures, charges, guarantors, filterable transactions, conditional repay button.
+
+| `/loans/:loanId/repay`
+| `LoanRepayComponent`
+| Repayment via the transfers step-up: form, OTP, done.
+
+| `/loans/:loanId/transactions/:transactionId`
+| `LoansTransactionComponent`
+| Detail card for one transaction, with a back link to the loan.
+|===
+
+== Flows
+
+*List and obligees.* The list page loads two independent data sets. The first table is the user's own loans (account number, product, status badge, currency; row click opens the detail). The second table, "obligees", flips the perspective: it lists loans belonging to other borrowers that the logged-in user guarantees. It shows the borrower's display name, the loan's account number, the loan amount, the guarantee amount, and the amount already released from the guarantee. That data comes from the user module (`getUserObligees`), not the loans query service, because it is a property of the user's guarantor relationships rather than of any loan the user owns.
+
+*Detail.* On entry the component fires four loads: the account, its charges, its guarantors, and the first transaction page (page 0, size 20). The overview card shows principal disbursed, total outstanding, interest outstanding, the annual interest rate, and the next due amount and date. The guarantors table (people guaranteeing this loan) shows name, guarantor type, and relationship. The transaction section reuses the exact filter-and-pager mechanics of the savings detail: two `ion-datetime` pickers standing in for a range picker, a page-size field, an `applied` snapshot so paging honours the last applied filter, and a "showing _x_–_y_ of _z_" pager. The one loan-specific column is outstanding loan balance instead of running balance. A "repay" button appears in the page header only when the loan's `active` flag is true (`repayable` computed signal), and leads to the repay route.
+
+*Loan application.* The apply page loads the application template with no product id first, which returns the product options for the select plus defaults. Choosing a product reloads the template for that product. An `effect` then patches the form with the product's defaults: principal, number of repayments, repayment frequency, and interest rate. Non-editable conventions (amortization type, interest type, calculation period, processing strategy) are carried as hidden form controls. The loan term frequency is pre-filled as number of repayments times repayment interval. The user can adjust the visible terms, then:
+
+* *Preview* posts the terms to the schedule-preview endpoint (a read-only calculation; nothing is created) and renders the repayment schedule (period, due date, principal due, total due, outstanding balance), with the total repayment expected in the card header.
+* *Submit* creates a draft application on the BFF. Each submission carries an `Idempotency-Key` header (a random UUID) so a retried request cannot create a second application. The key is created lazily per attempt, cleared on success, and also cleared whenever any form value changes. Editing the form means the next submit is a genuinely new request, while re-clicking after a network hiccup replays the same one.
+* Once a draft exists, a draft card appears with "modify" (re-submits the current form against the draft's loan id, with its own idempotency key) and "withdraw" (cancels the draft, using the form's submitted-on date as the withdrawal date, after which the draft card disappears).
+
+Field-level validation failures surface as one translated toast per attempt (first failing field), consistent with the app-wide no-inline-errors convention.
+
+*Repay with step-up OTP.* Repayment is deliberately not a loans command: the screen drives the transfers pipeline with the loan as the destination (`toAccountType` of `LOAN`). A `step` signal walks through the `form`, `otp`, and `done` steps in order. The form offers the user's savings accounts as the funding source (loaded from `SavingsStore`) and an amount, checked client-side to be at least 0.01 and no more than the loan's total outstanding. A loan that is not active bounces straight back to the detail page with an error toast. Initiating the transfer returns a challenge: the BFF emails an OTP and the shared `OtpComponent` shows the masked destination. Confirming sends the challenge's `stepUpToken`, the typed OTP, the original transfer fields, and an idempotency key (same lazy-create/clear-on-change pattern as the application). The done screen shows the transfer reference and amount, and the loan and its transactions are reloaded so the new balance is visible on return.
+
+*Transaction drill-down.* As in savings: a single-transaction card with type, amount, and outstanding loan balance, plus a back link.
+
+== BFF endpoints used
+
+All methods below are generated `@bff/client` services, called through `LoansStore` (or `TransfersStore` for the repay step-up).
+
+[cols="3,4", options="header"]
+|===
+| User action | Client call
+
+| Open the loans list
+| `LoansQueryControllerService.listLoanAccounts`
+
+| (Same page) load the obligees table
+| `UserQueryControllerService.getUserObligees`
+
+| Open a loan detail
+| `LoansQueryControllerService.getLoanAccount`
+
+| (Same page) load charges / guarantors
+| `LoansQueryControllerService.getLoanCharges`, `LoansQueryControllerService.getLoanGuarantors`
+
+| Apply a transaction filter or change page
+| `LoansQueryControllerService.listLoanTransactions`
+
+| Click a transaction row
+| `LoansQueryControllerService.getLoanTransaction`
+
+| Open the apply page or pick a product
+| `LoansQueryControllerService.getLoanApplicationTemplate`
+
+| Preview the schedule
+| `LoansQueryControllerService.previewLoanSchedule`
+
+| Submit the application (with `Idempotency-Key`)
+| `LoansCommandControllerService.submitLoanApplication`
+
+| Modify the draft (with `Idempotency-Key`)
+| `LoansCommandControllerService.modifyLoanApplication`
+
+| Withdraw the draft (with `Idempotency-Key`)
+| `LoansCommandControllerService.withdrawLoanApplication`
+
+| Initiate a repayment
+| `TransfersCommandControllerService.initiateTransfer` (via `TransfersStore`)
+
+| Confirm the repayment with the OTP (with `Idempotency-Key`)
+| `TransfersCommandControllerService.confirmTransfer` (via `TransfersStore`)
+|===
+
+The server side is documented in `docs/consumer/features/loans.adoc`; the repayment pipeline in `docs/consumer/features/transfers.adoc`; the obligee query in `docs/consumer/features/user.adoc`.
+
+== Test coverage
+
+* Vitest: `frontend/src/app/features/loans/loans.store.spec.ts` covers `LoansStore` against a mocked HTTP layer (list sorting, obligees, the transaction filter and page envelope, schedule preview, and the draft lifecycle); `loan-apply.component.spec.ts` covers the application form's submit and modify guards; `loan-repay.component.spec.ts` covers the repayment form guards, the live outstanding-balance ceiling, and the non-active-loan bounce.
+* Playwright: `frontend/playwright/tests/loans.spec.ts` covers the guarded-route redirect, the repay button hidden on inactive loans, the repay OTP step-up happy path, and the wrong-OTP error toast.

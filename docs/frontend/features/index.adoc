@@ -1,0 +1,25 @@
+= Features
+
+This chapter documents the Angular client feature by feature. Each feature lives in its own folder under `frontend/src/app/features/`, mirroring a BFF bounded context. Most features follow the same shape: lazy-loaded route components, a signal-backed store that wraps the generated `@bff/client` services, and templates that only render state and dispatch actions. Three features deviate: authentication keeps its state in the core `AuthService`, registration wraps the generated client in a stateless service, and consent is a single component that posts native HTML forms to the BFF with no `@bff/client` call at all. Every section lists the screens and routes, walks through the interesting flows, and maps each user action to the generated client call. Each section also points to the matching BFF feature section for the server side.
+
+include::authentication.adoc[leveloffset=+1]
+
+include::registration.adoc[leveloffset=+1]
+
+include::summary.adoc[leveloffset=+1]
+
+include::savings.adoc[leveloffset=+1]
+
+include::loans.adoc[leveloffset=+1]
+
+include::transfers.adoc[leveloffset=+1]
+
+include::beneficiaries.adoc[leveloffset=+1]
+
+include::profile-settings.adoc[leveloffset=+1]
+
+include::consent.adoc[leveloffset=+1]
+
+include::demo.adoc[leveloffset=+1]
+
+include::shared-ui.adoc[leveloffset=+1]

@@ -1,0 +1,50 @@
+[[device-fingerprint]]
+= Device Fingerprint
+
+Despite the name, the device fingerprint is not a fingerprint of anything. It is a random UUID (universally unique identifier, a 36-character random string) that the client mints once and presents on every request. The BFF binds it into refresh tokens and JWT claims so that a session stolen from one browser cannot be replayed from another. The server half (validation, the three binding points, and the per-request filter) is described in `docs/consumer/security/tokens.adoc`.
+
+== How the identifier is minted and stored
+
+`frontend/src/app/core/auth/device-fingerprint.ts` exposes one function, `deviceFingerprint()`:
+
+. If a module-level variable already holds a value, return it (so the ID is read from storage at most once per page load).
+. Otherwise read localStorage key `bff.device-id`. If absent, generate `crypto.randomUUID()` and store it.
+. If localStorage throws (some private-browsing modes and embedded webviews block it), fall back to a fresh in-memory UUID that lives only until the page reloads or the tab closes.
+
+The value is deliberately not derived from browser characteristics (screen size, fonts, canvas rendering and similar). A characteristics fingerprint would be a tracking mechanism and would still be forgeable; a random UUID is honest about what it is: a stable label for one browser profile.
+
+== How it reaches the BFF
+
+Two paths carry the same value:
+
+* `authInterceptor` (`core/interceptors/auth.interceptor.ts`) clones each request whose URL starts with `/api` and sets the `X-Device-Fingerprint` header. An interceptor is a hook that runs on every outgoing HTTP request. The BFF's `DeviceFingerprintFilter` requires this header on every authenticated request and compares it to the claim inside the access-token cookie.
+* The generated API client (`@bff/client`) declares the fingerprint as a required, typed first parameter on the sensitive methods: login, 2FA, refresh, and every step-up initiate/confirm. Feature code passes `deviceFingerprint()` explicitly there (see `AuthService`, `TransfersStore`, `BeneficiariesStore`, `SettingsStore`). The interceptor would have set the header anyway; the typed parameter exists so the contract is visible in the method signature and cannot be forgotten if the interceptor changes.
+
+The audit batcher (`core/audit/audit.service.ts`) uses `fetch` directly rather than Angular's HTTP client, so it bypasses the interceptor and sets the header itself.
+
+== What the binding buys
+
+The BFF stamps the fingerprint into each refresh-token row and into the `device_fingerprint` claim of access, challenge, and step-up tokens. Because the cookies are httpOnly, an attacker who steals them (for example by copying them off a device backup or through a proxy) must replay them from a browser that also presents the matching header. Without the localStorage value, refresh with the current token fails with a device mismatch. The BFF revokes the whole session family only when an already-rotated token is replayed; on such a replay, a device mismatch triggers the revocation even inside the rotation grace window.
+
+== Client handling of a mismatch
+
+If the BFF rejects a request with HTTP 403 and code `error.msg.consumer.auth.device.fingerprint.forbidden`, `errorInterceptor` treats the session as unusable on this device: it records an `API_FAILURE` audit event, clears the session signal, and redirects to `/login`. There is no retry: a mismatch cannot be fixed by refreshing, only by logging in again from this device.
+
+== What this does and does not defend against
+
+[cols="1,2", options="header"]
+|===
+|Question |Answer
+
+|Stops a stolen cookie replayed from another device?
+|Yes. The thief's browser lacks the matching `bff.device-id`, so both ordinary requests and refresh attempts fail.
+
+|Stops an attacker who controls the victim's browser?
+|No. Script running in the victim's page (or anyone who can read its localStorage) sees the UUID; it is an identifier, not a secret.
+
+|Identifies a physical device?
+|No. It labels one browser profile. Clearing site data, switching browsers, or private-browsing mode mints a new identity, after which the user must log in again. By design, this costs a login, never data.
+
+|Enables cross-site tracking?
+|No. It is only ever sent to the BFF, and only on `/api` requests.
+|===

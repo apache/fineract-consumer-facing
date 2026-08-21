@@ -1,0 +1,130 @@
+[[abac]]
+= Attribute-Based Access Control (ABAC)
+
+This section describes how the consumer BFF (backend-for-frontend, the Spring Boot service in `consumer/`) decides whether a request is allowed.
+
+ABAC (attribute-based access control) means authorization decisions are computed from attributes of the principal (who is asking), the resource (what they are asking about), and the environment (the circumstances of the request), rather than from role checks alone. A role check answers "is this user an admin". An ABAC check answers "is this KYC-verified consumer, on the device the session was issued to, asking about a savings account that actually belongs to them".
+
+== Deny by default
+
+Every HTTP request must pass authentication before any controller runs. There are three Spring Security filter chains, and each one ends in `anyRequest().authenticated()`:
+
+* `SecurityConfig.securityFilterChain` (in `infrastructure.configs.SecurityConfig`) covers the consumer API. A short explicit allowlist is `permitAll()`: the OpenAPI and Swagger UI paths, `/actuator/health`, `/api/v1/registration/**`, and five public `POST` endpoints (`/api/v1/authentication/login`, `/api/v1/authentication/2fa`, `/api/v1/authentication/refresh`, `/api/v1/user/password/forgot`, `/api/v1/user/password/reset`). Everything else requires a valid JWT (JSON Web Token, a signed token carrying claims about the session), which this chain reads from the `access_token` cookie rather than an `Authorization` header.
+* `OAuth2AuthorizationServerConfig.authorizationServerSecurityFilterChain` covers the OAuth2 authorization server endpoints used by open banking third parties.
+* `OAuth2AuthorizationServerConfig.openBankingResourceFilterChain` covers the open banking resource endpoints.
+
+Note that the codebase does not use `@PreAuthorize` anywhere. Authentication is coarse-grained at the filter chain, and fine-grained authorization happens in the service layer through `AccessPolicyEvaluator` (next section). Deny-by-default is enforced twice:
+
+. At the chain: an unauthenticated request to any non-allowlisted path is rejected before it reaches a controller.
+. At the policy table: `AccessPolicyEvaluator.authorize` looks the action up in a static policy table, and if no policy is registered for the action it throws `AccessPolicyMissingException` (HTTP 403, code `error.msg.consumer.access.denied`). A new endpoint whose action was never added to the table fails closed instead of silently passing.
+
+== Policies as data: the AccessPolicyEvaluator
+
+Policies are not `if` statements scattered through services. They are rows in a static, immutable table.
+
+* `ConsumerAction` (in `infrastructure.access.data`) is an enum of every authorizable action, for example `SAVINGS_VIEW`, `TRANSFER_EXECUTE`, `OPENBANKING_ACCOUNTS_VIEW`.
+* `ActionPolicy` is the policy row: the action, the set of allowed token scopes, a `requiresKycVerified` flag, and an optional `ownership` field of type `ResourceType` (`SAVINGS` or `LOANS`).
+* `ActionPolicies` holds the full table as an unmodifiable map, built with three factory helpers: `owned(...)` (scope check, KYC required, ownership check), `unowned(...)` (scope check, KYC required, no ownership), and `unownedKycNonrequired(...)` (scope check only, used for actions such as `USER_PROFILE_VIEW` and `AUDIT_EVENT_SUBMIT` that must work before KYC binding completes).
+
+`AccessPolicyEvaluator.authorize(jwt, action, resourceId, onDenied)` evaluates the row in a fixed order and fails closed at each step:
+
+. Policy lookup. Missing policy throws `AccessPolicyMissingException`.
+. Scope. If the token's `scope` claim shares no entry with the policy's allowed scopes, it throws `AccessScopeInsufficientException` (403).
+. KYC. If the policy requires KYC and the `kyc_verified` claim is not `true`, it throws `AccessKycRequiredException` (403).
+. Ownership. If the policy names a `ResourceType` and the principal does not own the resource, it throws the caller-supplied exception, so each feature reports its own domain-specific denial (for example `SavingsQueryAccessDeniedException`).
+
+Every denial also publishes a `NonTransactionalAuditEvent` of type `ACCESS_DENIED` carrying the action name, the denial reason (`policy_missing`, `scope_insufficient`, `kyc_required`, or `ownership_denied`), the user's public ID, and the resource ID when present.
+
+== Attribute categories
+
+[cols="1,2,3", options="header"]
+|===
+|Category |Attribute |Where it comes from
+
+|Principal
+|`scope` claim (`consumer:full`, `openbanking:accounts.read`, `openbanking:consents`, defined in `AuthenticationConstants`)
+|Minted into the JWT at login or at open banking consent grant; checked against `ActionPolicy.allowedScopes`.
+
+|Principal
+|`kyc_verified` claim
+|Set at every token mint after a live check of the bound Fineract client's standing (`ClientStandingChecker.isActive`, which calls Fineract and requires client status ID 300, active). Checked against `ActionPolicy.requiresKycVerified`. The value is never carried forward from a previous token.
+
+|Principal
+|`tenant` claim
+|Minted into the JWT (constant in `JwtClaims`). Present in the token but not evaluated by `AccessPolicyEvaluator` (see Limitations).
+
+|Resource
+|Account ownership (`ResourceType.SAVINGS`, `ResourceType.LOANS`)
+|Resolved per request via `UserClientResolver` and `OwnedAccountsCache` (next section).
+
+|Environment
+|Device fingerprint (`X-Device-Fingerprint` header versus the `device_fingerprint` claim)
+|Enforced by `DeviceFingerprintFilter` on every authenticated consumer request (below).
+
+|Environment
+|Request rate per principal
+|Enforced by `RateLimitFilter` (below).
+|===
+
+== Example: a feature service invoking the evaluator
+
+Feature services call the evaluator as the first statement of every service method, before any Fineract call. From `SavingsQueryServiceImpl`:
+
+[source,java]
+----
+@Override
+public SavingsAccountQueryData getAccount(Jwt jwt, Long savingsId) {
+    accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
+            SavingsQueryAccessDeniedException::new);
+    SavingsAccountData account = fetch(
+            () -> savingsAccountApi.retrieveSavingsAccount(savingsId, null, null, null));
+    return toAccountData(account);
+}
+----
+
+The same pattern appears in every feature service that touches protected state, including `LoansQueryServiceImpl`, `TransfersCommandServiceImpl`, `BeneficiariesCommandServiceImpl`, `SummaryQueryServiceImpl`, `AuditCommandServiceImpl`, and the open banking services.
+
+== Resource ownership checks
+
+Before the BFF forwards a savings or loan query to Fineract, it confirms the logged-in consumer owns that account:
+
+. `UserClientResolver.resolveClientId(jwt)` takes the JWT subject (the user's public UUID), looks the user up through `PrincipalUserLookupPort`, and returns the Fineract client ID bound to that user. An unknown subject throws `AccessUserNotFoundException`.
+. `OwnedAccountsCache.ownedAccounts(clientId)` returns the set of savings and loan IDs the client owns. It is a two-level cache: an in-process Caffeine cache with a 60 second TTL (L1), then a shared Valkey entry under `abac:ownership:<clientId>` with a 300 second TTL (L2), and finally a live call to Fineract's `ClientApi.retrieveAllClientAccounts`. Cache read or write failures fall through to Fineract; they never grant access.
+. `AccessPolicyEvaluator.ownsResource` checks that the requested ID is in the owned set. A `null` resource ID is denied.
+
+`OwnedAccountsCache.evict(clientId)` invalidates both levels when ownership changes.
+
+== Why the BFF does not rely on Fineract's authorization alone
+
+The BFF authenticates to Fineract with a single service account: `FineractBasicAuthInterceptor` attaches the same basic-auth credentials to every outbound Feign call, and `FineractTenantHeaderInterceptor` attaches the tenant header. Fineract therefore sees one privileged caller and has no notion of which end consumer is behind a request. If the BFF forwarded a savings ID without checking ownership, Fineract would happily return another customer's account. The BFF is the policy enforcement point for all consumer-facing rules; this is the reason the project exists, since upstream no longer ships the deprecated Fineract self-service APIs that allowed direct client access.
+
+== Rate limiting as an environment control
+
+`RateLimitFilter` (in `infrastructure.access.filter`) is a servlet filter built through two named factories, each installed on a different chain:
+
+* `RateLimitFilter.perUser` runs on the consumer chain, immediately after `BearerTokenAuthenticationFilter`, so the JWT subject is already resolved. The bucket key is the authenticated user's public ID; unauthenticated requests pass through unlimited. The ceiling is `consumer.rate-limit.per-user-per-minute` (default 300).
+* `RateLimitFilter.perTppClient` runs on the OAuth2 authorization server chain and applies only to `POST` requests to the token endpoint. The bucket key is the third-party client ID, taken from the basic-auth header or the `client_id` parameter, prefixed `tppclient:`. The ceiling is `consumer.rate-limit.per-tpp-client-per-minute` (default 60).
+
+`RateLimitCounter` implements a fixed 60 second window in Valkey (`INCR` on `ratelimit:<key>` plus a TTL). When the count exceeds the ceiling the filter responds with HTTP 429, a `Retry-After` header, and the standard `ConsumerApiError` body (`error.msg.consumer.rate.limit.exceeded`). If Valkey is unreachable the counter logs an error and fails open, allowing the request. The whole feature is gated by `consumer.rate-limit.enabled`.
+
+Per-IP rate limiting is deliberately not implemented in the BFF. Requests reach the BFF through a reverse proxy, where the client IP is only trustworthy at the edge; per-IP throttling is left to an upstream edge service.
+
+== Device fingerprint as an environment control
+
+`DeviceFingerprintFilter` runs after the rate limit filter on the consumer chain. For every authenticated request it compares the `X-Device-Fingerprint` header (constant in `ConsumerHeaders`) with the `device_fingerprint` claim minted into the JWT at login. A missing header or missing claim yields HTTP 401; a mismatch, or a token without the `consumer:full` scope presenting a fingerprint, yields HTTP 403 and publishes a `DEVICE_FINGERPRINT_MISMATCH` audit event. This binds the session to the device it was issued to, so a stolen cookie replayed from another device fails.
+
+== Design rationale
+
+* Policies live in one static table (`ActionPolicies`) instead of scattered conditionals, so the full authorization surface can be reviewed in a single file and a missing entry fails closed.
+* The evaluator is invoked from service methods rather than annotations because the ownership check needs the resource ID, which is method input, and because each feature supplies its own denial exception with a stable error code.
+* `kyc_verified` is re-derived at every token mint from a live Fineract call (`ClientStandingChecker`, uncached) rather than copied from the previous token, so a client closed or blocked in Fineract loses access at the next mint.
+* Ownership data is cached (60s in-process, 300s shared) because it is consulted on every account-scoped request, but all cache failures degrade to a live Fineract call, never to an allow.
+* Rate limit state and the ownership cache live in Valkey so limits hold across BFF replicas.
+
+== Limitations and future work
+
+* *ABAC enforcement relies on developer discipline.* Every new service method that touches protected state must call `AccessPolicyEvaluator.authorize` as its first statement. There is no `@PreAuthorize` or method-security backstop, so a method that omits the call is protected only by chain-level authentication, not by scope, KYC, or ownership checks. The `AccessPolicyMissingException` safety net only fires for actions that do call the evaluator.
+* *The `tenant` claim is minted but never evaluated.* No policy decision reads it.
+* *Environment signals are minimal.* They are limited to device fingerprint and request rate. There is no geo signal, client-version check, or graded device-trust level, so no policy can require elevated trust for sensitive actions beyond the separate step-up token mechanism.
+* *The rate limiter fails open when Valkey is down.* It also uses a fixed window, which permits short bursts of up to twice the ceiling across a window boundary.
+* *Cached ownership answers can be stale.* They can lag by up to the cache TTLs (60s L1, 300s L2) after an account changes hands, except where code explicitly calls `evict`.

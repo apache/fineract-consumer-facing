@@ -1,0 +1,123 @@
+= Savings
+
+== Purpose
+
+The savings module provides read-only consumer views of a customer's savings accounts: the account list, account detail with balances, account charges, and transaction history. It is a query-only module. There is no command side: the BFF (backend-for-frontend, the Spring Boot service that sits between the Angular client and Fineract Core) does not create or mutate savings accounts through this module. Deposits and withdrawals initiated by the consumer are handled by the transfers feature, not here.
+
+Code lives under `consumer/src/main/java/org/apache/fineract/consumer/savings/query/`, following the project CQRS layout (CQRS: commands and queries are separated end to end). Only the `query` sub-tree exists.
+
+== Endpoints
+
+All endpoints are served by `SavingsQueryController` under the base path `/api/v1/savings` and return JSON. Every request must carry a valid access JWT (JSON Web Token, the signed token minted at login), which the security filter chain reads from the `access_token` httpOnly cookie. There are no public savings endpoints.
+
+Each endpoint additionally passes through the ABAC policy check (ABAC: attribute-based access control, authorization decided from attributes of the caller, the resource, and the request) for the listed action. All savings actions require the `kyc_verified` JWT claim to be `true`.
+
+[cols="1,3,4,4", options="header"]
+|===
+| Method | Path | Purpose | Authorization
+
+| GET
+| `/api/v1/savings`
+| List the caller's savings accounts (id, account number, product name, status code, active flag, currency code).
+| Action `SAVINGS_LIST`. Scope `consumer:full` or `openbanking:accounts.read`. KYC required.
+
+| GET
+| `/api/v1/savings/{savingsId}`
+| Account detail: account number, product name, status code, active flag, balance, available balance, nominal annual interest rate, currency code.
+| Action `SAVINGS_VIEW` with ownership check on `savingsId`. Scope `consumer:full` or `openbanking:accounts.read`. KYC required.
+
+| GET
+| `/api/v1/savings/{savingsId}/charges`
+| Charges attached to the account (id, name, amount, amount outstanding, currency code).
+| Action `SAVINGS_VIEW` with ownership check. Same scopes as above.
+
+| GET
+| `/api/v1/savings/{savingsId}/transactions`
+| Paginated transaction search returning a page envelope. Query parameters: `fromDate` and `toDate` (optional, ISO dates, `yyyy-MM-dd`), `page` (default `0`), `size` (default `20`), `sort` (optional, `field` or `field,direction`).
+| Action `SAVINGS_VIEW` with ownership check. Same scopes as above.
+
+| GET
+| `/api/v1/savings/{savingsId}/transactions/{transactionId}`
+| Single transaction detail (id, type, amount, currency code, running balance, date).
+| Action `SAVINGS_VIEW` with ownership check on `savingsId`. Same scopes as above.
+
+| GET
+| `/api/v1/savings/template`
+| Savings application template. Without `productId`: the list of savings products (id, name) for browsing. With `productId`: that product's detail (currency, interest rate, compounding, posting, and calculation settings).
+| Action `SAVINGS_APPLICATION_TEMPLATE_VIEW`. Scope `consumer:full` only. KYC required. No ownership check (products are not owned resources).
+|===
+
+Pagination is page-number based at the BFF boundary and translated to offset/limit for Fineract: `offset = page * size`, `limit = size`. The optional `sort` parameter is split at the first comma into Fineract's `orderBy` and `sortOrder`; a bare field name is passed as `orderBy` alone. The transaction search returns a page envelope (`SavingsTransactionQueryResponse`) with `content`, `page`, `size`, `totalElements` (Fineract's total match count), and `totalPages` (computed in the BFF from `totalElements` and `size`). The BFF does not validate that `fromDate` is on or before `toDate`; the range is passed to Fineract as given.
+
+The `openbanking:accounts.read` scope appears on the list and view actions because the open banking module (`consumer.openbanking`) reuses `SavingsQueryService` to serve consent-scoped third-party reads. Consumer sessions carry `consumer:full`.
+
+== Ownership and ABAC checks
+
+Every service method calls `AccessPolicyEvaluator.authorize(...)` (in `consumer.infrastructure.access`) before any Fineract call. The evaluator checks, in order: a policy exists for the action, the JWT scope claim intersects the policy's allowed scopes, the `kyc_verified` claim is true, and, for owned actions, the caller owns the resource. Any failure publishes an `ACCESS_DENIED` audit event and throws; ownership denials on savings throw `SavingsQueryAccessDeniedException` (HTTP 403, code `error.msg.consumer.savings.query.access.denied`).
+
+Ownership works as follows. `UserClientResolver` maps the JWT subject (the BFF user's public UUID) to the bound Fineract client id via a database lookup. `OwnedAccountsCache` then resolves the set of savings and loan account ids that client owns by calling Fineract `GET /v1/clients/{clientId}/accounts`, cached in a two-level cache (in-process Caffeine, 60 second TTL, backed by Valkey, 300 second TTL). The requested `savingsId` must be in that set. A `savingsId` the caller does not own is rejected at the BFF; the request never reaches Fineract.
+
+The list endpoint has no per-resource check because it is scoped by construction: the service resolves the caller's own client id and asks Fineract only for that client's accounts.
+
+See xref:abac[Attribute-Based Access Control (ABAC)] for the general policy model, the policy table, and the caching and eviction rules.
+
+== Fineract integration
+
+`SavingsQueryServiceImpl` calls Fineract through the generated Feign client (Feign: a declarative HTTP client; the interfaces are generated from Fineract's OpenAPI specification into `consumer.infrastructure.fineractclient.generated`). No hand-written Feign interfaces are used in this module. Upstream endpoints, verified against the generated client:
+
+[cols="3,4", options="header"]
+|===
+| BFF operation | Fineract endpoint
+
+| List accounts
+| `GET /v1/clients/{clientId}/accounts` (`ClientApi.retrieveAllClientAccounts`)
+
+| Account detail
+| `GET /v1/savingsaccounts/{accountId}` (`SavingsAccountApi.retrieveSavingsAccount`)
+
+| Charges
+| `GET /v1/savingsaccounts/{savingsAccountId}/charges` (`SavingsChargesApi.retrieveAllSavingsAccountCharges`)
+
+| Transaction search
+| `GET /v1/savingsaccounts/{savingsId}/transactions/search` (`SavingsAccountTransactionsApi.searchTransactions`)
+
+| Single transaction
+| `GET /v1/savingsaccounts/{savingsId}/transactions/{transactionId}` (`SavingsAccountTransactionsApi.retrieveOneSavingsAccountTransaction`)
+
+| Product list and product detail (template)
+| `GET /v1/savingsproducts` and `GET /v1/savingsproducts/{productId}` (`SavingsProductApi`)
+|===
+
+Upstream errors are translated by the shared `FineractCaller` wrapper: an upstream 404 becomes `SavingsAccountNotFoundException` (404) or, on the product path, `SavingsProductNotFoundException` (404); an upstream 400 becomes `SavingsRequestInvalidException` (400) or, on the product path, `SavingsUpstreamUnavailableException` (502); any other Feign failure becomes `SavingsUpstreamUnavailableException` (502). Fineract response bodies never reach the client on error paths; the standard exception handler serializes only the BFF error code and default message.
+
+One workaround exists: Fineract's OpenAPI spec declares the single-transaction response as a plain string, so the generated client returns raw JSON text for that call. The service deserializes it manually into `SavingsAccountTransactionData` with the Jackson `ObjectMapper`.
+
+== DTO mapping policy
+
+Fineract response shapes never pass through to the Angular client. Each operation maps the generated Fineract model into a module-owned read model in `savings/query/data/`: `SavingsAccountListItemQueryData`, `SavingsAccountQueryData`, `SavingsChargeQueryData`, `SavingsTransactionQueryData`, `SavingsApplicationTemplateQueryData`, and `SavingsProductOptionQueryData`, plus the page envelope `SavingsTransactionQueryResponse`. Mapping is a deliberate subset: only the fields the consumer UI needs are carried over.
+
+Fineract's enum-option objects (`{id, code, value}` triples for status and transaction type) are flattened to their stable `code` string (for example `savingsAccountStatusType.active`); the localized display `value` is not exposed. Account read models additionally carry a boolean `active` flag derived from the status object. The application template detail exposes each enum setting as an id and code pair (for example `interestCompoundingPeriodTypeId` and `interestCompoundingPeriodTypeCode`). Currency objects are reduced to the currency code. Monetary and rate fields (`balance`, `availableBalance`, `amount`, `runningBalance`, `amountOutstanding`, `nominalAnnualInterestRate`) are `java.math.BigDecimal` end to end; no floating-point types touch money. Dates are `java.time.LocalDate`.
+
+== BFF state
+
+The module stores nothing. There is no `repository/` or `domain/` package, no JPA entity, and no Liquibase changeset for savings. Every read is a live pass-through to Fineract. The only state involved is the ownership cache described above, which is infrastructure owned by the access package, not by this module.
+
+== Testing
+
+* Unit tests: `SavingsQueryServiceImplTest` covers the list mapping, the empty-list case, translation of an upstream failure to `SavingsUpstreamUnavailableException`, the ownership denial on account detail, currency mapping on account detail, charges, and single transaction, the split of `sort` into Fineract's `orderBy` and `sortOrder` (including a bare field name), and the empty page envelope when Fineract returns no content.
+* End-to-end tests: `savings.feature` (Cucumber, run against the full Docker stack) covers five scenarios: listing seeded accounts, fetching account detail, currency presence on account, charge, and transaction amounts, rejection without a session (401), and denial when reading another client's account (403).
+* The summary feature's Cucumber scenarios exercise the savings read path indirectly through the account-summary aggregation.
+* A Playwright spec (`frontend/playwright/tests/savings.spec.ts`) covers the frontend route guard: an unauthenticated visit to the savings page redirects to login.
+
+== Design rationale
+
+* Query-only by design. Consumer-initiated money movement belongs to the transfers feature, and account opening is not offered, so a savings command side would be an empty shell. Per project convention, absent sides are not pre-created.
+* Ownership is enforced at the BFF, before Fineract is called. Fineract's own authorization is back-office shaped and is not trusted as the consumer policy enforcement point. Failing early also avoids leaking existence information about other clients' accounts.
+* The service is exposed as an interface (`SavingsQueryService`) so the open banking module can reuse the exact same read path under a narrower token scope instead of forking a second savings client. The ABAC action table, not the module, decides which scopes may invoke each operation.
+* Thin DTOs keep the Angular client decoupled from Fineract's large response shapes and prevent accidental exposure of upstream fields that were never reviewed for consumer visibility.
+
+== Limitations and future work
+
+* *Only date and sort filters are exposed.* Fineract's transaction search supports filtering by amount range, transaction type, and submitted date; the BFF exposes only `fromDate`, `toDate`, and `sort`. Additional filters would be additive parameters on the existing endpoint.
+* *No statement document generation (PDF or export).* "Statements" means the filterable transaction list.
+* *Ownership checks read a cached account set.* The cache uses 60 s / 300 s TTLs, so an account added to a client mid-session may be denied until the cache entry expires or is evicted.

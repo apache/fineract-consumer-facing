@@ -21,3 +21,4 @@
 .vscode/
 *.iml
 *.log
+docs/build/

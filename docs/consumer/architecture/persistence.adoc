@@ -1,0 +1,142 @@
+= Persistence
+
+== Two systems of record
+
+The BFF runs against its own PostgreSQL database (the `bff-db` service in `consumer/compose.yaml`). This database holds only the state the BFF itself is responsible for: consumer identity, authentication artifacts, transfer beneficiaries, audit events, open banking consents, registered third-party (TPP) clients, and infrastructure bookkeeping.
+
+Financial data never lives in the BFF database. Savings accounts, loans, transactions, products, and client records are owned by Fineract Core and reached over Feign (a declarative HTTP client: you write a Java interface, the library generates the HTTP calls). The BFF stores at most a numeric reference to a Fineract resource, for example `users.client_id` (the bound Fineract client) or `beneficiaries.fineract_account_id`.
+
+== BFF-owned tables
+
+Each table is created by one Liquibase changeset and mapped by JPA entities under the owning feature module.
+
+[cols="1,1,3"]
+|===
+|Module |Table |Purpose
+
+|`user`
+|`users`
+|One row per registered consumer: email, password hash, bound Fineract client id, binding status (`PENDING_OTP` or `BOUND`). Entity: `user.command.domain.User`.
+
+|`authentication`
+|`refresh_tokens`
+|Rotating refresh tokens. Stores a SHA-256 hex hash of the token value (`token_hash`, never the raw token), the device fingerprint it is bound to, expiry, revocation timestamp, and a `rotated_to` self-reference forming the rotation chain. Entity: `authentication.command.domain.RefreshToken`.
+
+|`beneficiaries`
+|`beneficiaries`
+|Saved transfer destinations per user, with account type, optional transfer limit, and Fineract office/client/account references. Entity: `beneficiaries.command.domain.Beneficiary`.
+
+|`audit`
+|`audit_events`
+|The structured audit log for both server-emitted and client-reported events: source, type, severity, device fingerprint, correlation id, client-claimed timestamp plus authoritative server receive time, and a JSONB `details` column. Entity: `audit.command.domain.AuditEvent`.
+
+|`openbanking`
+|`open_banking_consents`
+|Third-party (TPP) consent records: granting user, permission set, status (`AWAITING_AUTHORISATION`, `AUTHORISED`, `REJECTED`, `REVOKED`), and expiry. Entity: `openbanking.command.domain.OpenBankingConsent`.
+
+|`infrastructure`
+|`event_publication`
+|Spring Modulith's event outbox (a table that records in-process domain events until their listeners complete, so events survive a crash). Completed rows are deleted (`spring.modulith.events.completion-mode=delete`).
+
+|`infrastructure`
+|`oauth2_authorization`
+|Spring Authorization Server state for the open banking OAuth2 flow (authorization codes, access and refresh tokens issued to TPPs). Persisted by `JdbcOAuth2AuthorizationService`, wired in `OAuth2AuthorizationServerConfig`.
+
+|`infrastructure`
+|`registered_tpps`
+|The OAuth2 client registry: one row per onboarded third-party provider (TPP). Columns: unique `client_id`, `client_secret_hash` (a bcrypt hash carrying the delegating-encoder `{bcrypt}` prefix; the raw secret is never stored), `client_name`, `redirect_uri`, `scopes`, `status` (`ACTIVE` or `REVOKED`), and onboarding/status timestamps. Entity: `infrastructure.oauth2.domain.RegisteredTpp`, surfaced to Spring Authorization Server by `RegisteredTppClientAdapter` (a `RegisteredClientRepository`). Rows are onboarded out-of-band by the seed scripts; dynamic client registration is not enabled (the adapter's `save` throws).
+|===
+
+Because the module uses CQRS (command/query responsibility segregation: writes and reads are separate code paths), most tables are mapped twice: a mutable command-side entity and a read-only `@Immutable` query-side twin over the same table (for example `User` and `UserQueryEntity`). There is still exactly one store and one schema. Infrastructure-owned entities are side-agnostic and mapped once: `RegisteredTpp` has no query-side twin.
+
+== Liquibase
+
+Liquibase is a database migration tool: every schema change is a versioned changeset applied in order, and the applied history is recorded in the database itself. The changelog root is `consumer/src/main/resources/db/changelog/db.changelog-master.yaml`, which includes one changeset file per table from per-module directories:
+
+----
+db/changelog/
+├── db.changelog-master.yaml
+├── user/001-create-users-table.yaml
+├── authentication/002-create-refresh-tokens.yaml
+├── beneficiaries/003-create-beneficiaries.yaml
+├── audit/004-create-audit-events.yaml
+├── infrastructure/005-create-event-publication.yaml
+├── openbanking/006-create-open-banking-consents.yaml
+├── infrastructure/007-create-oauth2-authorization.yaml
+└── infrastructure/008-create-registered-tpps.yaml
+----
+
+Every changeset carries a `rollback` block. Changesets use PostgreSQL-native features where they earn their keep: native enum types (`user_status`, `beneficiary_account_type`, `open_banking_consent_status`, `registered_tpp_status`), JSONB, and partial unique indexes (`uq_beneficiaries_user_name` applies only to active rows).
+
+Two rules follow from this setup:
+
+* All schema changes go through changesets. Hibernate never generates or alters schema: `application.properties` sets `spring.jpa.hibernate.ddl-auto=validate`, which only checks that entities match the schema Liquibase built and fails startup on drift. No profile uses `update`.
+* The Liquibase version is pinned in `consumer/build.gradle` (`set('liquibase.version', "4.33.0")`), overriding the version Spring Boot's dependency management would otherwise pick. The pin is deliberate: 4.33.0 is the newest Liquibase release under an Apache Category A license, so do not remove the pin or let the Boot BOM float the version.
+
+== Identifier conventions
+
+Externally visible identifiers are UUIDs; internal primary keys are numeric where a table is never addressed from outside by its key.
+
+* `users` has a `BIGINT` identity primary key for internal foreign keys, plus a unique `public_id UUID`. The UUID is what leaves the service: it is the JWT `sub` claim and the value idempotency keys are derived from. The numeric id never appears in an API response.
+* `beneficiaries` follows the same pattern (`id BIGINT` plus `public_id UUID`).
+* `audit_events` has a numeric primary key plus a unique `event_uuid` used for client-side deduplication.
+* `refresh_tokens` has a numeric primary key only; the token is addressed by its hash, never by id, so no public UUID is needed.
+* `open_banking_consents` uses a UUID as its primary key directly, since the consent id is itself the externally shared handle in the consent flow.
+* `registered_tpps` also uses a UUID primary key directly; it doubles as the Spring Authorization Server `RegisteredClient` id.
+
+== Secrets at rest
+
+No BFF table stores a recoverable secret, so the schema needs hashing rather than encryption:
+
+* Passwords are stored as `users.password_hash`, produced by Spring Security's delegating `PasswordEncoder` (`PasswordEncoderConfig`).
+* Refresh tokens are stored as SHA-256 hashes (`AuthenticationCommandServiceImpl.sha256Hex`); a database dump cannot be replayed as a token.
+* OTP codes are stored only as SHA-256 hashes in Valkey with a short TTL (see below), never in PostgreSQL.
+* TPP client secrets are stored as bcrypt hashes (`registered_tpps.client_secret_hash`); Spring Authorization Server verifies a presented secret against the hash through the delegating `PasswordEncoder`, keyed by the `{bcrypt}` prefix.
+* Raw government ID numbers are never persisted. During registration the BFF compares the user-supplied ID against Fineract's stored identifier in memory and stores only the binding outcome on the `users` row.
+
+The engineering standard for this repository requires that if an ID number or other recoverable secret is ever persisted, it must go through a JPA `AttributeConverter` (a class JPA calls to transform a field on the way to and from its column) that encrypts the value, with the encryption keys held in a KMS (a key management service that stores keys outside the application) in production. The only `AttributeConverter` in the codebase is `OpenBankingPermissionSetConverter` (one copy per CQRS side, in `openbanking.command.domain` and `openbanking.query.domain`), which serializes a permission enum set to a comma-separated string; it is a formatting converter, not a cryptographic one.
+
+== Caching layer: Valkey
+
+Valkey is a Redis-compatible in-memory key-value store; the BFF reaches it through Spring's `spring.data.redis.*` client stack, and the `valkey` service in `consumer/compose.yaml` provides it locally. It holds ephemeral state that must be shared across BFF instances but has no business value beyond its TTL:
+
+[cols="2,2,3"]
+|===
+|Component |Key prefix |Behavior
+
+|`JwtDenylist` (`infrastructure.access`)
+|`jwt:denylist:`
+|Logout and revocation marks for JWTs that are otherwise valid until expiry. Entries live for the token's remaining lifetime plus a clock-skew pad. Fails closed: if Valkey is unreachable, tokens are treated as denied.
+
+|`OtpRepository` (`infrastructure.otp`)
+|`otp:pending:`, `otp:attempts:`
+|SHA-256 hash of the pending OTP and a failed-attempt counter, both expiring after `OtpConstants.OTP_TTL_SECONDS` (300 seconds).
+
+|`RateLimitCounter` (`infrastructure.access`)
+|`ratelimit:`
+|Per-user request counters over a 60 second window. Fails open: if Valkey is unreachable, the request is allowed and the failure is logged.
+
+|`OwnedAccountsCache` (`infrastructure.access`)
+|`abac:ownership:`
+|The set of savings and loan accounts a Fineract client owns, used by ABAC ownership checks. Two tiers: an in-process Caffeine cache (60 second TTL) in front of Valkey (300 second TTL), with explicit eviction after writes that change ownership, such as submitting a loan application.
+|===
+
+== Repositories own queries
+
+Data access follows Spring Data conventions: each feature entity has a per-side repository interface (`<Feature>CommandRepository` / `<Feature>QueryRepository`) extending `JpaRepository`, and any query too complex for method-name derivation lives on the repository as a `@Query` or a custom fragment. Infrastructure entities have a single side-agnostic repository (`RegisteredTppRepository`). Services never assemble JPQL inline; they call a named repository method and act on the result. Valkey adapters such as `OtpRepository` (`infrastructure.otp.repository`) are hand-rolled `@Repository` classes over `StringRedisTemplate` because they are not JPA-backed.
+
+== Design rationale
+
+Keeping financial data out of the BFF database avoids a second system of record: there is no reconciliation problem between BFF and Fineract because balances, transactions, and account state have exactly one home. The BFF persists only what Fineract cannot represent, which is consumer-channel identity and policy state.
+
+Hashing instead of encrypting the secrets the BFF does hold (passwords, refresh tokens, OTPs) removes key management from the threat model for those columns: verification only ever needs equality against a hash, so a recoverable ciphertext would add risk without adding function.
+
+The Valkey split exists because this state is cross-instance but disposable. A denylist entry or rate-limit counter must be visible to every replica immediately, but losing it costs at most one token lifetime or one rate window. Putting it in PostgreSQL would add write load and vacuum churn for rows that expire in minutes.
+
+Liquibase-only schema management with `ddl-auto=validate` makes the schema reviewable in pull requests and identical across dev, CI, and production; Hibernate drift is caught at startup instead of silently patched.
+
+== Limitations and future work
+
+* *TPP token values are not hashed at rest.* The `oauth2_authorization` table stores TPP access and refresh token values as plain `TEXT`, which is Spring Authorization Server's default JDBC schema. This is unlike the consumer `refresh_tokens` table and the TPP client secrets in `registered_tpps`, which are hashed.
+* *The audit details column is unconstrained at the schema level.* `audit_events.details` is free-form JSONB guarded by the PII screen at write time; nothing in the schema prevents sensitive data from landing there if the screen misses a pattern.
+* *Local databases are wiped on every restart.* The containers use `tmpfs` volumes, which suits local development and tests; real deployments use persistent volumes.

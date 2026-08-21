@@ -1,0 +1,220 @@
+[[openbanking]]
+= Open Banking
+
+The open banking module provides a demo of third-party access to a customer's accounts with the customer's explicit consent. A TPP (third-party provider: an external application acting on the customer's behalf, for example an account-aggregation app) obtains a consent-scoped access token from the BFF and uses it to read the customer's account list and balances. The surface is read-only. No TPP can move money or mutate anything through this module.
+
+Code lives in two places:
+
+* `consumer/src/main/java/org/apache/fineract/consumer/openbanking/` holds the feature module in the project CQRS layout (CQRS: commands and queries are separated end to end): the consent aggregate, its command and query controllers, services, repositories, and per-side entities.
+* `consumer/src/main/java/org/apache/fineract/consumer/infrastructure/oauth2/` holds the OAuth2 plumbing: token customization, consent-ceremony validators, the refresh-grant consent check, the filter that authenticates the customer during the ceremony, and the database-backed TPP registry (the `RegisteredTpp` entity, its repository, and the `RegisteredTppClientAdapter`). The authorization server itself is Spring Authorization Server, configured in `infrastructure/configs/OAuth2AuthorizationServerConfig.java` and running in-process inside the BFF. The two sides are decoupled through two ports defined in the infrastructure package, `OAuth2ConsentLookupPort` and `OAuth2ConsentRecorderPort`, implemented by adapters in the feature module.
+
+== Consent model
+
+A consent (a customer's recorded permission for one TPP to read specific categories of their data, for a limited time) is a row in the BFF's own database. It records:
+
+* the TPP client id that requested it,
+* the customer (BFF user public UUID), set at the moment the customer approves or denies,
+* the granted permissions (data categories),
+* creation time, expiry time, and the time of the last status change.
+
+Two permissions exist, named in the Open Banking UK style:
+
+[cols="2,4", options="header"]
+|===
+| Permission | Grants
+
+| `ReadAccountsBasic`
+| List the customer's savings and loan accounts (account number, product name, status, currency).
+
+| `ReadBalances`
+| Read the balances of a single consented account.
+|===
+
+The lifecycle is enforced by the `OpenBankingConsent` entity. Transitions outside this table throw:
+
+[cols="2,2,4", options="header"]
+|===
+| Status | Reachable from | Meaning
+
+| `AWAITING_AUTHORISATION`
+| (initial)
+| Created by the TPP; the customer has not yet decided.
+
+| `AUTHORISED`
+| `AWAITING_AUTHORISATION`
+| The customer approved on the consent page. The only status under which TPP reads succeed.
+
+| `REJECTED`
+| `AWAITING_AUTHORISATION`
+| The customer denied on the consent page.
+
+| `REVOKED`
+| `AUTHORISED`
+| The customer revoked the consent later. Revoking a non-authorised consent is rejected (`OpenBankingConsentNotRevocableException`).
+|===
+
+Expiry is not a status: `expires_at` is stamped at creation (`consumer.oauth2.consent-ttl`, default 90 days) and every consumer of the consent checks it at use time. An expired consent fails the authorize ceremony, the refresh grant, and every TPP read.
+
+== The OAuth2 flow
+
+The flow is OAuth2 authorization code with PKCE (PKCE: a one-time code challenge that stops an intercepted authorization code from being replayed). PKCE is mandatory for every registered TPP (`requireProofKey(true)`).
+
+=== TPP registration
+
+Registered TPPs are rows in the BFF's own `registered_tpps` table (changeset `db/changelog/infrastructure/008-create-registered-tpps.yaml`). Each row holds the client id, the client name, one redirect URI, a comma-delimited scope list (scope: a named permission carried inside the access token), a status (Postgres enum `registered_tpp_status`: `ACTIVE` or `REVOKED`), and onboarding/status timestamps.
+`RegisteredTppClientAdapter` implements Spring Authorization Server's `RegisteredClientRepository` over that table. Every lookup reads the row live and filters on status, so only `ACTIVE` TPPs resolve; a `REVOKED` or unknown client id fails client authentication. Each row maps to a client that authenticates with HTTP Basic (`client_secret_basic`), is granted three grant types (`client_credentials`, `authorization_code`, `refresh_token`), and requires PKCE.
+
+Client secrets are hashed at rest. The `client_secret_hash` column stores a Spring Security password-encoder string (encoder id prefix plus hash; the seeded rows use `{bcrypt}`), verified through the delegating `PasswordEncoder` at client authentication. The plaintext secret is never stored or served by the BFF.
+
+There is no onboarding API: the adapter's `save()` throws `UnsupportedOperationException`, and rows are inserted out-of-band with SQL. In production, a TPP must be verified and onboarded by an external open banking service before its row is inserted. `consumer/scripts/seed-demo.sh` registers two dev fixtures, both scoped to `openbanking:consents,openbanking:accounts.read` and both carrying the dev secret `demo-tpp-secret`:
+
+[cols="2,3,4", options="header"]
+|===
+| Client id | Name | Redirect URI
+
+| `demo-tpp`
+| Demo TPP
+| `http://localhost:9999/tpp/callback`
+
+| `postman-tpp`
+| Postman TPP
+| `https://oauth.pstmn.io/v1/callback`
+|===
+
+The Cucumber harness seeds its own `demo-tpp` row directly into the database before the run (`cucumber/hooks/RegisteredTppSeed`).
+
+=== Authorization server endpoints
+
+All authorization-server endpoints are remapped under `/api/v1/oauth2/` (see `OAuth2Constants`): `/authorize`, `/token`, `/jwks` (the public signing keys), `/revoke`, `/introspect`, and others Spring Authorization Server provides by default. The token endpoint is rate limited per TPP client (`RateLimitFilter.perTppClient`).
+
+=== Step by step
+
+.Consent ceremony: authorization code with PKCE, end to end
+[plantuml,format=svg]
+----
+include::{diagramsdir}/openbanking-consent-sequence.puml[]
+----
+
+. *The TPP creates a consent.* It obtains a `client_credentials` token (scope `openbanking:consents`) from `POST /api/v1/oauth2/token`, then calls `POST /api/v1/openbanking/account-access-consents` with the requested permissions. The consent is stored as `AWAITING_AUTHORISATION` and its UUID is returned.
+. *The TPP redirects the customer to the authorize endpoint.* The URL is `GET /api/v1/oauth2/authorize` with the standard parameters (`client_id`, `redirect_uri`, `scope`, `code_challenge`, `code_challenge_method`) plus a custom `consent_id` parameter. `OAuth2ConsentAuthorizeRequestValidator` rejects the request with `invalid_request` unless the consent exists, belongs to the requesting TPP, is still `AWAITING_AUTHORISATION`, and is unexpired. A consent can therefore be put through the ceremony exactly once.
+. *The customer logs in with the ordinary consumer login.* There is no separate open banking credential store. If the browser has no consumer session, the authorize endpoint redirects to the Angular login page (`{frontend}/login?returnUrl=...`). The customer authenticates through the normal pipeline: password, OTP second factor, device-fingerprint-bound session, `access_token` httpOnly cookie. `OAuth2UserAuthenticationFilter` then authenticates the authorize request by decoding that same cookie.
+. *The customer approves or denies on the consent page.* The consent page is the Angular route `/consent`. The decision posts back to the authorization endpoint with a CSRF token (`XSRF-TOKEN` cookie, `CookieCsrfTokenRepository`). `OAuth2ConsentDecisionCustomizer` records the outcome through `OAuth2ConsentRecorderPort`: approval transitions the consent to `AUTHORISED` and binds the customer's user id to it; denial transitions it to `REJECTED`. Approval and denial are audited (`CONSENT_GRANTED` / `CONSENT_DENIED`). Consent decisions are never persisted by Spring's own consent service: `PerCeremonyAuthorizationConsentService` is a deliberate no-op, so the BFF's consent row is the single source of truth and every ceremony re-collects the decision.
+. *The TPP exchanges the code.* `POST /api/v1/oauth2/token` with the authorization code, the PKCE `code_verifier`, and Basic client authentication. A wrong verifier is rejected with `invalid_grant`.
+. *The access token is consent-scoped, narrower, and shorter-lived.* `OAuth2AccessTokenCustomizer` stamps every open banking access token with `purpose=openbanking`, the tenant, the space-joined scopes, the `consent_id`, and `kyc_verified`. It is signed with ES256 using the same signing key as consumer login JWTs (key id from `consumer.oauth2.kid`, default `bff-es256`, published at `/api/v1/oauth2/jwks`). Its TTL is `consumer.oauth2.access-token-ttl`, default 5 minutes, versus 15 minutes for a consumer login token.
+. *Refresh is supported and rotating.* Refresh tokens (`consumer.oauth2.refresh-token-ttl`, default 90 days) are single-use: `reuseRefreshTokens(false)` means every refresh mints a new refresh token and replaying the old one fails with `invalid_grant`. `OAuth2RefreshTokenConsentValidator` wraps the refresh grant and re-checks that the bound consent is still `AUTHORISED` and unexpired, so revoking the consent kills refresh immediately.
+
+=== KYC live check at every mint
+
+The project rule that `kyc_verified` is never carried forward between tokens applies here too. On both the `authorization_code` and `refresh_token` grants, `OAuth2AccessTokenCustomizer` calls `ClientStandingChecker` (in `infrastructure/kyc/`) to live-check that the customer's bound Fineract client is still active, uncached and fail-closed. If not, the mint aborts with `invalid_grant` ("identity verification no longer valid"). The same checker guards consumer login and refresh.
+
+=== Token separation
+
+Consumer tokens and open banking tokens are mutually unusable, enforced by the `purpose` claim and two separate decoders. The consumer resource chain rejects any token that carries a `purpose` claim; the open banking resource chain (`openbankingTokenJwtDecoder`) requires `purpose=openbanking`. A consumer session cookie on an open banking endpoint, or an open banking bearer token on a consumer endpoint, both fail as unauthenticated. Both cases are covered by Cucumber scenarios.
+
+== Endpoints
+
+=== TPP-facing
+
+Served on a dedicated security filter chain that accepts only open banking bearer tokens (`Authorization: Bearer ...`), stateless, CSRF disabled.
+
+[cols="1,4,2,4", options="header"]
+|===
+| Method | Path | Scope | Purpose
+
+| POST
+| `/api/v1/openbanking/account-access-consents`
+| `openbanking:consents`
+| Create a consent with a set of permissions. Client-credentials token. Returns the consent id, status `AWAITING_AUTHORISATION`, permissions, creation and expiry times.
+
+| GET
+| `/api/v1/openbanking/account-access-consents/{consentId}`
+| `openbanking:consents`
+| Read a consent's current status. Only consents belonging to the calling TPP are visible; anything else is a 404.
+
+| GET
+| `/api/v1/openbanking/accounts`
+| `openbanking:accounts.read`
+| List the consenting customer's savings and loan accounts. Requires permission `ReadAccountsBasic` on the consent.
+
+| GET
+| `/api/v1/openbanking/accounts/{accountId}/balances`
+| `openbanking:accounts.read`
+| Balances of one account. Requires permission `ReadBalances`. Account ids are typed strings, `savings-{id}` or `loan-{id}` (`OpenBankingAccountId`). Savings return `ClosingBooked` and `InterimAvailable` balance entries; loans return `ClosingBooked` (total outstanding).
+|===
+
+=== Customer-facing
+
+Served on the ordinary consumer chain (login session cookie, scope `consumer:full`). This is the consent-management surface on the Angular settings page: the customer sees their consents and revokes them there.
+
+[cols="1,4,4", options="header"]
+|===
+| Method | Path | Purpose
+
+| GET
+| `/api/v1/openbanking/consents`
+| List the caller's own consents, newest first (TPP id, permissions, status, created, expires). Action `OPENBANKING_CONSENT_VIEW`, KYC required.
+
+| POST
+| `/api/v1/openbanking/consents/{consentId}/revoke`
+| Revoke an `AUTHORISED` consent the caller owns. Action `OPENBANKING_CONSENT_REVOKE`, KYC required. Audited as `CONSENT_REVOKED`.
+|===
+
+== ABAC scoping
+
+The module is a policy enforcement point in two layers.
+
+*Scope layer.* Every service method passes through `AccessPolicyEvaluator` with an action from the ABAC policy table (`ActionPolicies`). Each TPP read first authorizes `OPENBANKING_ACCOUNTS_VIEW`, which accepts only `openbanking:accounts.read`, then delegates to the consumer read services. Open banking tokens never carry `consumer:full`, so the only consumer actions they can reach are the ones whose policy explicitly lists `openbanking:accounts.read`: `SAVINGS_LIST`, `LOANS_LIST`, `SAVINGS_VIEW`, and `LOANS_VIEW`. Every other consumer action (transfers, beneficiaries, profile, loan applications) is `consumer:full` only, so a stolen open banking token cannot reach them. The TPP consent actions (`OPENBANKING_TPP_CONSENT_CREATE`, `OPENBANKING_TPP_CONSENT_VIEW`) accept only `openbanking:consents` and do not require `kyc_verified`, because a client-credentials token has no customer behind it yet.
+
+*Consent layer.* On every TPP read, `OpenBankingQueryServiceImpl.requireValidConsent` re-loads the consent row named by the token's `consent_id` claim and requires, atomically: status `AUTHORISED`, unexpired, the consent's TPP matches the token audience, the consent's user matches the token subject, and the requested permission is in the consent's permission set. Any failure is a 403 (`OpenBankingConsentInvalidException`). Because this check reads the database on every request, revocation takes effect immediately even while an access token is still within its 5-minute TTL.
+
+Account restriction falls out of reuse: the open banking token's subject is the consenting customer's user id, and the reads delegate to the same `SavingsQueryService` and `LoansQueryService` the consumer app uses, which resolve accounts from the caller's bound Fineract client. A TPP can only ever see the accounts of the customer who approved the consent.
+
+== Data model
+
+[cols="2,3,4", options="header"]
+|===
+| Table | Changeset | Contents
+
+| `open_banking_consents`
+| `db/changelog/openbanking/006-create-open-banking-consents.yaml`
+| The consent aggregate: `id` (UUID), `tpp_client_id`, `user_id` (nullable until the customer decides), `permissions`, `status` (Postgres enum `open_banking_consent_status`), `created_at`, `expires_at`, `status_updated_at`. Indexed on `user_id`. Owned by this module, mapped twice per the CQRS convention: the mutable command entity `OpenBankingConsent` and the read-only query twin `OpenBankingConsentQueryEntity`.
+
+| `oauth2_authorization`
+| `db/changelog/infrastructure/007-create-oauth2-authorization.yaml`
+| Spring Authorization Server state (`JdbcOAuth2AuthorizationService`): pending authorization codes, issued access and refresh tokens, and the authorization request attributes. Infrastructure-owned, standard Spring schema.
+
+| `registered_tpps`
+| `db/changelog/infrastructure/008-create-registered-tpps.yaml`
+| The TPP registry: `id` (UUID), `client_id` (unique), `client_secret_hash`, `client_name`, `redirect_uri`, `scopes` (comma-delimited), `status` (Postgres enum `registered_tpp_status`: `ACTIVE`, `REVOKED`), `onboarded_at`, `status_updated_at`. Infrastructure-owned, mapped by the `RegisteredTpp` entity and read through `RegisteredTppClientAdapter`.
+|===
+
+Spring's authorization-consent table does not exist because consent approvals are deliberately not persisted at that layer.
+
+== Auditing
+
+The flow emits structured server-side audit events: `CONSENT_CREATED` (TPP creates), `CONSENT_GRANTED` / `CONSENT_DENIED` (customer decides), `CONSENT_REVOKED` (customer revokes), and `ACCESS_DENIED` from the policy evaluator on any scope, KYC, or ownership failure. Events carry the consent id, TPP client id, and the customer's public id, never account data.
+
+== Testing and demo tooling
+
+Unit tests cover both sides of the feature (`OpenBankingConsentCommandServiceImplTest`, `OpenBankingConsentQueryServiceImplTest`, `OpenBankingQueryServiceImplTest`, `OpenBankingAccountIdTest`, `OpenBankingConsentLookupAdapterTest`) and the OAuth2 plumbing (`OAuth2AccessTokenCustomizerTest`, `OAuth2ConsentAuthorizeRequestValidatorTest`, `OAuth2ConsentDecisionCustomizerTest`, `OAuth2RefreshTokenConsentValidatorTest`, `RegisteredTppClientAdapterTest`, `OAuth2AuthorizationServerConfigTest`).
+
+The end-to-end reference is `consumer/src/test/resources/features/openbanking.feature` (thirteen scenarios), driven by the `OpenBankingClient` test harness, which walks the real browserless flow: client-credentials token, consent creation, login redirect, cookie-authenticated authorize, CSRF-protected approve or deny, PKCE code exchange (including a wrong-verifier rejection), reads, permission gating, revocation, refresh rotation, and refresh-token replay rejection. Run with the stack up: `docker compose up -d --build --wait && ./gradlew cucumber; docker compose down -v` from `consumer/`.
+
+For manual demos, `consumer/scripts/seed-openbanking.sh` drives the whole flow headlessly against the local stack and prints tokens ready to paste into a Postman environment. It needs the stack up and `seed-demo.sh` already run (that script inserts the TPP rows). By default it authenticates as the `postman-tpp` row (redirect `https://oauth.pstmn.io/v1/callback`) and the seeded customer `demo3@example.com`; to drive the `demo-tpp` row instead, override `TPP_CLIENT_ID`, `TPP_CLIENT_SECRET`, and `TPP_REDIRECT_URI`. Each run creates a new consent row and token pair; it never updates a previous consent. Running it is covered in xref:_open_banking_demo_tokens[Open banking demo tokens] in the development chapter. The same flow can also be driven by hand with any HTTP client using either seeded TPP fixture (secret `demo-tpp-secret`); the consent page is served by the Angular app at `http://localhost:4443`.
+
+== Design rationale
+
+* *One auth stack, not two.* The module deliberately reuses the consumer login pipeline instead of forking it: the customer authenticates the authorize ceremony with the same device-fingerprint-bound session cookie minted at login, open banking tokens are signed with the same ES256 key as consumer JWTs, and the same `ClientStandingChecker` fail-closed KYC check guards every mint on both pipelines. The differences are data, not code paths: a `purpose` claim, a narrower scope set, and a shorter TTL.
+* *The consent row is the single source of truth.* Spring's own consent persistence is disabled, so consent state lives in exactly one place, `open_banking_consents`, and every enforcement point (authorize validation, refresh validation, per-read check) reads it live. That is why revocation is immediate rather than eventual.
+* *Defense in depth over trust in the token.* A valid open banking access token is necessary but not sufficient: every read re-verifies the consent's status, expiry, TPP binding, user binding, and permission against the database. Token theft within the 5-minute window yields nothing once the consent is revoked.
+* *Ports between infrastructure and feature.* The OAuth2 plumbing depends on `OAuth2ConsentLookupPort` and `OAuth2ConsentRecorderPort`, not on the feature module, keeping the authorization server generic and the consent domain logic inside the bounded context.
+* *Open Banking UK-flavored contract.* Resource naming (`account-access-consents`), permission names (`ReadAccountsBasic`, `ReadBalances`), status names (`AWAITING_AUTHORISATION`), and balance types (`ClosingBooked`, `InterimAvailable`) follow the Open Banking UK read API vocabulary so a later evolution toward that specification changes payload detail, not the model.
+
+== Limitations and future work
+
+* *Local demo only, not FAPI-certified.* FAPI (Financial-grade API: the hardened OAuth2 profile real open banking regimes require) expects mTLS or `private_key_jwt` client authentication, pushed authorization requests, and sender-constrained tokens. The dev and demo stack uses `client_secret_basic`; a production deployment puts mTLS (mutual TLS: both sides present and verify certificates) between open banking providers and the open banking endpoints. The PAR endpoint path exists in the server settings but is not required or exercised.
+* *Consent is data-category-granular, not account-granular.* An `AUTHORISED` consent with `ReadAccountsBasic` exposes all of the customer's accounts. There is no per-account selection at the consent page.
+* *Read surface is accounts and balances only.* No transactions, direct debits, standing orders, or parties endpoints exist on the TPP surface, and no payment-initiation surface at all.
+* *No expiry housekeeping.* Expired consents are correctly rejected at every use, but rows stay in `AWAITING_AUTHORISATION` or `AUTHORISED` forever; there is no scheduled transition to an expired status or retention sweep.
+* *`consent_id` rides as a custom authorize parameter.* It does not ride inside a signed request object as Open Banking UK's intent id does, so the parameter is integrity-protected only by the server-side validation, not by a client signature.
+* *Long-lived refresh tokens.* The 90-day default refresh and consent TTLs are demo conveniences; a production deployment would want re-authentication ceilings aligned with regulatory 90-day re-confirmation rules rather than a silent 90-day refresh chain.

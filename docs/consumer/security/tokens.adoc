@@ -1,0 +1,213 @@
+[[tokens]]
+= Token Model
+
+This section describes how the consumer BFF (backend-for-frontend, the Spring Boot service in `consumer/`) authenticates browser sessions. It covers the access token, the refresh token, device fingerprint binding, the claims carried in each token, signing key management, and request-time validation. Every value below is taken from the source tree, primarily `org.apache.fineract.consumer.infrastructure.jwt`, `infrastructure.configs`, `infrastructure.access`, and `authentication.command`.
+
+A JWT (JSON Web Token) is a signed string containing a set of named fields called claims. The BFF issues its own JWTs and validates them itself; no external identity provider is involved.
+
+== Token types and lifetimes
+
+All durations are configurable in `application.properties` through the `authentication.*` keys (Spring `Duration` shorthand, overridable by environment variable). The values below are the shipped defaults.
+
+|===
+|Token |Default TTL |Config key |Where it lives
+
+|Access token (JWT)
+|15 minutes
+|`authentication.access-token-ttl`
+|httpOnly cookie `access_token`, path `/api/v1`
+
+|2FA challenge token (JWT)
+|5 minutes
+|`authentication.challenge-token-ttl`
+|Response body of `POST /api/v1/authentication/login`
+
+|Refresh token (opaque random value)
+|1 day
+|`authentication.refresh-token-ttl`
+|httpOnly cookie `refresh_token`, path `/api/v1/authentication`
+
+|Rotation grace window
+|30 seconds
+|`authentication.rotation-grace-ttl`
+|Not a token; see rotation below
+
+|Step-up token (JWT)
+|5 minutes
+|`StepUpConstants.STEPUP_TTL` (code constant)
+|Response body; see xref:step-up[Step-Up Authentication]
+
+|One-time password (OTP)
+|300 seconds
+|`OtpConstants.OTP_TTL_SECONDS` (code constant)
+|SHA-256 hash in Valkey
+|===
+
+The open banking surface has its own TTLs (`consumer.oauth2.access-token-ttl` default 5 minutes, `consumer.oauth2.refresh-token-ttl` default 90 days) issued by the in-process Spring Authorization Server. It shares the signing key and claim names described here but is otherwise out of scope for this section.
+
+== Login pipeline
+
+Constants referenced below live in `AuthenticationConstants` (`infrastructure.access.data`) and `ConsumerHeaders` (`infrastructure.web.data`).
+
+. `POST /api/v1/authentication/login` with email and password, plus the `X-Device-Fingerprint` header. On a credential match the BFF creates an OTP (emailed to the user) and returns a challenge token: a JWT with claim `purpose` = `2fa_challenge` and the caller's device fingerprint baked in. No session exists yet.
+. `POST /api/v1/authentication/2fa` with the challenge token, the OTP, and the same `X-Device-Fingerprint` header. The BFF verifies the challenge token's purpose and device fingerprint, validates the OTP, then establishes a session.
+. Establishing a session (`AuthenticationCommandServiceImpl.establishSession`) mints one access JWT and one refresh token and returns both as `Set-Cookie` headers. The JSON body contains only the access-token expiry timestamp, never a token value.
+
+Handled by `AuthenticationCommandController` (`authentication.command.api`) and `AuthenticationCommandServiceImpl` (`authentication.command.service`).
+
+== Access token delivery: httpOnly cookie
+
+The access JWT is delivered exclusively as a cookie, not in a response body or `Authorization` header. An httpOnly cookie is a browser cookie that page JavaScript cannot read, which keeps the token out of reach of injected scripts.
+
+`AuthCookieFactory` (`infrastructure.access.service`) builds both cookies with:
+
+* `HttpOnly` set
+* `SameSite=Strict` (the browser withholds the cookie on cross-site requests)
+* `Secure` per `authentication.cookie-secure` (default `false` for the plain-HTTP dev compose stack; must be `true` wherever TLS terminates)
+* Path scoping: `access_token` to `/api/v1`, `refresh_token` to `/api/v1/authentication` only, so the refresh token is never sent to ordinary API endpoints
+
+On the server side, `SecurityConfig` installs a custom bearer token resolver that reads the `access_token` cookie instead of the `Authorization` header. The resolver returns null on the public paths (login, 2FA, refresh, password forgot/reset, registration) so a stale cookie cannot break those requests.
+
+`POST /api/v1/authentication/logout` adds the access token's `jti` to the denylist, revokes the presented refresh token, and returns expired copies of both cookies.
+
+== Refresh tokens: storage, rotation, revocation
+
+The refresh token is not a JWT. It is 32 bytes from `SecureRandom`, base64url encoded. The BFF never stores the raw value: the `refresh_tokens` table (entity `RefreshToken` in `authentication.command.domain`) stores only its SHA-256 hex hash, along with `user_id`, `device_fingerprint`, `issued_at`, `expires_at`, `revoked_at`, and `rotated_to`.
+
+On `POST /api/v1/authentication/refresh`:
+
+. The presented cookie value is hashed and looked up by `token_hash`. Unknown hash: rejected, audited as `token_unknown`.
+. If the row is unrotated, it must be unrevoked, unexpired, and its stored `device_fingerprint` must equal the `X-Device-Fingerprint` header. Any failure is rejected and audited with the specific reason (`revoked`, `expired`, `device_mismatch`).
+. A new access JWT and a new refresh token are minted. The old row is marked rotated: `rotated_to` points to the successor and `revoked_at` is set. Rotation happens on every successful refresh.
+
+Replay handling: if a token that has already been rotated is presented again, the BFF distinguishes an honest race from theft. Within `authentication.rotation-grace-ttl` (default 30 seconds) after rotation, with a matching device fingerprint and an unexpired row, the replay is treated as a concurrent-tab race and a fresh session is minted. Outside the grace window, on a device mismatch, or on an expired row, the BFF assumes the token was stolen, revokes every active refresh token for that user, audits `rotated_token_replayed`, and rejects the request.
+
+Explicit revocation paths: logout revokes the presented token; password reset calls `revokeAllSessions`, which revokes all refresh-token rows for the user and adds a per-subject cutoff to the JWT denylist so already-issued access tokens die too. Password change calls `revokeAllSessionsAndReissue`, which performs the same revocation and then mints a fresh session for the caller.
+
+== Device fingerprint binding
+
+The client sends a device identifier in the `X-Device-Fingerprint` header (constant `ConsumerHeaders.DEVICE_FINGERPRINT`) on every request. The value is client generated; the BFF treats it as an opaque string of at most 100 characters.
+
+The fingerprint is bound in three places:
+
+* Into each refresh-token row. A refresh attempt from a different fingerprint fails with `device_mismatch`, so a refresh token stolen from another device is unusable.
+* Into the access JWT as the `device_fingerprint` claim.
+* Into challenge and step-up tokens, which each carry the same claim.
+
+`DeviceFingerprintFilter` (`infrastructure.access.filter`) runs on every authenticated request and compares the header against the claim in the presented access token:
+
+|===
+|Condition |Result
+
+|Header longer than 100 characters
+|400, code `error.msg.consumer.auth.device.fingerprint.invalid`
+
+|Header or claim missing or blank
+|401, code `error.msg.consumer.auth.device.fingerprint.mismatch`
+
+|Token lacks the `consumer:full` scope, or header does not equal the claim
+|403, code `error.msg.consumer.auth.device.fingerprint.forbidden`, plus a `DEVICE_FINGERPRINT_MISMATCH` audit event
+|===
+
+Because the access token is a `SameSite=Strict` cookie and every authenticated request must also carry a custom header that matches a claim inside that cookie, a cross-site attacker cannot forge a usable request. This combination is why the security chain runs with Spring's CSRF filter disabled.
+
+== JWT claims
+
+`JwtIssuer` (`infrastructure.jwt.service`) mints every session and single-purpose token. It always sets the registered claims and the caller supplies the custom ones. Claim name constants live in `JwtClaims` (`infrastructure.jwt.data`).
+
+|===
+|Claim |Set on |Value
+
+|`jti`
+|All tokens
+|Random UUID; used by the logout denylist
+
+|`iss`
+|All tokens
+|`jwt.issuer` config (default `http://localhost:8080`)
+
+|`sub`
+|All tokens
+|The user's public UUID (never the internal numeric ID)
+
+|`iat`, `exp`
+|All tokens
+|Issue time and issue time plus TTL
+
+|`tenant`
+|Access and open banking tokens
+|The Fineract tenant ID the session is bound to
+
+|`kyc_verified`
+|Access and open banking tokens
+|Boolean; see the live-check rule below
+
+|`scope`
+|Access and open banking tokens
+|`consumer:full` for browser sessions; `openbanking:*` scopes for third-party tokens
+
+|`device_fingerprint`
+|Access, challenge, and step-up tokens
+|The fingerprint bound at mint time
+
+|`purpose`
+|Single-purpose tokens only
+|`2fa_challenge`, `stepup`, or `openbanking`; its presence disqualifies a token as a consumer access token
+
+|`action_fingerprint`
+|Step-up tokens only
+|Hash of the approved action's parameters; see xref:step-up[Step-Up Authentication]
+|===
+
+There is no roles claim. Authorization decisions combine the `scope` claim, the `kyc_verified` claim, and attribute lookups performed by `AccessPolicyEvaluator` (`infrastructure.access.service`) against BFF state.
+
+=== The kyc_verified live-check rule
+
+`kyc_verified` is never copied forward from a previous token. Every mint of a session token re-checks the user's standing:
+
+* The consumer path: `establishSession` (called from 2FA verification, refresh, and post-password-change reissue) calls `ClientStandingChecker.isActive` (`infrastructure.kyc.service`) for any KYC-bound user before issuing anything. If the bound Fineract client is not in ACTIVE status (status ID 300), the mint aborts with `AuthenticationKycRevokedException` (403, `error.msg.consumer.authentication.kyc.revoked`).
+* The open banking path: `OAuth2AccessTokenCustomizer` (`infrastructure.oauth2.service`) performs the same check on authorization-code and refresh-token grants and fails the grant with `invalid_grant` if standing is lost.
+
+The check is deliberately uncached: `ClientStandingChecker` calls the Fineract client API on every invocation. It fails closed: a 404 from Fineract yields `false`, and any other upstream error propagates and aborts the mint. A Fineract outage therefore blocks token issuance rather than issuing a token with stale KYC status.
+
+== Signing key management
+
+Tokens are signed with ES256 (ECDSA over the P-256 curve, an asymmetric scheme where the private key signs and the public key verifies). `JwtConfig` (`infrastructure.configs`) loads a single PEM file containing both the PKCS#8 private key and the public key, once at startup, from `jwt.key-location` (default `file:dev-jwt-key.pem`, override with `JWT_KEY_LOCATION`).
+
+* Dev: the keypair is generated by `consumer/scripts/generate-dev-jwt-key.sh` and the file is gitignored. Startup fails with a pointer to that script if the file is missing or malformed.
+* Prod: the file is expected to be mounted from a secret manager.
+* The key ID is derived from the JWK thumbprint (`keyIDFromThumbprint`), so encoder and decoder agree without configuration.
+
+The encoder holds the full keypair; the decoders are built from the public key only.
+
+== Request-time validation
+
+The consumer security chain (`SecurityConfig`, order `LOGIN_CHAIN_ORDER`) is a Spring Security OAuth2 resource server: a server that accepts a token on each request, validates it, and builds the security context from its claims, with no server-side HTTP session (`SessionCreationPolicy.STATELESS`). Everything not explicitly permitted (API docs, health, registration, and the public authentication POSTs) requires authentication; access is deny by default.
+
+Each request passes through, in order:
+
+. The cookie bearer token resolver extracts the JWT from the `access_token` cookie.
+. `accessTokenJwtDecoder` (a dedicated `JwtDecoder` bean in `JwtConfig`) verifies the ES256 signature, expiry, and issuer, then applies two extra validators:
+* Reject any token carrying a `purpose` claim. Challenge, step-up, and open banking tokens can therefore never be used as consumer access tokens.
+* Reject denylisted tokens via `JwtDenylist` (`infrastructure.access.service`), a Valkey-backed store checked both per token ID (set at logout) and per subject cutoff (set by revoke-all flows). If Valkey is unreachable the check fails closed and the token is treated as denied.
+. `RateLimitFilter.perUser` enforces the per-user request budget.
+. `DeviceFingerprintFilter` enforces the header-to-claim fingerprint match described above.
+. Endpoint code then runs ABAC checks through `AccessPolicyEvaluator` before delegating to Fineract.
+
+Open banking bearer tokens are validated by a separate resource chain (order `TPP_RESOURCE_CHAIN_ORDER`) and never pass this one.
+
+== Design rationale
+
+* Cookies instead of header-carried tokens keep both tokens invisible to page JavaScript, so a cross-site scripting bug cannot exfiltrate them. The trade of losing header-based CSRF immunity is paid back with `SameSite=Strict` plus the mandatory custom fingerprint header.
+* Storing only the SHA-256 hash of refresh tokens means a database leak yields nothing directly replayable.
+* Rotation on every refresh plus replay detection converts a stolen refresh token into a detectable event: the legitimate client and the thief cannot both keep refreshing, and detection revokes the whole family. The 30-second grace window exists because real browsers race (two tabs refreshing simultaneously) and punishing that with full revocation made honest sessions flap.
+* Device binding is enforced at three layers (refresh row, JWT claim, per-request filter) so a token separated from its device fails at whichever layer it first touches.
+* Live KYC checking at every mint accepts one upstream round trip per token in exchange for a hard upper bound (one access-token TTL) on how long a de-activated client can keep transacting.
+* ES256 keeps tokens small and lets validation use only the public key, so components that verify never need signing material.
+* Single-purpose tokens share the issuer and validation machinery but are excluded from the access-token decoder by the `purpose` claim, avoiding a forked auth stack while preventing privilege crossover.
+
+== Limitations and future work
+
+* *There is no key rotation mechanism.* One keypair is loaded at startup; there is no second-key overlap, no consumer-facing JWKS endpoint, and rotating the key invalidates every outstanding token. Prod rotation would need dual-key support in `JwtConfig`.
+* *The device fingerprint is a client-generated value.* It is a UUID kept in browser localStorage. It proves continuity of a browser profile, not the identity of hardware, and an attacker who can read localStorage can clone it.
+* *Refresh rotation does not denylist old access tokens.* Logout denylists the access token, but after a rotation the prior access token remains valid until its natural expiry (up to 15 minutes).

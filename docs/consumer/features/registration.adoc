@@ -1,0 +1,117 @@
+= Registration
+
+== Purpose
+
+The registration module lets a person who already exists as a client in Fineract Core create consumer credentials on the BFF (backend-for-frontend, the Spring Boot service that sits between the Angular client and Fineract). The flow verifies that the applicant can prove ownership of an identity document already recorded on the Fineract client, sends a one-time password (OTP, a short code delivered out of band) to the applicant's email address, and, once the OTP is verified, binds a new BFF user account to that Fineract client.
+
+An important clarification: the module does not create a Fineract client. The Fineract client and its identity document must already exist in Fineract Core, for example created by back-office staff during onboarding. Registration provisions the BFF side of the relationship, a row in the BFF `users` table bound to the existing `client_id`. The Cucumber suite reflects this: its background step creates the Fineract client through the test harness before any registration call is made.
+
+The OTP verification is itself the second authentication factor. There is no enrolled authenticator such as TOTP; a fresh code is generated per challenge and nothing per-user secret is stored at rest beyond the transient hashed code.
+
+== Module layout
+
+The module lives at `consumer/src/main/java/org/apache/fineract/consumer/registration` and contains only a command side (CQRS, a convention in this codebase where state-changing "command" code and read-only "query" code are kept in separate sub-trees):
+
+* `command/api/RegistrationCommandController`: the three REST endpoints.
+* `command/service/RegistrationCommandService` and `RegistrationCommandServiceImpl`: orchestration.
+* `command/data/*`: request, command, and response records for each step.
+* `command/exception/IdentityNotVerifiedException`: 403 with code `error.msg.consumer.registration.identity.not.verified`.
+
+The module owns no repository, entity, or Liquibase changeset. It orchestrates two supporting modules, `identity` (document check against Fineract) and `user` (persistent account state), plus the shared OTP infrastructure component (`infrastructure.otp`, challenge issue and validation).
+
+== Flow step by step
+
+. *Submit identity.* `POST /api/v1/registration/submit` carries the Fineract client id, an email address, a password, and an identity document type name plus document key (for example a Passport number). `RegistrationCommandServiceImpl.submit`:
+.. Calls `IdentityQueryService.verifyIdentity`, which fetches the client's recorded identifiers from Fineract Core and compares document type name and normalized key (trimmed, dashes and spaces removed, upper-cased). A mismatch or an unknown client yields a generic `IdentityNotVerifiedException`; the response does not reveal which field failed.
+.. Hashes the password with the Spring Security `PasswordEncoder` and calls `UserCommandService.create`, which inserts a `users` row in status `PENDING_OTP`. Duplicate email or duplicate Fineract client id raises `UserAlreadyExistsException` (409).
+.. Returns the new user's public UUID as `registrationId`, status `PENDING_OTP`, and the masked last four characters of the matched document key.
+. *Send OTP.* `POST /api/v1/registration/otp/send` takes the `registrationId` and a `deliveryMethod` string. The service resolves the user, builds an `OtpDestination` (delivery method plus target address), and calls `OtpService.createOtp`. Only the `email` delivery method is implemented; any other value, including `sms`, is rejected with 400 `error.msg.consumer.otp.delivery.method.invalid`. The response returns the masked email address, the expiry timestamp, and the time to live in seconds. The code itself never appears in the response.
+. *Verify OTP.* `POST /api/v1/registration/otp/verify` takes the `registrationId` and the code. `OtpService.validateOtp` compares the SHA-256 hash of the submitted code with the stored hash and deletes the pending entry on success. The service then calls `UserCommandService.markOtpVerified`, which transitions the user from `PENDING_OTP` to `BOUND` and records `bound_at`. `BOUND` means the BFF account is now linked to the Fineract client and can log in. Verifying from any other state raises `InvalidBindingStateException` (409).
+
+== Endpoints
+
+All three endpoints are unauthenticated. `SecurityConfig` permits `/api/v1/registration/**` explicitly, and the bearer-token cookie resolver skips these paths so a stale session cookie cannot interfere. The device fingerprint header is not required because the `DeviceFingerprintFilter` only enforces binding for authenticated (JWT-bearing) requests.
+
+[cols="1,3,4,2", options="header"]
+|===
+|Method |Path |Purpose |Auth
+
+|POST
+|`/api/v1/registration/submit`
+|Verify identity document against the Fineract client and create a BFF user in `PENDING_OTP`. Returns 201 with `registrationId`, status, masked last four of the document key.
+|None (public)
+
+|POST
+|`/api/v1/registration/otp/send`
+|Issue and email a one-time code for the pending registration. Returns 201 with masked destination and expiry.
+|None (public)
+
+|POST
+|`/api/v1/registration/otp/verify`
+|Validate the code and advance the user to `BOUND`. Returns 200 with the new status.
+|None (public)
+|===
+
+Request validation on `submit` enforces a positive client id, a well-formed email, and the shared password policy (`PasswordPolicy` length and complexity pattern from the infrastructure package).
+
+== Collaborating modules and Fineract calls
+
+*Identity (`consumer.identity.query`).* `IdentityQueryServiceImpl` is the KYC piece for registration. It injects the generated `ClientIdentifierApi` (an interface generated from the Fineract OpenAPI spec and implemented by a Feign client, Feign being a declarative HTTP client) and calls `retrieveAllClientIdentifiers`, which maps to `GET /v1/clients/{clientId}/identifiers` on Fineract Core. This is the only Fineract call in the registration flow. A Fineract 404 is treated as "no identifiers", which surfaces as the same generic denial as a key mismatch. Any other Feign error becomes `IdentityVerificationException` (502), so an upstream outage is distinguishable from a failed check.
+
+*OTP (`consumer.infrastructure.otp`).* `OtpServiceImpl` generates a six-character code from digits and upper-case letters using `SecureRandom`, delivers it, and stores only its SHA-256 hash in Valkey (a Redis-compatible key-value store) under `otp:pending:{publicId}` with a 300 second TTL. `OtpDestination` is the channel abstraction: it carries a delivery method and a target, and `OtpConstants` defines both `email` and `sms` names, but `createOtp` only branches on `email` and delegates to `OtpEmailDeliveryService`, which sends a plain-text mail through `JavaMailSender` (Mailpit in the local Docker stack, institution SMTP in production per `application.properties`). There is no SMS implementation. OTP issue, failed validation, and attempts-exceeded outcomes are published as structured audit events (`OTP_CHALLENGE_ISSUED`, `OTP_VALIDATION_FAILED`, `OTP_ATTEMPTS_EXCEEDED`).
+
+*User (`consumer.user`).* `UserCommandService.create` and `markOtpVerified` own the persistent state. The `User` entity enforces the `PENDING_OTP` to `BOUND` transition. The registration module never touches the repository directly.
+
+== Data model
+
+The registration module owns no tables. The state it creates lives in the `user` module's table (Liquibase changeset `db/changelog/user/001-create-users-table.yaml`) and in transient Valkey keys owned by the OTP infrastructure component (`infrastructure.otp`).
+
+[cols="1,3,4", options="header"]
+|===
+|Store |Name |Contents relevant to registration
+
+|PostgreSQL
+|`users`
+|`id` (internal PK), `public_id` (UUID exposed as `registrationId`), `email` (unique), `password_hash`, `client_id` (Fineract client id, unique), `status` (Postgres enum `user_status`: `PENDING_OTP`, `BOUND`), `bound_at`, `created_at`, `updated_at`.
+
+|Valkey
+|`otp:pending:{publicId}`
+|SHA-256 hash of the outstanding code, TTL 300 seconds.
+
+|Valkey
+|`otp:attempts:{publicId}`
+|Failed validation counter, expires with the same TTL.
+|===
+
+== Failure and abuse handling
+
+* *OTP expiry.* The pending hash lives for `OtpConstants.OTP_TTL_SECONDS` (300 seconds). After expiry the key is gone and validation fails with 400 `error.msg.consumer.otp.invalid`.
+* *Retry limit.* Each failed validation increments `otp:attempts:{publicId}`. On the fifth failure (`MAX_OTP_VALIDATION_ATTEMPTS = 5`) the pending code is deleted, so further attempts fail even with the correct code, and an `OTP_ATTEMPTS_EXCEEDED` audit event is published.
+* *Replay.* Successful validation deletes the pending key, so replaying a consumed code fails. Covered by a dedicated Cucumber scenario.
+* *Duplicate registration.* `UserCommandService.create` checks email and Fineract client id up front and also catches the database unique-constraint violation, returning 409 `error.msg.consumer.user.already.exists` in all three cases. A Fineract client can therefore be bound to at most one BFF user, and an email to at most one account.
+* *Enumeration resistance.* Identity denial is a single generic 403 regardless of whether the client id, document type, or document key was wrong. The Cucumber suite asserts that the rejection does not reveal which field failed.
+* *Secret handling.* Codes are hashed with SHA-256 before storage, never logged, and never returned in responses. Document keys are only echoed as the last four characters. Request records use `@ToString(onlyExplicitlyIncluded = true)` so passwords and document keys do not leak into logs through accidental `toString` calls.
+* *Rate limiting.* The infrastructure `RateLimitFilter` keys its per-user bucket on the JWT subject. Registration requests are unauthenticated, so the filter passes them through unlimited; per-IP throttling is delegated to an upstream edge by design. The OTP attempt counter is the only registration-specific abuse control in the BFF.
+* *Delivery failure.* A mail-server error surfaces as 502 `error.msg.consumer.otp.delivery.failed` rather than a silent success.
+
+== Testing
+
+* *Cucumber.* `consumer/src/test/resources/features/registration.feature` with glue in `org.apache.fineract.consumer.cucumber.steps.RegistrationSteps` and `cucumber.helpers.RegistrationHelper`. Scenarios: the happy path through `BOUND` (retrieving the real code from Mailpit), mismatched identifier denial without field disclosure, replay of a consumed OTP, wrong OTP, duplicate email, and duplicate Fineract client.
+* *Unit tests.* `OtpServiceImplTest` and `OtpRepositoryTest` cover code generation, hashing, attempt counting, and Valkey key handling. `UserCommandServiceImplTest` and `UserTest` cover user creation, duplicate detection, and the `PENDING_OTP` to `BOUND` transition.
+* `RegistrationCommandServiceImpl` and `IdentityQueryServiceImpl` are exercised end to end through the Cucumber suite.
+* *Playwright.* `frontend/playwright/tests/registration.spec.ts` walks the three registration screens (identity, OTP, success) in a real browser against stubbed BFF responses (the spec intercepts all three registration endpoints) and asserts that neither the OTP code nor the document key is persisted to `localStorage` or `sessionStorage`.
+
+== Design rationale
+
+* *Bind, do not create.* Requiring a pre-existing Fineract client with a recorded identity document means the institution controls who may register, and the BFF never writes client data into Fineract during self-registration. Knowledge of the document key acts as the proof of ownership.
+* *OTP as the second factor.* Mirroring upstream Fineract's two-factor model, each challenge generates a fresh code and nothing per-user is enrolled. The verify step is a single service call (`OtpService.validateOtp`), so a WebAuthn factor could be added later without schema changes.
+* *Orchestrator over owner.* Keeping user rows in `consumer.user` and codes in `infrastructure.otp` lets other flows (login two-factor, password change step-up, password reset) reuse the same OTP service and the same account state instead of forking them.
+* *Hash-only, TTL-only OTP storage.* Storing a SHA-256 hash in Valkey with automatic expiry means a database or cache dump never contains a usable code and expired state cleans itself up.
+* *Generic denials.* Returning one indistinguishable 403 for every identity mismatch prevents an attacker from confirming which client ids or document values exist.
+
+== Limitations and future work
+
+* *SMS delivery is not implemented.* `OtpConstants` names an `sms` method and `OtpDestination` is channel-neutral, but `OtpServiceImpl.createOtp` only handles `email` and rejects everything else. The abstraction point exists; the SMS provider integration does not.
+* *Per-IP throttling is an edge concern.* The per-user rate limit filter keys on the authenticated JWT subject, so it does not cover the public registration endpoints; production providers supply per-IP throttling and DDoS protection at their edge, which is not part of the dev stack.
+* *No expiry or cleanup for abandoned `PENDING_OTP` users.* A submitted registration that never verifies keeps its email and Fineract client id reserved indefinitely; there is no re-submit path to correct a typo in the email address.
+* *Identity verification is equality matching, not a KYC provider.* The check compares strings against identifiers already stored in Fineract. There is no pluggable external verifier, no per-region document validation, and the document key is compared in plain form rather than through an encrypted-at-rest verifier port.

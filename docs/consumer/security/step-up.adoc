@@ -1,0 +1,109 @@
+[[step-up]]
+= Step-Up Authentication
+
+Step-up authentication means re-proving your identity with a fresh factor immediately before a sensitive action, even though you already hold a valid session. A logged-in user can browse balances with only their access token, but moving money or changing credentials requires proving, right then, that they still control the second factor (an emailed one-time password) and the same device.
+
+The mechanism lives in `org.apache.fineract.consumer.infrastructure.stepup`: `StepUpTokenService` (`service/`) and `StepUpConstants` (`data/`). It builds entirely on the JWT and OTP infrastructure described in xref:tokens[Token Model]; there is no separate step-up store.
+
+== Actions that require step-up
+
+Each protected action is a two-step endpoint pair: an initiate call that issues the challenge and a confirm call that must present the proof.
+
+|===
+|Action |Initiate |Confirm |Denial exception (all 401)
+
+|Transfer execution
+|`POST /api/v1/transfers/initiate`
+|`POST /api/v1/transfers/confirm`
+|`TransferStepUpInvalidException`, code `error.msg.consumer.transfers.command.stepup.invalid`
+
+|Add beneficiary
+|`POST /api/v1/beneficiaries/initiate`
+|`POST /api/v1/beneficiaries/confirm`
+|`BeneficiaryStepUpInvalidException`, code `error.msg.consumer.beneficiaries.command.stepup.invalid`
+
+|Update beneficiary
+|`PUT /api/v1/beneficiaries/{publicId}/initiate`
+|`PUT /api/v1/beneficiaries/{publicId}/confirm`
+|`BeneficiaryStepUpInvalidException`, code `error.msg.consumer.beneficiaries.command.stepup.invalid`
+
+|Password change (logged in)
+|`POST /api/v1/user/password/change/initiate`
+|`POST /api/v1/user/password/change/confirm`
+|`UserStepUpInvalidException`, code `error.msg.consumer.user.stepup.invalid`
+|===
+
+Beneficiary deletion (`DELETE /api/v1/beneficiaries/{publicId}`) and the logged-out password reset flow do not use step-up. Password reset relies on the emailed OTP alone, since there is no session to elevate.
+
+== Issuing a challenge
+
+The initiate endpoint, running under a normal authenticated session, does three things (see `TransfersCommandServiceImpl.initiate` for the canonical example):
+
+. Runs the ABAC authorization for the action (`AccessPolicyEvaluator.authorize`), so a user who could never perform the action is refused before any challenge is created.
+. Creates an OTP through the shared `OtpService` (in `org.apache.fineract.consumer.infrastructure.otp`). This is the same OTP capability used by login 2FA and registration: a random code emailed to the user, stored only as a SHA-256 hash in Valkey with a 300-second TTL (`OtpConstants.OTP_TTL_SECONDS`) and a limit of 5 validation attempts (`OtpConstants.MAX_OTP_VALIDATION_ATTEMPTS`). One pending OTP exists per user at a time; issuing a new one replaces the previous one.
+. Computes an action fingerprint and mints a step-up token bound to it.
+
+The action fingerprint is a SHA-256 hex hash of a canonical string describing exactly what was approved. `StepUpTokenService.actionFingerprint` joins an action identifier and its parameters with `|`, for example endpoint, source account, destination account, destination type, and the amount normalized with `stripTrailingZeros`. Action identifiers in use: `/api/v1/transfers`, `beneficiaries:add`, `beneficiaries:update`, and `/api/v1/user/password/change`.
+
+`StepUpTokenService.issue` then mints a JWT through the shared `JwtIssuer` with:
+
+|===
+|Claim |Value
+
+|`sub`
+|The user's public UUID
+
+|`purpose`
+|`stepup` (`StepUpConstants.STEPUP_PURPOSE_VALUE`)
+
+|`device_fingerprint`
+|The caller's `X-Device-Fingerprint` header value
+
+|`action_fingerprint`
+|The hash described above
+
+|`exp`
+|Issue time plus 5 minutes (`StepUpConstants.STEPUP_TTL`)
+|===
+
+The initiate response body returns the step-up token, its expiry, and the masked email the OTP was sent to. The token travels in the body, not a cookie, because it is a short-lived, single-action credential the client must explicitly present back.
+
+== How the elevated state is represented
+
+The elevated state is the step-up token itself. There is no claim added to the access token, no server-side session flag, and no cache entry recording "user X is elevated". The only server-side state involved is the pending OTP hash in Valkey. Elevation is therefore:
+
+* Stateless: possession of a valid step-up JWT plus the matching OTP is the entire proof.
+* Scoped to one action with one exact parameter set, via `action_fingerprint`.
+* Scoped to one device, via `device_fingerprint`.
+* Time-boxed to 5 minutes.
+
+Because the token carries the `purpose` claim, the consumer resource server's access-token decoder rejects it outright (see xref:tokens[Token Model]), so a step-up token can never be replayed as a session credential.
+
+== Verifying at confirm time
+
+The confirm endpoint receives the step-up token, the OTP, and the action parameters again, and the service performs, in order:
+
+. Recomputes the action fingerprint from the parameters actually submitted to confirm.
+. Calls `StepUpTokenService.verify`, which decodes the token with the primary `JwtDecoder` (signature, expiry, issuer) and requires all of: `purpose` equals `stepup`, `sub` equals the current session's subject, `device_fingerprint` equals the header on the confirm request, and `action_fingerprint` equals the recomputed hash. Any decode failure or mismatch returns false; the caller throws the feature's step-up exception.
+. Validates the OTP through `OtpService.validateOtp`. A successful validation deletes the pending OTP, so the OTP is single use even though the token is not.
+. Re-runs the ABAC authorization for the action, then executes it.
+
+If the client changes any parameter between initiate and confirm (a different amount, a different destination account), the recomputed fingerprint no longer matches the claim and verification fails. The user must start over, which regenerates both the OTP and the token.
+
+== Denial behavior
+
+All failure modes converge on the feature's step-up exception, an `AbstractConsumerException` with HTTP status 401 and the machine-readable codes listed in the table above. The same exception covers a malformed or expired token, a subject, device, or action mismatch, and a wrong OTP, so a response does not reveal which check failed. After 5 wrong OTP attempts the pending OTP is deleted and the flow must be re-initiated; OTP expiry (300 seconds) or step-up token expiry (5 minutes) likewise force a fresh initiate. A failed confirm never touches the caller's session: the access and refresh tokens remain valid, and only the step-up flow itself is rejected. Failed OTP validations are published as audit events by the OTP service.
+
+== Design rationale
+
+* Reusing the OTP capability and `JwtIssuer` instead of a parallel mechanism keeps one hashing, delivery, TTL, and audit path for all one-time codes, and one signing key for all tokens.
+* Binding the token to a hash of the exact parameters turns "the user approved a transfer" into "the user approved this transfer", closing the gap where a confirm request could be tampered with after the challenge was solved.
+* Statelessness means no elevation table to expire or replicate; the guarantees are enforced by signature verification alone, which also works unchanged across multiple BFF replicas.
+* Requiring both the token and the OTP at confirm separates what the session holds (the token, obtainable by anyone with the session) from what only the real user holds (the code in their inbox).
+* Re-running the ABAC check at confirm, not just at initiate, means a permission revoked mid-challenge still blocks the action.
+
+== Limitations and future work
+
+* *The step-up token is not single use.* Only the OTP is consumed. Within the 5-minute window a token could be verified more than once; in practice each confirm also demands the OTP, which is deleted on first success, so a full replay needs a fresh initiate. There is no denylist entry written for a consumed step-up token.
+* *Concurrent step-up flows clobber each other.* One pending OTP per user means initiating a transfer challenge invalidates a pending beneficiary challenge's OTP, and the login 2FA OTP shares the same slot.
+* *Email is the only OTP channel.* An SMS delivery channel would be an addition to the OTP infrastructure package (`infrastructure.otp`).

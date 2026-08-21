@@ -1,0 +1,58 @@
+[[state-management]]
+= State Management
+
+== The signal-store pattern
+
+There is no state-management library (no NgRx, no component store). Each feature holds its state in a small hand-written store: an `@Injectable({ providedIn: 'root' })` service that exposes signals (Angular's reactive state primitive: a value container that notifies the template when the value changes) plus methods that call the generated `@bff/client` services. The contract between the layers is as follows:
+
+* Components never call the generated client directly; they inject the store.
+* Read data flows one way: a store method calls the generated client over HTTP, the response is written into a signal with `.set()`, and the template re-renders because it reads the signal.
+* Query methods (`load...`) are fire-and-forget `void` methods; the store subscribes internally and the component just reads the resulting signals.
+* Mutation methods (`initiate`, `confirm`, `submit`, ...) return the `Observable` (an RxJS stream that emits the HTTP response) so the calling component can subscribe and drive its own step transitions (for example advancing a form to the OTP step).
+
+== Worked example: transfers
+
+The transfer flow shows the whole chain end to end.
+
+. *Route.* `/transfers/new` lazy-loads `features/transfers/transfer-form.component.ts` (see xref:overview[Architecture Overview]).
+. *Component.* `TransferFormComponent` injects `TransfersStore` (plus `SavingsStore` and `BeneficiariesStore` to populate the account dropdowns). Submitting the form calls `store.initiate({...})` and subscribes; on success it flips a local `step` signal from `'form'` to `'otp'`.
+. *Store.* `features/transfers/transfers.store.ts` calls the generated `TransfersCommandControllerService.initiateTransfer(deviceFingerprint(), request)` and `tap`s the response into its `challenge` signal (the OTP challenge, including where the code was sent).
+. *Generated client.* The `@bff/client` service issues `POST /api/v1/transfers/initiate` with typed request and response DTOs; the interceptor chain adds the device-fingerprint header (see xref:bff-integration[BFF Integration]).
+. *Signal to template.* The OTP step reads `store.challenge()?.sentTo` directly in the template. Confirming calls `store.confirm(idempotencyKey, {...})`, which sets the `result` signal and clears `challenge`; the `'done'` step renders `store.result()` fields.
+. *List screen.* `/transfers` (`transfer.component.ts`) calls `store.loadHistory(page, size)` in its constructor. The store writes the page of `TransferQueryData` rows, plus the `historyPage` and `historyTotalPages` counters, into signals that the template's table and pager read.
+
+== Store inventory
+
+[cols="1,2,3", options="header"]
+|===
+|Store |File (under `frontend/src/app/features/`) |State held (signals)
+
+|`SummaryStore` |`summary/summary.store.ts` |Aggregated savings and loan cards for the dashboard; `loading`.
+|`SavingsStore` |`savings/savings.store.ts` |Account list, selected account, charges, paginated transactions (+ page/size/total counters), selected transaction, application template; `loading`.
+|`LoansStore` |`loans/loans.store.ts` |Loan list, selected loan, charges, guarantors, obligees, paginated transactions, selected transaction, application template, schedule preview, draft application; `loading`.
+|`TransfersStore` |`transfers/transfers.store.ts` |OTP challenge, transfer result, paginated history; `historyLoading`.
+|`BeneficiariesStore` |`beneficiaries/beneficiaries.store.ts` |Beneficiary list, OTP challenge for add/update.
+|`ProfileStore` |`profile/profile.store.ts` |User profile, charges (+ total), profile image; `loading`.
+|`SettingsStore` |`settings/settings.store.ts` |Password-change OTP challenge, open banking consents.
+|`DemoStore` |`demo/demo.store.ts` |Client-side audit events queried back from the BFF; `loading`.
+|===
+
+Three features have no store. `auth` keeps its session state in the core `AuthService` (see below). `registration/registration.service.ts` is a stateless pass-through to the generated registration client (submit identity, send OTP, verify OTP), because the multi-step wizard state lives entirely in the component. `consent` has neither store nor service; its component reads query parameters and posts native HTML forms straight to the BFF, so it makes no `@bff/client` call at all.
+
+== Conventions
+
+*Loading signals.* Stores whose screens fetch on entry expose a boolean `loading` signal (named `historyLoading` in `TransfersStore`). Load methods clear the data signal, set `loading` to `true`, and reset it in both the `next` and `error` callbacks. Templates bind it to an indeterminate `ion-progress-bar`; the shell shows the same bar for route transitions. Mutation flows track their in-flight state in a component-local `loading` signal instead, since the button being disabled is a per-screen concern.
+
+*No error signals.* Stores deliberately hold no error state. A failed call surfaces globally: the `errorInterceptor` translates the BFF's `ConsumerApiError` code into a toast (see xref:bff-integration[BFF Integration]), and the store's `error` callback only resets `loading`. This keeps every screen's failure behavior identical without per-store plumbing.
+
+*Idempotency keys.* Money-moving and application-mutating calls (`confirmTransfer`, loan submit/modify/withdraw, loan repayment) carry an idempotency key so a retried request cannot execute twice on the BFF. The component owns the key. It lazily generates one with `crypto.randomUUID()` on first submit (`this.idempotencyKey ??= crypto.randomUUID()`) and reuses it on retries. It resets the key to `null` whenever the form value changes, because a changed form is a new operation, and clears it after success.
+
+*Refresh on init.* List screens re-fetch in their constructor (`loadAccounts()`, `loadHistory(0, size)`, ...) rather than caching across navigations. Stores clear the previous data signal at the start of each load so stale rows never flash. Pagination state (page, size, total elements, total pages) lives in the store next to the rows, mirroring the BFF's page-response shape.
+
+*Subscription cleanup.* Every internal subscription is piped through `takeUntilDestroyed(this.destroyRef)` (an RxJS operator that unsubscribes automatically when the injecting component or service is destroyed), so neither stores nor components manage subscriptions by hand.
+
+== The AuthService exception
+
+`core/auth/auth.service.ts` is intentionally not shaped like the feature stores, because the frontend never possesses the tokens. Both the access token and refresh token live in httpOnly cookies (cookies the browser attaches automatically but JavaScript cannot read), so there is nothing token-like to put in a signal. The service holds exactly one piece of state: a private `sessionExpiresAt` signal set from the BFF's session response, with `isAuthenticated` as a `computed` over it. That computed value is what `authGuard` checks.
+
+Its methods (`login`, `verifyTwoFactor`, `refresh`, `logout`) call the generated authentication client; the first three pass the device fingerprint as a typed parameter, while `logout` relies on the header the HTTP interceptor sets. `refresh()` additionally de-duplicates concurrent callers. An in-flight refresh is shared via `shareReplay(1)` and cleared in `finalize`, so the app initializer and the 401-retry path in the error interceptor never race two refresh requests. See `docs/consumer/security/` for the server side of this model.

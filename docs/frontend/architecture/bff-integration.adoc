@@ -1,0 +1,86 @@
+[[bff-integration]]
+= BFF Integration
+
+== The generated client
+
+All HTTP traffic to the BFF goes through a machine-generated TypeScript client in `frontend/src/openapi-client/`, imported everywhere as `@bff/client` (a path alias mapped in `frontend/tsconfig.json`). It is organized as follows:
+
+* `api/` holds one Angular service per BFF controller (for example `savingsQueryController.service.ts`, `transfersCommandController.service.ts`), each extending the generated `BaseService` in `api.base.service.ts` and paired with a `*.serviceInterface.ts`. Method signatures are typed end to end: path, query, and header parameters plus the response DTO.
+* `model/` holds one TypeScript interface per BFF DTO (`SavingsAccountQueryData`, `ConfirmTransferCommandRequest`, ...), with camelCased property names.
+* `configuration.ts` defines the `Configuration` class holding the base path; the app provides it with `basePath: ''` so every request is relative (`/api/v1/...`).
+* `index.ts`, `encoder.ts`, `param.ts`, and `variables.ts` are plumbing. A generated `api.module.ts` also exists, but the app never imports it (services are `providedIn: 'root'`).
+
+Because the client is generated, a BFF contract change shows up as a TypeScript compile error rather than a runtime surprise. One type is hand-written instead: `src/app/api/consumer-api-error.ts` defines the `ConsumerApiError` envelope (`code`, `defaultMessage`) that the BFF returns on failures. The envelope only ever appears as an error body, never as a declared response schema, so the generator does not emit it.
+
+== How the client is generated
+
+The generator runs on the BFF side, in `consumer/build.gradle`. The `generateTypescriptClient` task depends on the `openapi` task, which scrapes the spec from the running BFF at `/v3/api-docs` into `build/openapi/openapi.json`. It then runs OpenAPI Generator (`typescript-angular`) over that spec and writes into `frontend/src/openapi-client` with `npmName: '@bff/client'`, `withInterfaces`, `providedInRoot`, and `modelPropertyNaming: camelCase`. The frontend wraps it as an npm script:
+
+[source,bash]
+----
+cd frontend
+npm run generate:client   # runs ../consumer's ./gradlew generateTypescriptClient
+----
+
+Two operational rules follow from that design:
+
+* The Docker stack must be up, because the spec is scraped from the live application.
+* Delete the old output first (`rm -rf frontend/src/openapi-client`), because the generator does not remove files for endpoints that no longer exist; stale services would otherwise linger. The directory is generated output, so a failed run is fixed by re-running.
+
+The `e2e:docker:up` npm script regenerates the client automatically after bringing up the backend, before building the frontend image. See `docs/consumer/architecture/technology.adoc` for the full client-generation pipeline (the Java test client is generated from the same spec).
+
+== Dependency-injection wiring
+
+`src/app/app.config.ts` wires the client into Angular's dependency injection:
+
+* `{ provide: Configuration, useValue: new Configuration({ basePath: '' }) }` overrides the generated default (`http://localhost:8080` in `BaseService`) so all requests use relative URLs and inherit whatever origin served the app.
+* `provideHttpClient(withInterceptors([errorInterceptor, authInterceptor]))` registers the two functional interceptors (plain functions that wrap every HTTP request, replacing the older class-based interceptor style).
+
+== The interceptor chain
+
+Interceptors run in registration order on the way out and reverse order on the way back, so `errorInterceptor` wraps `authInterceptor`. The fingerprint header is added last before the request leaves, and errors bubbling back pass through `errorInterceptor` last, where they are handled once for the whole app.
+
+`core/interceptors/auth.interceptor.ts` is minimal: for requests whose URL starts with `/api`, it clones the request and sets the `X-Device-Fingerprint` header from `deviceFingerprint()` (a per-browser UUID persisted in `localStorage`). It does not attach an `Authorization` header, because the access token travels in an httpOnly cookie that the browser attaches itself. The BFF verifies the header against the fingerprint claim baked into the token.
+
+`core/interceptors/error.interceptor.ts` centralizes failure handling. In order:
+
+[cols="2,3", options="header"]
+|===
+|Condition |Behavior
+
+|Request was to the audit endpoint or the refresh endpoint
+|Rethrow untouched (prevents toast/refresh loops).
+
+|`403` with `ConsumerApiError` code `error.msg.consumer.auth.device.fingerprint.forbidden`
+|Device mismatch: record an `API_FAILURE` audit event, clear the session, navigate to `/login`.
+
+|`401` without a `ConsumerApiError` code (an expired access token, not a policy denial)
+|Call `AuthService.refresh()` and transparently retry the original request once. If the retry still fails with `401`/`403`, clear the session and navigate to `/login`; a `429` on retry shows the rate-limit toast.
+
+|`429`
+|Record `API_FAILURE` and show the translated rate-limited toast.
+
+|Anything else
+|Record `API_FAILURE` and show a toast: the `ConsumerApiError` `code` is looked up in the i18n catalog; if untranslated, the server's `defaultMessage` is shown; failing that, a generic error message.
+|===
+
+The `API_FAILURE` audit events record only a templated endpoint path (numeric and UUID segments replaced with `:id`) and the status code, never request or response bodies. This interceptor is why feature stores hold no error state (see xref:state-management[State Management]).
+
+== Base path resolution per environment
+
+Since the client's base path is `''`, requests go to `/api/...` on the current origin, and each environment routes that to the BFF:
+
+[cols="1,2,3", options="header"]
+|===
+|Environment |Origin |How `/api` reaches the BFF
+
+|Dev server (`ng serve`)
+|`http://localhost:4200`
+|`frontend/proxy.conf.json` (wired via `proxyConfig` in `angular.json`) forwards `/api` to `http://localhost:8080`.
+
+|Containerized stack (e2e / demo)
+|`http://localhost:4443`
+|`frontend/nginx.conf` in the frontend image proxies `location /api/` to `http://bff:8080/api/`, adding `X-Forwarded-*` headers; every other path falls through to the static Angular bundle (`try_files ... /index.html`).
+|===
+
+Relative URLs keep the httpOnly auth cookies same-origin in both setups: the browser never makes a cross-origin call, so no CORS configuration is needed on the BFF for the app itself.
