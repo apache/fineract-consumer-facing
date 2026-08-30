@@ -19,5 +19,8 @@
 
 rootProject.name = 'consumer'
 
-include ':docs'
-project(':docs').projectDir = new File(settingsDir, '../docs')
+def docsDir = new File(settingsDir, '../docs')
+if (docsDir.directory) {
+    include ':docs'
+    project(':docs').projectDir = docsDir
+}
