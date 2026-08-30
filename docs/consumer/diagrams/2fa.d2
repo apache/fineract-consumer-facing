@@ -1,0 +1,75 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+vars: {
+  d2-config: {
+    sketch: true
+    theme-id: 4
+    center: true
+    pad: 20
+  }
+}
+
+*.style.font-size: 20
+flow.*.style.font-size: 20
+(** -> **)[*].style.font-size: 18
+(** -> **)[*].style.stroke-width: 2
+
+title: "Two-Factor Login — Password + Email Code" {
+  near: top-center
+  shape: text
+  style.font-size: 28
+  style.bold: true
+}
+
+flow: "" {
+  shape: sequence_diagram
+
+  user: "User" {shape: person}
+  app: "App"
+  bff: "Backend"
+  email: "Email"
+  fineract: "Fineract"
+
+  s1: "1 — Something you know" {
+    user -> app: "email + password"
+    app -> bff: "login"
+    bff -> bff: "verify password"
+    bff -> email: "send\none-time code"
+    bff -> app: "challenge token\n(short-lived, single use)"
+  }
+
+  s2: "2 — Something you have" {
+    email -> user: "code arrives\nin inbox"
+    user -> app: "enter code"
+    app -> bff: "verify code +\nchallenge token"
+    bff -> bff: "code valid?\ndevice matches?"
+  }
+
+  s3: "3 — Session" {
+    bff -> fineract: "customer in\ngood standing?"
+    bff -> app: "secure cookies:\nshort-lived access\nlonger-lived refresh"
+    app -> user: "dashboard"
+  }
+}
+
+note: "Wrong password and wrong code look identical to an attacker.\nThe challenge token can never be used to call real APIs." {
+  near: bottom-center
+  shape: text
+  style.font-size: 16
+  style.italic: true
+}

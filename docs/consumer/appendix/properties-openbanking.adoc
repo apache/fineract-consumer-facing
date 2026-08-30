@@ -31,3 +31,5 @@ Settings for the in-process OAuth2 authorization server that issues consent-scop
 |bff-es256
 |Key id (`kid`) published in the JWKS document and stamped into open-banking token headers, so TPPs can pick the right verification key.
 |===
+
+WARNING: The JWKS document publishes exactly one key, with no rotation overlap. Rotating the signing keypair immediately invalidates every outstanding open-banking access token; TPPs recover through the refresh grant. If the private key is ever compromised, rotate it immediately: anyone holding it can mint tokens the BFF will accept. Always change `consumer.oauth2.kid` together with the key, so TPPs that cached the old JWKS see an unfamiliar `kid` and re-fetch the document instead of failing against the stale key. See the key management limitations in xref:tokens[Tokens].

@@ -43,9 +43,9 @@ Within the BFF, code is packaged by feature (bounded context), not by layer: `au
 == Runtime topology
 
 .Local stack: containers, ports, and who talks to whom
-[plantuml,format=svg]
+[d2,format=svg]
 ----
-include::{diagramsdir}/runtime-topology.puml[]
+include::{diagramsdir}/runtime-topology.d2[]
 ----
 
 The local stack is defined in `consumer/compose.yaml`. Docker Compose (a tool that starts a set of containers with one command) brings up:

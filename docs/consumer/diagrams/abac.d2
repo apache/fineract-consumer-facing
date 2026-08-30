@@ -1,0 +1,98 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+vars: {
+  d2-config: {
+    sketch: true
+    theme-id: 4
+    layout-engine: dagre
+    center: true
+    pad: 20
+  }
+}
+
+direction: right
+
+*.style.font-size: 20
+*.style.stroke-width: 2
+bff.*.style.font-size: 20
+bff.*.style.stroke-width: 2
+(** -> **)[*].style.font-size: 18
+(** -> **)[*].style.stroke-width: 2
+
+title: "ABAC — Who can do what?" {
+  near: top-center
+  shape: text
+  style.font-size: 28
+  style.bold: true
+}
+
+user: Customer {shape: person}
+
+app: "Banking App\n(Angular)"
+
+bff: "Consumer Backend (BFF)" {
+  grid-columns: 1
+  grid-gap: 70
+  abac: "ABAC Guard\n\n1. Action allowed by policy?\n2. Right scope in token?\n3. KYC verified?\n4. Do you own this account?"
+  l1: "L1 Cache\nin-memory · short TTL" {shape: cylinder}
+}
+
+core: "" {
+  style.stroke: transparent
+  style.fill: transparent
+  grid-columns: 1
+  grid-gap: 90
+
+  fineract: "Fineract\nCore Banking" {shape: cylinder}
+
+  l2: "L2 Cache\nValkey (shared) · longer TTL" {shape: cylinder}
+}
+
+audit: "Audit Log" {
+  shape: cylinder
+  style.fill: "#d5b8e8"
+  style.stroke: "#6a4b8a"
+}
+
+user -> app
+app -> bff: {style.opacity: 0}
+app -> bff.abac: "request"
+
+bff.abac -> bff.l1: "owns account?\ncheck L1 first"
+bff -> core: {style.opacity: 0}
+bff -> audit: {style.opacity: 0}
+
+bff.l1 -> core.l2: "miss? ask L2" {style.stroke-dash: 3}
+core.l2 -> core.fineract: "miss? fetch\nowned accounts,\nfill both caches" {style.stroke-dash: 3}
+
+bff.abac -> core.fineract: "ALLOW —\nforward\nrequest" {
+  style.stroke: "#2e7d32"
+  style.font-color: "#2e7d32"
+  style.bold: true
+}
+bff.abac -> audit: "DENY — 403\n+ log the reason" {
+  style.stroke: "#c62828"
+  style.font-color: "#c62828"
+}
+
+note: "Account ownership changes evict both caches immediately" {
+  near: bottom-center
+  shape: text
+  style.font-size: 16
+  style.italic: true
+}
