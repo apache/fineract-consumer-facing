@@ -1,0 +1,29 @@
+= Database Properties
+
+Connection settings for the BFF's own PostgreSQL database (`bff-db` in the compose stack). All schema changes ship as Liquibase changelogs under `consumer/src/main/resources/db/changelog/`; Liquibase runs automatically at startup with Spring Boot's default settings, so it has no dedicated properties here.
+
+.Database Properties
+[cols="4,2,2,6"]
+|===
+|Name |Env Variable |Default Value |Description
+
+|spring.datasource.url
+|SPRING_DATASOURCE_URL
+|jdbc:postgresql://localhost:5432/consumerapp
+|JDBC URL of the BFF's PostgreSQL database.
+
+|spring.datasource.username
+|SPRING_DATASOURCE_USERNAME
+|consumerapp
+|Database login user for the BFF.
+
+|spring.datasource.password
+|SPRING_DATASOURCE_PASSWORD
+|(secret; dev default in compose.yaml)
+|Database login password for the BFF.
+
+|spring.jpa.hibernate.ddl-auto
+|-
+|validate
+|Hibernate only validates that the existing schema matches the JPA entities at startup; it never creates or alters tables; that is Liquibase's job.
+|===

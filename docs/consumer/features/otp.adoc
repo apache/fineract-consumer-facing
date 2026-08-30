@@ -1,0 +1,152 @@
+= One-Time Passwords
+
+[NOTE]
+====
+The OTP code is not a feature module. It lives in the `infrastructure` module at `consumer.infrastructure.otp`. This section is kept in the features chapter for discoverability; the code it describes is infrastructure.
+====
+
+== Purpose
+
+The OTP capability issues and verifies one-time passwords (OTP, a short code delivered out of band and valid for a single use). It is a supporting capability, not a user-facing feature: it exposes no REST controllers and owns no endpoint. Feature modules call its service whenever a flow needs proof that the caller controls the registered email address. Five modules depend on it: registration (binding a new BFF account), authentication (the second factor at login), user (password change and password reset), transfers (step-up confirmation before moving money), and beneficiaries (step-up confirmation before adding or updating a payee).
+
+The OTP is the codebase's only challenge factor. There is no enrolled authenticator such as TOTP; a fresh code is generated per challenge and nothing per-user secret persists beyond the transient hashed code.
+
+== Code layout
+
+The code lives at `consumer/src/main/java/org/apache/fineract/consumer/infrastructure/otp`. As an infrastructure sub-package it has no CQRS `command/` or `query/` split (infrastructure is side-agnostic); it follows the infrastructure convention of `data/` for value objects and constants, `service/` for behavior:
+
+* `service/OtpService` and `OtpServiceImpl`: the public contract, `createOtp` and two `validateOtp` overloads.
+* `service/OtpEmailDeliveryService`: sends the code by email through `JavaMailSender` (Spring's SMTP client abstraction).
+* `data/OtpConstants`, `OtpDestination`, `OtpMetadata`, `PendingOtp`: constants and value objects.
+* `repository/OtpRepository`: Valkey (a Redis-compatible key-value store) persistence via `StringRedisTemplate`.
+* `exception/*`: `OtpTokenInvalidException` (400, `error.msg.consumer.otp.invalid`), `OtpDestinationInvalidException` (400, `error.msg.consumer.otp.delivery.method.invalid`), `OtpDeliveryFailedException` (502, `error.msg.consumer.otp.delivery.failed`).
+
+== Generation, hashing, and storage
+
+`OtpServiceImpl.createOtp` generates a six-character code drawn from a 36-character alphabet (digits `0-9` and upper-case `A-Z`) using a shared `SecureRandom` instance. The raw code is handed to the delivery service and then discarded; only its hash is stored.
+
+The hash is an unsalted SHA-256 digest of the upper-cased code, hex-encoded. Upper-casing before hashing makes validation case-insensitive, so a user may type `a1b2c3` for a delivered `A1B2C3`. There is no salt or keyed MAC; see the limitations section.
+
+Storage is Valkey only. The OTP code owns no Liquibase changeset and no PostgreSQL table.
+
+[cols="2,4,1", options="header"]
+|===
+|Valkey key |Contents |TTL
+
+|`otp:pending:{publicId}`
+|SHA-256 hex hash of the outstanding code. Written by `savePendingOtp`, which first deletes the attempts counter, so re-issuing a code resets the failure count.
+|300 s
+
+|`otp:attempts:{publicId}`
+|Failed-validation counter, incremented per wrong code. The TTL is set when the counter first reaches 1.
+|300 s
+|===
+
+`{publicId}` is the user's public UUID. Because the key is per user rather than per flow, a user has at most one pending OTP at a time: issuing a transfer step-up code silently replaces a pending login code for the same user.
+
+== Verification, TTL, and attempt limits
+
+`validateOtp(publicId, token)` fetches the stored hash, hashes the submitted token, and compares. On success it deletes both keys, making every code single use; the Cucumber suites assert that replaying a verified code is rejected. On failure:
+
+* If a pending hash exists, the attempts counter is incremented. At `MAX_OTP_VALIDATION_ATTEMPTS` (5) failures both keys are deleted, so the pending code is burned and the caller must request a new one.
+* The failure is published as an audit event: `OTP_ATTEMPTS_EXCEEDED` when the cap is hit, otherwise `OTP_VALIDATION_FAILED`. Successful issue publishes `OTP_CHALLENGE_ISSUED`. Event details carry only the user's public UUID, never the code.
+* The supplied exception is thrown. The default overload throws `OtpTokenInvalidException`; the second overload takes a `Supplier` so each caller surfaces its own flow-specific error (`TwoFactorInvalidException` for login, `TransferStepUpInvalidException` for transfers, and so on) without revealing that an OTP subsystem exists. `TwoFactorInvalidException` responds with HTTP 401; the Angular error interceptor treats a 401 that carries an application error code as a flow error rather than an expired session, so a wrong login OTP does not log the user out.
+
+The time to live is `OtpConstants.OTP_TTL_SECONDS` (300 seconds, 5 minutes), enforced by Valkey key expiry rather than application code. Both the TTL and the attempt cap are compile-time constants, not configuration properties.
+
+There is no resend cooldown. Neither the OTP code nor any caller throttles how often `createOtp` may be invoked; a resend simply overwrites the pending key and resets the attempts counter. This is deliberate separation of concerns: per-user request throttling belongs to the infrastructure `RateLimitFilter` (300 requests per user per minute, `consumer.rate-limit.per-user-per-minute`), which keys on the authenticated JWT subject and is independent of the OTP attempt counters. That filter skips unauthenticated requests; for the public registration OTP-send and forgot-password endpoints, production providers supply per-IP throttling and DDoS protection at their edge, which is not part of the dev stack.
+
+== Delivery channels
+
+`OtpDestination` is the channel abstraction: a delivery method name plus a target address. `OtpConstants` names two methods, `email` and `sms`, but `createOtp` only branches on `email` (case-insensitive) and rejects everything else, including `sms`, with `OtpDestinationInvalidException`. There is no SMS implementation and no delivery-port interface; email is wired directly.
+
+`OtpEmailDeliveryService` sends a plain-text `SimpleMailMessage` containing the code and a hardcoded "expires in 5 minutes" line. Delivery is real SMTP, not a stub: the local Docker stack routes it to Mailpit (a development SMTP server with an HTTP API, `axllent/mailpit` in `consumer/compose.yaml`), and production is expected to point `spring.mail.host` at institution SMTP. A `MailException` becomes `OtpDeliveryFailedException` (502) so callers can distinguish an outbound-mail outage from a bad request.
+
+[cols="2,2,3", options="header"]
+|===
+|Property |Default |Meaning
+
+|`spring.mail.host` / `spring.mail.port`
+|`localhost` / `1025`
+|SMTP server; the Docker stack overrides the host to `mailpit`.
+
+|`otp.email.from`
+|`no-reply@fineract-consumer.local`
+|Sender address.
+
+|`otp.email.subject`
+|`Your verification code`
+|Mail subject.
+|===
+
+== OTP values are never logged
+
+The OTP code contains no logging statements at all; the `@Slf4j` annotation on `OtpEmailDeliveryService` is present but unused. The raw code exists only in the mail body and in the `PendingOtp` value returned to the caller. Audit events, API responses, and the Valkey store carry only the hash or the user UUID. Callers follow the same rule: registration returns a masked email address and expiry, never the code, and unit tests (`createOtpStoresHashNotRawToken`) pin the hash-at-rest behavior.
+
+== Boundaries and consumers
+
+The project uses Spring Modulith (a library that enforces module boundaries at build time) with a custom `ConsumerModuleDetectionStrategy`. The `infrastructure` module is declared fully open (`NamedInterfaces.forOpen`), so any feature module may import any OTP class, including `OtpRepository` and the OTP exceptions. In practice the consumers import only `OtpService` and the `data/` value objects, and new code should follow the same convention.
+
+[cols="1,3,3", options="header"]
+|===
+|Consumer |Calls |Purpose
+
+|`registration`
+|`createOtp`, `validateOtp` (default overload)
+|Verify email ownership before binding the BFF account to the Fineract client.
+
+|`authentication`
+|`createOtp` at login, `validateOtp` with `TwoFactorInvalidException`
+|Second factor: credentials yield a challenge token, the OTP completes the session.
+
+|`user`
+|`createOtp`, `validateOtp` with `UserStepUpInvalidException` or `UserPasswordResetInvalidException`
+|Step-up for password change; forgot-password reset (OTP sent asynchronously to avoid revealing whether the email exists).
+
+|`transfers`
+|`createOtp` on initiate, `validateOtp` with `TransferStepUpInvalidException` on confirm
+|Step-up confirmation of a money transfer, paired with an action-bound step-up token.
+
+|`beneficiaries`
+|`createOtp`, `validateOtp` with `BeneficiaryStepUpInvalidException`
+|Step-up confirmation for adding or updating a beneficiary.
+|===
+
+In the step-up flows the OTP is one half of a two-part proof: the infrastructure `StepUpTokenService` issues a short-lived token bound to the exact action and device fingerprint, and the OTP proves email possession. Both must verify.
+
+== Data model
+
+There are no OTP tables. All OTP state is transient and lives in the two Valkey keys described above; nothing survives the 300-second TTL, a successful validation, or the fifth failed attempt. Durable evidence that a challenge happened exists only as audit events written by the audit module.
+
+== Testing
+
+[cols="2,4", options="header"]
+|===
+|Suite |Coverage
+
+|`OtpServiceImplTest` (unit, Mockito)
+|Hash stored instead of raw token; raw token delivered by email; unknown delivery method rejected; case-insensitive acceptance and deletion on success; wrong, null, and missing tokens rejected; OTP kept alive below the attempt cap and burned at the fifth failure; the `Supplier` overload throws the supplied exception and enforces the same cap.
+
+|`OtpRepositoryTest` (unit, mocked `StringRedisTemplate`)
+|Namespaced keys and 300 s TTL on save; save resets the attempts counter; counter increments and gains a TTL on first failure; delete removes both keys.
+
+|Cucumber (`registration.feature`, `login.feature`, `password.feature`)
+|End-to-end against the real stack: codes are fetched from Mailpit through `MailpitClient` and verified for registration, login, password change, and password reset. Single-use enforcement (replay of a verified code rejected) is asserted for registration and login; wrong-code rejection is asserted for registration, login, and password reset.
+|===
+
+Transfer and beneficiary step-up flows exercise `validateOtp` through their own unit tests with the service mocked; their Cucumber coverage goes through the same Mailpit retrieval path.
+
+== Design rationale
+
+* *Hash at rest, store nothing durable.* Keeping only a SHA-256 hash in a TTL-bound Valkey key means a database dump contains no OTP material and expiry needs no scheduled cleanup. Valkey was already in the stack for the JWT denylist, so no new infrastructure was added.
+* *One service, many flows.* Login 2FA, registration, password reset, and every step-up challenge share a single issue-and-verify pipeline, so hardening (attempt caps, audit events, single use) applies uniformly instead of being reimplemented per feature.
+* *Caller-supplied exceptions.* The `Supplier` overload lets each flow return its own generic error code, so API responses do not leak which internal check failed.
+* *Per-user key, not per-flow.* Keying on the public UUID keeps the store simple and guarantees at most one live code per user, at the cost of the cross-flow replacement behavior noted below.
+* *Counters separate from rate limiting.* OTP attempt counters guard guessing of a specific code; the infrastructure `RateLimitFilter` guards request volume. They are deliberately independent mechanisms with independent storage.
+
+== Limitations and future work
+
+* *No SMS channel.* The `sms` constant exists but any non-email destination is rejected. Adding SMS means adding a branch in `createOtp` and a new delivery service; there is no delivery-port interface to implement against.
+* *Unsalted SHA-256 over a small keyspace.* A six-character, 36-symbol code has about 2.2 billion combinations, which is trivially brute-forceable offline if the Valkey store leaks. The 300-second TTL and single-use semantics limit the window, but a keyed hash (HMAC) would remove the offline-guessing concern.
+* *No resend cooldown.* Repeated `createOtp` calls each send a mail and reset the attempts counter. Authenticated callers are bounded only by the general 300-per-minute filter; the unauthenticated registration and forgot-password entry points have no BFF-side throttle and depend on upstream edge protection.
+* *Cross-flow replacement.* Because the pending key is per user, requesting a transfer step-up code invalidates a pending login or password-reset code for the same user. Harmless in practice but surprising; a per-purpose key component would remove the interaction.

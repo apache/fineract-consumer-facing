@@ -1,0 +1,27 @@
+= Fineract Consumer BFF
+
+This manual documents the consumer-facing backend-for-frontend (BFF) for Apache Fineract. The BFF is a Spring Boot service that sits between consumer clients and Fineract Core. It is the only service that talks to Fineract directly, and it enforces all consumer-facing security policy.
+
+The manual is organized into four chapters, followed by reference material:
+
+* Architecture: the system layout, module structure, shared infrastructure, persistence, and Fineract integration.
+* Security: tokens and sessions, step-up authentication, attribute-based access control, and handling of secrets.
+* Features: one section per feature module, covering endpoints, flows, data model, and tests.
+* Development: building, testing, and running the demo locally.
+* Reference: the API reference, configuration-property appendix, and glossary.
+
+New contributors should read the architecture chapter first, then the security chapter, then the features they will work on.
+
+include::architecture/index.adoc[leveloffset=+1]
+
+include::security/index.adoc[leveloffset=+1]
+
+include::features/index.adoc[leveloffset=+1]
+
+include::development/index.adoc[leveloffset=+1]
+
+include::api.adoc[leveloffset=+1]
+
+include::appendix/index.adoc[leveloffset=+1]
+
+include::glossary.adoc[leveloffset=+1]

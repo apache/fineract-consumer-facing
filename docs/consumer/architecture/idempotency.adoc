@@ -1,0 +1,88 @@
+[[idempotency]]
+= Idempotency
+
+Idempotency means a retried write request must not execute twice. If a browser resends a transfer confirmation because a response timed out, money must move once. The BFF achieves this without storing any request or response state of its own: it derives a stable key from the client-supplied header and delegates deduplication and response replay to Fineract Core, which already implements Idempotency-Key semantics for its command endpoints.
+
+== Which endpoints require a key
+
+Only endpoints whose upstream effect is a non-idempotent Fineract write take a key. Each declares the header as a required `@RequestHeader` parameter, so a request without it is rejected before any service code runs.
+
+[cols="2,2,3"]
+|===
+|Endpoint |Controller |Fineract write
+
+|`POST /api/v1/loans`
+|`LoansCommandController.submit`
+|Submit a loan application.
+
+|`PUT /api/v1/loans/{loanId}`
+|`LoansCommandController.modify`
+|Modify a pending loan application.
+
+|`POST /api/v1/loans/{loanId}?command=withdrawnByApplicant`
+|`LoansCommandController.withdraw`
+|Withdraw a loan application.
+
+|`POST /api/v1/transfers/confirm`
+|`TransfersCommandController.confirm`
+|Execute an account transfer to a savings account, or to a loan account for a loan repayment; both destinations run through this endpoint. The sibling `POST /api/v1/transfers/initiate` takes no key because it only sends an OTP and issues a step-up token; nothing upstream is written. The transfer history read, `GET /api/v1/transfers` on `TransfersQueryController`, is a query and likewise takes no key.
+|===
+
+Other writes (registration, login, beneficiary management, audit ingestion) do not take the header. They either mutate only BFF state under database constraints, or are naturally idempotent, or (for client audit events) deduplicate on the event UUID instead.
+
+== The header and its format
+
+The client sends the key in the `Idempotency-Key` header, named by the constant `ConsumerHeaders.IDEMPOTENCY_KEY` in `infrastructure.web.data`. Before anything else, the controller calls `IdempotencyKeyPolicyEvaluator.validate(rawKey)`: the key must be 1 to 64 visible ASCII characters. A malformed key raises `IdempotencyKeyMalformedException` (HTTP 400, code `error.msg.consumer.idempotency.key.malformed`). A missing header is translated by `MissingRequestHeaderExceptionHandler` to HTTP 400 with code `error.msg.consumer.request.header.missing`.
+
+The Angular client generates a fresh UUID per logical action and reuses it across retries of that action.
+
+== Key derivation and per-user scoping
+
+The raw client key is never sent upstream. The command service derives the forwarded key with `IdempotencyKeyDeriver.derive(userPublicId, rawKey)` in `infrastructure.idempotency.service`:
+
+----
+derivedKey = base64url( SHA-256( userPublicId + ":" + rawKey ) )
+----
+
+Prefixing the caller's public UUID before hashing scopes every key to one user. Two users who happen to send the same raw key can never collide on Fineract's deduplication table, and a client cannot replay another user's cached response by guessing their key. The digest also normalizes length: whatever the client sends, Fineract always receives a 43-character base64url string, comfortably inside its column limit.
+
+The derived value travels as the value object `DerivedIdempotencyKey` (in `infrastructure.idempotency.data`), not a bare `String`.
+
+== How the key reaches Fineract
+
+The plumbing is a request-scoped holder plus a Feign interceptor, so command services never touch HTTP headers directly:
+
+1. The command service (for example `LoansCommandServiceImpl.callWithIdempotency`) derives the key and places it in `IdempotencyKeyHolder`, a request-scoped bean (one instance per HTTP request) registered in `FineractClientConfig`. The set and the upstream call are wrapped in `try/finally` so the holder is cleared even when the call throws.
+2. `FineractIdempotencyKeyInterceptor` (in `infrastructure.fineractclient.interceptors`) runs on every outbound Feign request. If the holder is populated and the outbound method is not GET, it adds the `Idempotency-Key` header (constant `FineractHeaders.IDEMPOTENCY_KEY`). GET requests are skipped so that lookups the service performs inside the same window, such as the client and account reads before a transfer, are never accidentally deduplicated.
+3. The holder is cleared in `finally`, so a later write in the same HTTP request cannot inherit a stale key.
+
+== Storage, replay, TTL
+
+The BFF stores nothing. Fineract Core keeps the tuple (idempotency key, action, entity) with the completed response in its command source table:
+
+* First request: Fineract executes the command, stores the result, and returns it.
+* Retry after completion: Fineract returns the originally stored response body without re-executing. The BFF maps it exactly as it maps a first response, so a retried loan submission returns the same `loanId` and the Cucumber suite asserts only one loan exists.
+* Retry while the first attempt is still running: Fineract answers HTTP 425 (Too Early). `FineractCaller` (the shared Feign exception translator in `infrastructure.fineractclient.service`) has a dedicated overload that maps 425 to a feature exception, `LoanCommandInProgressException` or `TransferInProgressException`, telling the client to retry later rather than treating it as failure.
+
+There is no TTL or eviction on the BFF side because there is no BFF-side record. Retention of the deduplication records is governed entirely by Fineract's command source housekeeping.
+
+== Test coverage
+
+* Unit tests: `IdempotencyKeyPolicyEvaluatorTest` (format rules), `IdempotencyKeyDeriverTest` (derivation), `IdempotencyKeyHolderTest` (holder semantics), and `FineractIdempotencyKeyInterceptorTest` (header set for non-GET, skipped for GET, absent when the holder is empty or cleared).
+* Service tests: `LoansCommandServiceImplTest` and `TransfersCommandServiceImplTest` verify with ordered mocks that the derived key is set before the upstream call, cleared afterwards, cleared on upstream failure, and that a 425 replay maps to the in-progress exception.
+* Controller tests: `LoansCommandControllerTest` and `TransfersCommandControllerTest` cover header validation at the boundary, and `MissingRequestHeaderExceptionHandlerTest` covers the missing-header translation.
+* End-to-end: `loans.feature` submits the same application twice with one key and asserts one loan exists, and rejects a submission without a key; `transfers.feature` confirms a transfer twice with one key and asserts money moved once, then repeats with two different keys and asserts money moved twice.
+
+== Design rationale
+
+Delegating deduplication to Fineract avoids building a second replay store that would have to be transactionally consistent with the first. Fineract already binds the key to the executed command and its response in the same database transaction as the write; a BFF-side cache could only ever approximate that, and would reintroduce the double-execution window it exists to close.
+
+The holder-plus-interceptor shape keeps the concern in one place. Command services state the intent (this block runs under this key) and the Feign layer owns the wire detail; no service formats headers, and the GET exclusion is enforced once for every client rather than per call site.
+
+Hashing the user id into the key makes cross-tenant replay a non-issue by construction instead of by policy, and means the raw client-chosen key, which clients sometimes build from meaningful data, never leaves the BFF.
+
+== Limitations and future work
+
+* *Idempotency covers only the Fineract write itself.* BFF-local side effects around the call are not replay-aware: a retried loan submission that Fineract serves from its cache still re-runs the ownership-cache eviction (harmless) and would re-run any future local write placed in that path (not harmless). If a command ever pairs a local mutation with the upstream write, it will need a BFF-side idempotency record.
+* *Clients cannot tell replays from first executions.* The BFF does not surface Fineract's `x-served-from-cache` response header, so a client cannot distinguish the two.
+* *Registration and beneficiary creation rely on database uniqueness.* This prevents duplicates but returns a conflict error on retry instead of replaying the original success. True retry transparency there would require the same header treatment.

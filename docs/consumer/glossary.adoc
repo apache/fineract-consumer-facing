@@ -1,0 +1,98 @@
+[glossary]
+= Glossary
+
+Terms used throughout this manual, defined the way this project uses them. Entries are alphabetized.
+
+[glossary]
+2FA / step-up authentication::
+Proving identity with a second factor beyond the password. At login the emailed OTP is the second factor (there is no enrolled authenticator app); step-up means re-proving with a fresh OTP on the same device immediately before a sensitive action (transfers, beneficiary changes, password change), via paired initiate/confirm endpoints.
+
+ABAC (attribute-based access control)::
+Deciding whether a request is allowed from attributes of the caller (token scope, KYC status), the resource (does this account belong to them), and the environment (device fingerprint, request rate) instead of role checks alone. In the BFF, policies are rows in a static table evaluated by `AccessPolicyEvaluator`, and a missing policy denies the request.
+
+Access token::
+A short-lived JWT (15 minutes by default) proving a logged-in browser session. It is delivered only as the httpOnly cookie `access_token` and is validated on every API request.
+
+Account binding::
+Linking a BFF user account to an existing Fineract client record. Registration completes when the user proves the government ID on that record and verifies an OTP, moving the user to the `BOUND` state; only bound users can log in.
+
+BFF (backend-for-frontend)::
+A server that sits between one specific client application and the systems of record, exposing exactly the API that client needs. Here it is the Spring Boot service in `consumer/`, the only component allowed to talk to Fineract Core and the enforcement point for all consumer-facing security policy.
+
+Consent (open banking)::
+A customer's recorded permission for one TPP to read specific categories of their data for a limited time (90 days by default). It is a row in the BFF's own database with a strict lifecycle (`AWAITING_AUTHORISATION` to `AUTHORISED`, `REJECTED`, or `REVOKED`), and every third-party read re-checks it.
+
+CQRS (command/query separation)::
+A layout rule where writes (commands) and reads (queries) are kept apart. Each BFF feature module has separate `command/` and `query/` sub-trees, each with its own controllers, services, repositories, entities, and enums; cross-side imports are a boundary violation.
+
+Cucumber::
+A behavior-driven test framework: plain-text `.feature` files describe scenarios, and Java "step glue" classes execute them as real HTTP requests against the BFF running in the Docker stack.
+
+Denylist (JWT)::
+A Valkey-backed list of access tokens that must be rejected before their natural expiry: individual token IDs added at logout, plus per-user cutoffs added when all sessions are revoked. If Valkey is unreachable the check fails closed and the token is treated as denied.
+
+Device fingerprint::
+A client-generated identifier (a UUID kept in browser localStorage) sent in the `X-Device-Fingerprint` header on every request. It is baked into refresh-token records and JWT claims and checked per request, so a token stolen and replayed from another device fails.
+
+Docker Compose::
+A tool that starts a set of containers with one command. The local stack (BFF, Fineract Core, two PostgreSQL databases, Valkey, Mailpit) is defined this way, with throwaway databases so every test run starts clean. The throwaway databases apply only to the local dev and test stack; real deployments use volumes.
+
+DTO (data transfer object)::
+A plain object that defines the shape of data crossing an API boundary. The BFF maps Fineract's response shapes into its own DTOs so Fineract formats never leak to the browser.
+
+Feign client::
+A declarative HTTP client: you write a Java interface with annotated methods and the library generates the HTTP calls. The BFF's generated Feign client is the sole transport to Fineract Core.
+
+Fineract Core::
+Upstream Apache Fineract, the banking platform that is the system of record for clients, savings, loans, and transactions. It only ever sees the BFF authenticating as a single trusted service account, never end consumers.
+
+httpOnly cookie::
+A browser cookie that page JavaScript cannot read. Both the access token and the refresh token are delivered this way, keeping them out of reach of injected scripts.
+
+Idempotency key::
+A client-supplied header on writes that move money or change loan applications, ensuring a retried request executes only once. The BFF hashes the key together with the user's ID and forwards it to Fineract, which deduplicates and replays the original response.
+
+JWT (JSON Web Token)::
+A signed string carrying named fields called claims (subject, tenant, scope, KYC status, device fingerprint). The BFF issues and validates its own JWTs with an ES256 keypair; no external identity provider is involved.
+
+KYC (know your customer)::
+The regulatory requirement to confirm who a customer is. In the BFF, the `kyc_verified` claim is never copied from an earlier token: every token mint live-checks the bound Fineract client's standing, uncached and failing closed, so a client deactivated in Fineract loses access at the next mint.
+
+Liquibase::
+A database migration tool. Every BFF schema change is a versioned changeset under `db/changelog/`, applied automatically at startup; the schema is never auto-generated from code.
+
+Mailpit::
+A development SMTP catcher. OTP emails sent by the local stack land in its web inbox (port 8025) instead of going to a real mail server.
+
+nginx reverse proxy::
+The web server in front of the demo frontend: it serves the static Angular bundle on port 4443, adds security headers, and forwards `/api/` requests to the BFF.
+
+OAuth2 authorization code + PKCE::
+The standard flow a TPP uses to obtain a consent-scoped token: the customer logs in and approves, the TPP receives a one-time code and exchanges it for tokens. PKCE adds a one-time code challenge so an intercepted code cannot be replayed; it is mandatory for every registered TPP. The authorization server runs in-process inside the BFF.
+
+OpenAPI::
+A machine-readable description of an HTTP API. The BFF's spec is scraped from the running application and used to generate both the Angular client (`@bff/client`) and the Java client the Cucumber tests use.
+
+OTP (one-time password)::
+A short-lived code emailed to the user, valid for 300 seconds and stored only as a SHA-256 hash in Valkey. A fresh OTP is the second factor at login, at registration binding, and in every step-up challenge; values are never logged.
+
+Playwright::
+A browser automation framework. The frontend's end-to-end tests use it to drive a real browser against the full dockerized stack.
+
+Refresh token (rotating)::
+An opaque random value (not a JWT) in an httpOnly cookie, used to mint a new access token when the old one expires. Only its hash is stored, each use retires it and issues a replacement, and presenting an already-rotated token outside a short grace window is treated as theft and revokes all of the user's sessions.
+
+Scope::
+A named permission carried in a token's `scope` claim. Browser sessions get the broad `consumer:full`; open banking tokens get narrower `openbanking:*` scopes, and the ABAC policy table checks scope on every action.
+
+Spring Modulith::
+A library that treats each top-level package as a module and verifies at test time that modules only use each other's exposed interfaces. It is how the BFF's feature boundaries are enforced without splitting into microservices.
+
+Tenant::
+Fineract's unit of data isolation (roughly, one bank installation). The BFF stamps a `tenant` claim into tokens and sends the `Fineract-Platform-TenantId` header on every upstream call.
+
+TPP (third-party provider)::
+An external application acting on the customer's behalf, for example an account-aggregation app. TPPs are registered in the BFF's own database and get read-only, consent-scoped access to accounts and balances.
+
+Valkey::
+A Redis-compatible in-memory data store. The BFF uses it for the JWT denylist, pending OTP hashes, rate-limit counters, and the account-ownership cache, so this state is shared across BFF replicas.

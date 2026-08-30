@@ -1,0 +1,41 @@
+= Demo screen
+
+== Purpose
+
+The demo screen exists to make two invisible mechanisms visible to someone evaluating the project: the audit trail the app quietly builds, and the fact that authorization decisions are made by the BFF, not the browser. It is deliberately demo-only tooling. The page opens with a translated note (`demo.note`) saying so, and its backing read endpoint is feature-flagged off in a default BFF deployment; only the local Docker stack enables it.
+
+Code lives under `frontend/src/app/features/demo/`. `DemoStore` is the signal-backed wrapper around the generated audit query client.
+
+== Screens and routes
+
+[cols="2,3,4", options="header"]
+|===
+| Route | Component | Purpose
+
+| `/demo`
+| `DemoComponent` (`demo.component.ts`)
+| Paginated viewer of the caller's own audit events, plus two buttons that provoke ABAC denials on purpose.
+|===
+
+The route sits inside the authenticated shell behind `authGuard`. Visiting it is itself recorded as a `SENSITIVE_VIEW` audit event, so opening the page adds to the very list it displays.
+
+== Flows
+
+*Audit event viewer.* The viewer is a table of the logged-in customer's own audit events, newest first. It shows four columns: event type (for example `NAVIGATION`, `LOGIN_SUCCESS`, `API_FAILURE`), severity (`INFO`, `WARN`, `CRITICAL`), source (`CLIENT` for rows the browser reported, `SERVER` for rows the BFF observed itself), and the server-received timestamp. Only `receivedAt` is shown: the BFF never returns event details, device fingerprints, or the untrusted client-claimed time. Pagination is Previous/Next with a fixed page size of 10. Because the endpoint returns a plain list with no total count, the Next button is disabled heuristically when a page comes back with fewer than 10 rows.
+
+*ABAC denial demo.* Two red buttons, "try a forbidden savings account" and "try a forbidden loan", navigate to `/savings/999999` and `/loans/999999`. These are detail routes for resources the logged-in customer does not own. The detail page loads normally and issues its read; the BFF's policy evaluator (ABAC: attribute-based access control, authorization decided from attributes of the caller and the resource) rejects the request with HTTP 403, so the forbidden account read itself never reaches Fineract (the evaluator may call Fineract for the caller's own account list when its ownership cache misses). The shared error interceptor turns the `ConsumerApiError` body into a translated toast, and the failure is recorded as an `API_FAILURE` client audit event, which then shows up in the table above after the next refresh alongside the server's own `ACCESS_DENIED` row. This is the point of the page. The frontend happily asks, the BFF is the enforcement point that says no, and the UI degrades to a toast rather than a raw error page.
+
+== BFF endpoints used
+
+[cols="3,4", options="header"]
+|===
+| User action | Generated `@bff/client` call
+
+| View or page the audit trail
+| `AuditQueryControllerService.listAuditEvents(page, size)` (`GET /api/v1/audit/events`, flag-gated by `consumer.audit.query-enabled`)
+
+| Press an ABAC-denial button
+| There is no direct call. The button navigates to the savings or loans detail route, whose own store issues `GET /api/v1/savings/{id}` or `GET /api/v1/loans/{id}` and receives the 403.
+|===
+
+The server side (the audit table, the query endpoint's feature flag and self-only scoping, and the event catalog) is documented in `docs/consumer/features/audit.adoc`. The denial machinery is documented in `docs/consumer/security/abac.adoc`.

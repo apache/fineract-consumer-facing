@@ -1,0 +1,11 @@
+= Security
+
+This chapter describes the security model of the BFF. The BFF is the policy enforcement point for all consumer-facing rules. It authenticates users, mints and validates tokens, and authorizes every request before anything reaches Fineract Core. The sections in this chapter cover the token and session model, step-up authentication for sensitive actions, attribute-based access control, and how secrets and personal data are handled.
+
+include::tokens.adoc[leveloffset=+1]
+
+include::step-up.adoc[leveloffset=+1]
+
+include::abac.adoc[leveloffset=+1]
+
+include::secrets.adoc[leveloffset=+1]

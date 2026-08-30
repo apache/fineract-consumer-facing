@@ -1,0 +1,60 @@
+= Transfers
+
+== Purpose
+
+The transfers feature gives the customer two screens: a paginated history of past transfers and a guided flow for sending money to their own savings accounts or to saved beneficiaries. The new-transfer flow is a step-up flow (step-up: an extra one-time-code challenge required on top of the normal login before a sensitive action completes): the form submission only initiates the transfer; money moves only after the customer enters the OTP (one-time password) and the confirm call succeeds.
+
+Code lives under `frontend/src/app/features/transfers/`. Shared state is held in `TransfersStore`, a signal-backed service that wraps the generated `@bff/client` transfer services.
+
+== Screens and routes
+
+[cols="2,3,4", options="header"]
+|===
+| Route | Component | Purpose
+
+| `/transfers`
+| `TransferComponent` (`transfer.component.ts`)
+| Transfer history table with pagination and a button to start a new transfer.
+
+| `/transfers/new`
+| `TransferFormComponent` (`transfer-form.component.ts`)
+| Three-step new-transfer flow: form, OTP challenge, success summary.
+|===
+
+Both routes sit inside the authenticated shell layout and are protected by `authGuard`; an unauthenticated visit redirects to `/login`.
+
+== Flows
+
+*History list.* On load, `TransferComponent` fetches page 0 with a fixed page size of 10. Each row shows the date, source and destination account, amount with currency, and a direction column. Direction comes from the BFF as `OUTGOING` or `INCOMING` and is rendered through a translation key (`transfers.history.direction.<value>`), so the label is localized rather than the raw enum. Previous/Next buttons page through results using the page metadata (`page`, `size`, `totalElements`, `totalPages`) in the response envelope, and a "showing X to Y of Z" line is computed from the same metadata. The generated client accepts optional `fromDate` and `toDate` filters, but the history screen does not expose them; it always passes them as undefined.
+
+*New transfer, step `form`.* The form has three fields: a source account select (the customer's own savings accounts, loaded via the savings store), a destination select, and an amount. The destination select is grouped into "my savings" (the customer's other accounts, excluding the selected source) and "beneficiaries" (saved payees that resolve to a Fineract account id). Picking a source account that matches the current destination clears the destination, so a transfer to the same account cannot be built. Validation failures (no source, no destination, amount missing or below 0.01) surface as translated toast messages, never inline text. Submitting calls initiate, which sends the transfer details plus the `X-Device-Fingerprint` header and returns a challenge containing a `stepUpToken` and a masked `sentTo` hint (where the OTP was delivered).
+
+*New transfer, step `otp`.* The shared `app-otp` component prompts for the six-character code, showing the masked destination from the challenge. Cancel returns to the form without losing the entered values.
+
+*New transfer, step `done`.* Confirm sends the step-up token, the OTP, and the original transfer details, together with an `Idempotency-Key` header (idempotency key: a client-chosen unique value that lets the server recognize a retry of the same request and execute the money movement only once). The component generates the key with `crypto.randomUUID()` on the first confirm attempt and reuses the same key on retries (for example after a wrong OTP), so a retry can never debit twice. Any change to the form values resets the key to null, because changed values describe a different transfer that must get a fresh key. On success the key is cleared, the store keeps the returned result, and the done step renders the transfer reference, accounts, and amount.
+
+== BFF endpoints used
+
+[cols="3,4", options="header"]
+|===
+| User action | Generated `@bff/client` call
+
+| View transfer history (page load, Previous/Next)
+| `TransfersQueryControllerService.listTransfers(fromDate, toDate, page, size)` (`GET /api/v1/transfers`)
+
+| Populate the source/destination selects
+| `SavingsQueryControllerService.listSavingsAccounts()` (via `SavingsStore`) and `BeneficiariesQueryControllerService.listBeneficiaries()` (via `BeneficiariesStore`)
+
+| Submit the transfer form
+| `TransfersCommandControllerService.initiateTransfer(xDeviceFingerprint, request)` (`POST /api/v1/transfers/initiate`)
+
+| Enter the OTP and confirm
+| `TransfersCommandControllerService.confirmTransfer(xDeviceFingerprint, idempotencyKey, request)` (`POST /api/v1/transfers/confirm` with the `Idempotency-Key` header)
+|===
+
+The server side is documented in `docs/consumer/features/transfers.adoc`, including the ABAC checks, beneficiary transfer limits, and how the idempotency key is namespaced per user and forwarded to Fineract.
+
+== Test coverage
+
+* Vitest: `frontend/src/app/features/transfers/transfers.store.spec.ts` covers `TransfersStore` against a mocked HTTP layer (the initiate challenge, the confirm result, and the history paging metadata); `transfer-form.component.spec.ts` covers the submit guards and the destination-option rules (excluding the chosen source and the beneficiary that points at it).
+* Playwright: `frontend/playwright/tests/transfers.spec.ts` covers the guarded-route redirect, history-to-form navigation, the transfer OTP step-up happy path, and the wrong-OTP error toast.

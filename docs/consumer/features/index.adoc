@@ -1,0 +1,29 @@
+= Features
+
+This chapter documents each feature module of the BFF. Every module follows the same shape: a bounded context under `org.apache.fineract.consumer` with command and query sides, described in the architecture chapter. Each section covers the module's purpose, endpoints, flows, security checks, data model, and test coverage.
+
+Two sections in this chapter cover supporting capabilities rather than user-facing features. The one-time password section describes code issuance and verification, which lives in the shared `infrastructure.otp` package. The identity section describes the identity match used during registration.
+
+include::registration.adoc[leveloffset=+1]
+
+include::authentication.adoc[leveloffset=+1]
+
+include::otp.adoc[leveloffset=+1]
+
+include::identity.adoc[leveloffset=+1]
+
+include::savings.adoc[leveloffset=+1]
+
+include::loans.adoc[leveloffset=+1]
+
+include::transfers.adoc[leveloffset=+1]
+
+include::beneficiaries.adoc[leveloffset=+1]
+
+include::summary.adoc[leveloffset=+1]
+
+include::user.adoc[leveloffset=+1]
+
+include::audit.adoc[leveloffset=+1]
+
+include::openbanking.adoc[leveloffset=+1]

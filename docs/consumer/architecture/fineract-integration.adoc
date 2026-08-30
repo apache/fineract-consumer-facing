@@ -1,0 +1,113 @@
+[[fineract-integration]]
+= Fineract Core Integration
+
+== Overview
+
+All communication with upstream Fineract Core goes through one infrastructure package:
+
+----
+consumer/src/main/java/org/apache/fineract/consumer/infrastructure/fineractclient/
+├── configs/       FineractClientConfig, FineractClientProperties, FineractFeignConfig
+├── data/          FineractHeaders (header-name constants)
+├── interceptors/  FineractBasicAuthInterceptor, FineractTenantHeaderInterceptor,
+│                  FineractIdempotencyKeyInterceptor
+├── service/       FineractCaller (exception translation helper)
+├── spec/          fineract.json (vendored Fineract OpenAPI spec) + fineract.ignore
+└── templates/     apiClient.mustache (custom generator template)
+----
+
+The transport is Feign, a declarative HTTP client: you write a Java interface with annotated methods, and Spring Cloud OpenFeign generates the HTTP calls at runtime. Feign is enabled application-wide in `ConsumerApplication` via `@EnableFeignClients(basePackages = "org.apache.fineract.consumer", defaultConfiguration = FineractFeignConfig.class)`.
+
+== The generated Feign client
+
+The Feign interfaces are not written by hand. They are generated on every build from a vendored copy of Fineract's OpenAPI spec (`spec/fineract.json`) by two Gradle tasks in `consumer/build.gradle`:
+
+. `sanitizeFineractSpec` patches known defects in the upstream spec before generation: it strips null-only enums, retypes integer money fields (`principal`, `amount`, `depositAmount`) to `number`, adds balance fields missing from `GetClientsSavingsAccounts` and `GetClientsLoanAccounts`, adds `mobileNo` and `imagePresent` to `GetClientsClientIdResponse`, and fixes the response shapes of the obligee-details and client-image endpoints. The schema-targeted patches (the missing balance and profile fields, the obligee-details fix, and the client-image fix) fail the build with a `GradleException` if the schema or path they target disappears, so a spec upgrade cannot silently drop those fixes. The enum-stripping and money-retyping passes are pattern-based and simply match nothing if the spec changes.
+. `generateFineractClient` runs the OpenAPI Generator (`spring` generator, `spring-cloud` library) over the sanitized spec into `build/generated/fineractclient`, producing one interface per Fineract API tag under `org.apache.fineract.consumer.infrastructure.fineractclient.generated.api` and model classes under `...generated.model`. `float` and `double` are mapped to `BigDecimal` so money is never a binary floating-point type. `compileJava` depends on this task, so the client is always regenerated before compilation.
+
+To upgrade Fineract, replace the vendored `spec/fineract.json` with the new version's spec and rebuild. Any schema-targeted sanitize patch whose target has changed fails the build at that point and is updated or retired as part of the upgrade.
+
+A custom template, `templates/apiClient.mustache`, controls the Feign binding. For each tag it emits a pair:
+
+[source,java]
+----
+@FeignClient(name = "...", url = "${fineract.client.base-url}",
+        configuration = ClientConfiguration.class)
+public interface SavingsAccountApiClient extends SavingsAccountApi {
+}
+----
+
+`SavingsAccountApi` is a plain Java interface carrying the request mappings; `SavingsAccountApiClient` is the Feign-annotated subinterface that Spring turns into an HTTP proxy. The target URL comes from the `fineract.client.base-url` property (default `http://localhost:8888/fineract-provider/api`, set to `http://fineract:8080/fineract-provider/api` in the compose stack).
+
+== Narrow interfaces at the seam
+
+Feature services inject the plain `*Api` interfaces, never the `*ApiClient` Feign subinterfaces and never a hand-rolled HTTP client. For example, `SavingsQueryServiceImpl` declares:
+
+[source,java]
+----
+private final SavingsAccountApi savingsAccountApi;
+private final SavingsChargesApi savingsChargesApi;
+private final SavingsAccountTransactionsApi savingsAccountTransactionsApi;
+private final SavingsProductApi savingsProductApi;
+private final ClientApi clientApi;
+----
+
+Spring satisfies each `*Api` dependency with the Feign proxy because `*ApiClient extends *Api`. The effect is that a service depends only on a narrow, tag-scoped Java interface. In a unit test the same interface is mocked directly; nothing Feign-specific leaks into feature code. Hand-written `@FeignClient` interfaces are the exception, allowed only when the spec genuinely cannot produce a usable client for a call.
+
+== Authentication and tenant handling
+
+The BFF authenticates to Fineract as a single service account using HTTP Basic authentication. Two Feign `RequestInterceptor` beans, registered in `FineractClientConfig`, apply to every outbound request:
+
+* `FineractBasicAuthInterceptor` precomputes `Authorization: Basic ...` from `fineract.client.username` and `fineract.client.password` (defaults `mifos`/`password`, overridable via `FINERACT_SERVICE_USERNAME` and `FINERACT_SERVICE_PASSWORD`).
+* `FineractTenantHeaderInterceptor` sets `Fineract-Platform-TenantId` (the constant `FineractHeaders.TENANT_ID`) from `fineract.client.tenant-id` (default `default`, env `FINERACT_SERVICE_TENANT`). Fineract is multi-tenant and rejects requests without this header. The BFF targets exactly one tenant.
+
+Because Fineract sees a privileged service account rather than the end user, upstream authorization tells the BFF nothing about the consumer. Every feature service therefore runs the BFF's own ABAC checks (`AccessPolicyEvaluator`, ownership resolution via `UserClientResolver`) before any Feign call.
+
+The generated `ClientConfiguration` class also declares basic-auth and tenant interceptors, but they are guarded by `@ConditionalOnProperty` on `apachefineractrest.*` properties that are never set, so they stay inert. The hand-written interceptors above are the ones in effect.
+
+== Request body encoding: NON_EMPTY
+
+`FineractClientConfig` defines a dedicated Feign `Encoder` bean (`fineractFeignEncoder`) built on a Jackson `JsonMapper` rebuilt with `JsonInclude.Include.NON_EMPTY`. Null and empty properties are omitted from serialized request bodies. This matters because the generated model classes have many optional fields, and Fineract rejects or misinterprets requests that carry explicit nulls for fields the caller did not intend to send.
+
+== Idempotency keys
+
+`FineractIdempotencyKeyInterceptor` adds an `Idempotency-Key` header (constant `FineractHeaders.IDEMPOTENCY_KEY`) to every non-GET Fineract request when a key is present. The key comes from a request-scoped `IdempotencyKeyHolder` bean, populated by the idempotency infrastructure in `consumer.infrastructure.idempotency` from the client-supplied key (derived per user via SHA-256). GET requests never carry the header. This lets a retried write reach Fineract with the same key, so Fineract can deduplicate it.
+
+== Error handling
+
+There is no custom Feign `ErrorDecoder`. Non-2xx responses surface as `feign.FeignException` subclasses, and each feature service translates them at the call site through the `FineractCaller` helper:
+
+[source,java]
+----
+FineractCaller.call(
+        () -> savingsAccountApi.retrieveSavingsAccount(savingsId, null, null, null),
+        SavingsAccountNotFoundException::new,      // 404
+        SavingsRequestInvalidException::new,       // 400
+        SavingsUpstreamUnavailableException::new); // anything else
+----
+
+`FineractCaller.call` catches `FeignException.NotFound` and `FeignException.BadRequest` explicitly, and an overload adds a handler for HTTP 425 (Too Early, Fineract's "idempotent request still in progress" signal). Every other `FeignException` maps to the upstream-error handler. The supplied exceptions extend `AbstractConsumerException`, which carries the HTTP status, a machine-readable error code, and a safe default message, so a raw Fineract error body is never forwarded to the browser.
+
+== DTO translation policy
+
+Generated Fineract model types (`...fineractclient.generated.model.*`) are an implementation detail. The rules:
+
+* Feature service implementations may consume them, but every public service method returns the feature's own `*QueryData` or `*CommandData` class from the feature's `data/` package.
+* Controllers, response bodies, audit events, and exceptions never reference a generated model type. The Angular client is generated from the BFF's own OpenAPI spec, so a Fineract shape cannot appear in it by construction.
+* Mapping is done with plain private methods in the service implementation (for example `toListItem`, `toAccountData` in `SavingsQueryServiceImpl`), not with a mapping framework.
+
+This keeps the BFF's public contract stable when Fineract's API changes: a spec upgrade forces recompilation of the mapping code, not of the consumer-facing API.
+
+== Design rationale
+
+* Generating the client from Fineract's spec keeps the entire Fineract surface in one regenerated place instead of drifting across hand-maintained interfaces, and `BigDecimal` type mapping plus the sanitize step fix upstream spec defects once, centrally.
+* Injecting the plain `*Api` interfaces gives feature code a mockable seam with zero Feign coupling, which is why unit tests never need HTTP stubs.
+* Per-call exception translation via `FineractCaller` instead of a global `ErrorDecoder` keeps the decision "what does a 404 mean here" where the business context lives: a missing savings account and a missing loan are different consumer-facing errors.
+* The NON_EMPTY encoder is scoped to the Fineract client only, so the BFF's own API responses are unaffected.
+
+== Limitations and future work
+
+* *No correlation ID is propagated to Fineract.* There is no request-ID Feign interceptor, so cross-system log tracing is manual.
+* *Fineract calls have no resilience wrapping.* There is no retry, timeout tuning, or circuit breaker around them, so a slow Fineract stalls BFF request threads.
+* *BFF-to-Fineract traffic is cleartext HTTP.* It travels over the Docker network unencrypted. Production needs TLS on this wire; mutual TLS is reserved for connections between open banking providers and the open banking endpoints.
+* *Tenant selection is a static property.* Supporting multiple tenants would require deriving the tenant per request instead of per deployment.

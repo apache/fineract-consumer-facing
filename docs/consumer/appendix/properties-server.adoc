@@ -1,0 +1,34 @@
+= Server Properties
+
+General application and web-server settings. The HTTP port is Spring Boot's default `8080` (not overridden in configuration); the compose stack maps it to host port 8080.
+
+.Server Properties
+[cols="4,2,2,6"]
+|===
+|Name |Env Variable |Default Value |Description
+
+|spring.application.name
+|-
+|consumer
+|Logical name of the Spring Boot application, used in logs and framework metadata.
+
+|server.forward-headers-strategy
+|-
+|framework
+|Makes the BFF honor `X-Forwarded-*` headers set by a fronting reverse proxy (nginx in the e2e stack), so generated URLs and secure cookies reflect the external HTTPS address.
+
+|spring.modulith.detection-strategy
+|-
+|org.apache.fineract.consumer.ConsumerModuleDetectionStrategy
+|Registers the custom Spring Modulith strategy that defines module boundaries and which packages each feature module exposes.
+
+|spring.modulith.events.jdbc.schema-initialization.enabled
+|-
+|false
+|Stops Spring Modulith from creating its event-publication (outbox) table itself; the schema is owned by Liquibase instead.
+
+|spring.modulith.events.completion-mode
+|-
+|delete
+|Deletes outbox event rows once their listeners complete, instead of keeping completed rows forever.
+|===

@@ -1,0 +1,39 @@
+@startuml
+' Licensed to the Apache Software Foundation (ASF) under one or more
+' contributor license agreements. See the NOTICE file distributed with
+' this work for additional information regarding copyright ownership.
+' The ASF licenses this file to you under the Apache License, Version 2.0.
+
+title Open banking consent: authorization code + PKCE
+
+participant "TPP" as tpp
+actor "Customer\n(browser)" as user
+participant "BFF authorization server\n(/api/v1/oauth2/*)" as authz
+participant "BFF consent +\nread services" as bff
+database "bff-db\n(open_banking_consents)" as db
+participant "Fineract Core" as fineract
+
+tpp -> authz : POST /token (client_credentials)\nBasic auth, scope openbanking:consents
+authz --> tpp : client-credentials access token
+tpp -> bff : POST /api/v1/openbanking/account-access-consents\n{permissions}
+bff -> db : insert consent AWAITING_AUTHORISATION\n(expires_at = now + 90 days)
+bff --> tpp : consent id
+
+tpp -> user : redirect to GET /authorize\n(client_id, redirect_uri, scope,\ncode_challenge + consent_id)
+authz -> db : validate consent: exists, this TPP,\nAWAITING_AUTHORISATION, unexpired
+authz -> user : no consumer session? redirect to\nAngular login (password + OTP + fingerprint)
+user -> authz : approve on /consent page\n(session cookie + CSRF token)
+authz -> db : consent -> AUTHORISED, bind customer\n(audit CONSENT_GRANTED)
+authz -> user : redirect to TPP redirect_uri?code=...
+user -> tpp : authorization code
+
+tpp -> authz : POST /token (authorization_code)\ncode + PKCE code_verifier + Basic auth
+authz -> fineract : KYC live check (ClientStandingChecker,\nuncached, fail closed)
+authz --> tpp : access token (purpose=openbanking,\nconsent_id, 5 min TTL) + rotating refresh token
+
+tpp -> bff : GET /api/v1/openbanking/accounts\n(Bearer token)
+bff -> db : re-check consent: AUTHORISED, unexpired,\nTPP + user bound, permission granted
+bff -> fineract : read accounts of the consenting customer
+bff --> tpp : account list (read-only)
+
+@enduml

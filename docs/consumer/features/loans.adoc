@@ -1,0 +1,122 @@
+= Loans
+
+The loans module (`org.apache.fineract.consumer.loans`) gives a logged-in consumer a view of their loan accounts and lets them apply for a loan. It follows the repository's CQRS convention (CQRS: reads and writes are modeled as separate code paths). The query side serves loan reads: account list, account detail with outstanding balance, repayment schedule preview, transactions, charges, guarantors, and the loan product catalog. The command side serves loan application writes: submit, modify, and withdraw.
+
+The module holds no state of its own. Every request is authorized in the BFF (backend-for-frontend: the intermediary service the browser talks to instead of Fineract) and then delegated to Apache Fineract, which is the system of record for all loan data. There is no separate `products` module in the codebase; the loan product catalog is served from this module through the application template endpoint. Savings products are served by the savings module.
+
+== Query endpoints
+
+All endpoints are rooted at `/api/v1/loans` (`LoansQueryController`). Every endpoint requires an authenticated JWT (JSON Web Token: the signed access token issued at login); anonymous requests receive 401. On top of authentication, each service method runs an ABAC check (ABAC: attribute-based access control, authorization decided from attributes of the caller and the resource) through `AccessPolicyEvaluator`. All loan actions require the `kyc_verified` claim on the token.
+
+[cols="1,3,4,4",options="header"]
+|===
+|Method |Path |Purpose |Authorization
+
+|GET |`/api/v1/loans` |List the caller's loan accounts (id, account number, product name, status code, active flag, currency). |`LOANS_LIST`; scope `consumer:full` or `openbanking:accounts.read`.
+
+|GET |`/api/v1/loans/{loanId}` |Account detail: status code, active flag, principal disbursed, total and interest outstanding, annual interest rate, next due date and amount (derived from the first incomplete repayment period). |`LOANS_VIEW`; scope `consumer:full` or `openbanking:accounts.read`; caller must own the loan.
+
+|POST |`/api/v1/loans/schedule-preview` |Calculate a repayment schedule for prospective loan terms before applying. A read-only calculation; POST because it carries a full request body. |`LOAN_SCHEDULE_CALCULATE`; scope `consumer:full`.
+
+|GET |`/api/v1/loans/{loanId}/transactions` |Loan transactions as a page envelope. Query parameters: `page` (default `0`), `size` (default `20`), `sort` (optional), and `fromDate`/`toDate` (optional, ISO dates). See the pagination note below the table. |`LOANS_VIEW`; ownership required.
+
+|GET |`/api/v1/loans/{loanId}/transactions/{transactionId}` |Single transaction. |`LOANS_VIEW`; ownership required.
+
+|GET |`/api/v1/loans/{loanId}/charges` |Charges on the loan (fees and penalties). |`LOANS_VIEW`; ownership required.
+
+|GET |`/api/v1/loans/{loanId}/charges/{chargeId}` |Single charge. |`LOANS_VIEW`; ownership required.
+
+|GET |`/api/v1/loans/{loanId}/guarantors` |Guarantors recorded against the loan (type code, display name, relationship). Read only. |`LOANS_VIEW`; ownership required.
+
+|GET |`/api/v1/loans/template` |Loan application template. Without `productId`: the product catalog as a list of `{id, name}` options. With `productId`: that product's defaults and bounds (principal, repayments, interest rate, amortization, frequency types, processing strategy). |`LOAN_APPLICATION_TEMPLATE_VIEW`; scope `consumer:full`.
+|===
+
+The transactions endpoint returns a page envelope (`LoanTransactionQueryResponse`) with `content`, `page`, `size`, `totalElements`, and `totalPages`. It operates in two modes. Without `fromDate` and `toDate`, the `page`, `size`, and `sort` parameters pass through to Fineract and the envelope carries Fineract's own totals. With either date parameter, the BFF compensates for an upstream gap: Fineract's loan transaction API has no date parameters, so the service fetches up to 10,000 transactions in one upstream page, filters them by date in the BFF, slices the requested page in memory, and computes `totalElements` and `totalPages` itself. Fineract enum-option objects (status, transaction type, charge types, guarantor type) are flattened to their stable `code` string, and account read models carry a boolean `active` flag derived from the status object.
+
+== Command endpoints
+
+All endpoints are rooted at `/api/v1/loans` (`LoansCommandController`). Every command additionally requires an `Idempotency-Key` header (a client-supplied unique value that makes a retried request safe); a missing header is rejected by Spring, a malformed one by `IdempotencyKeyPolicyEvaluator`. None of these commands requires a step-up token; step-up re-authentication is used by the transfers module, not here.
+
+[cols="1,3,4,4",options="header"]
+|===
+|Method |Path |Purpose |Authorization
+
+|POST |`/api/v1/loans` |Submit a loan application. Returns 201 with `{loanId, resourceId, clientId}`. |`LOAN_APPLICATION_SUBMIT`; scope `consumer:full`; `Idempotency-Key` required.
+
+|PUT |`/api/v1/loans/{loanId}` |Modify a pending application (change product, principal, terms). |`LOAN_APPLICATION_MODIFY`; scope `consumer:full`; caller must own the loan; `Idempotency-Key` required.
+
+|POST |`/api/v1/loans/{loanId}?command=withdrawnByApplicant` |Withdraw a pending application. Any other `command` value is rejected with 400. Body carries `withdrawnOnDate`. |`LOAN_APPLICATION_WITHDRAW`; scope `consumer:full`; caller must own the loan; `Idempotency-Key` required.
+|===
+
+== Loan application lifecycle
+
+The BFF persists no application state; the lifecycle lives entirely in Fineract.
+
+* There is no server-side draft. An unsubmitted application exists only as form state in the client. The "draft" the consumer can still edit is the Fineract loan application in status `loanStatusType.submitted.and.pending.approval`, which is what `POST /api/v1/loans` creates upstream.
+* Modify (`PUT`) and withdraw (`POST ?command=withdrawnByApplicant`) act on that pending application. Fineract enforces which transitions are legal for the current status; the BFF translates upstream rejections to `LoanApplicationInvalidException` (400).
+* Withdrawal moves the application to `loanStatusType.withdrawn.by.client`. Approval, rejection, and disbursement are back-office operations performed in Fineract; the BFF exposes no endpoints for them.
+* Status is tracked by reading, not by callback: the list and detail endpoints pass through Fineract's status code string (`loanStatusType.submitted.and.pending.approval`, `loanStatusType.approved`, `loanStatusType.active`, `loanStatusType.withdrawn.by.client`, `loanStatusType.rejected`, `loanStatusType.closed.obligations.met`, and the other values of Fineract's `LoanStatus` enum).
+* The only local side effect of a submit is a cache eviction: `LoansCommandServiceImpl` evicts the caller's entry in `OwnedAccountsCache` so the new loan passes ownership checks immediately instead of after the cache TTL.
+
+== Access control and idempotency
+
+Authorization is centralized in `AccessPolicyEvaluator` with the policy table in `ActionPolicies` (`consumer.infrastructure.access`). For each action it checks, in order: a policy exists, the token carries an allowed scope, the `kyc_verified` claim is true (required for every loan action), and, for per-loan actions, that the loan id belongs to the caller. Ownership is resolved from `OwnedAccountsCache`, a two-level cache (in-process Caffeine, 60 second TTL, backed by Valkey, 300 second TTL) populated from Fineract's `GET /v1/clients/{clientId}/accounts`. Denials are published as `ACCESS_DENIED` audit events and surface as 403 with the codes `error.msg.consumer.loans.query.access.denied` or `error.msg.consumer.loans.command.access.denied`. See xref:abac[Attribute-Based Access Control (ABAC)] for the full policy model.
+
+For idempotency, the controller validates the raw `Idempotency-Key`, and the command service derives a per-user key (`IdempotencyKeyDeriver`, SHA-256 of user public id plus raw key) and places it in the request-scoped `IdempotencyKeyHolder`, from which a Feign interceptor forwards it to Fineract. Fineract performs the replay detection: a repeated key returns the original result, and a replay that arrives while the original request is still executing is translated to `LoanCommandInProgressException` (425 Too Early, `error.msg.consumer.loans.request.in.progress`). See xref:idempotency[Idempotency] for the derivation and interceptor details.
+
+== Fineract integration
+
+The module calls Fineract through the generated OpenAPI Feign client in `consumer.infrastructure.fineractclient.generated` (interfaces `LoansApi`, `LoanTransactionsApi`, `LoanChargesApi`, `GuarantorsApi`, `LoanProductsApi`, `ClientApi`). `FineractCaller` wraps every call and translates upstream failures into the module's exceptions, with a distinct mapping per call site. Commands map 404 to not-found, 400 to `LoanApplicationInvalidException`, 425 to in-progress, and everything else to upstream-unavailable (502). Plain query reads map 404 to not-found and everything else, including 400 and 425, to upstream-unavailable (502). The schedule preview maps 400 to `LoanSchedulePreviewInvalidException` and everything else, including 404, to upstream-unavailable (502). Only an exact upstream 400 maps to an invalid exception; other 4xx statuses fall through to the 502 translation.
+
+[cols="4,4",options="header"]
+|===
+|Upstream Fineract endpoint |Used by
+
+|`GET /v1/clients/{clientId}/accounts` |Loan account list; also the ownership cache.
+|`GET /v1/loans/{loanId}?associations=repaymentSchedule,transactions` |Loan detail, including the next-due derivation.
+|`POST /v1/loans?command=calculateLoanSchedule` |Schedule preview (no loan is created).
+|`POST /v1/loans` |Submit application.
+|`PUT /v1/loans/{loanId}` |Modify application.
+|`POST /v1/loans/{loanId}?command=withdrawnByApplicant` |Withdraw application.
+|`GET /v1/loans/{loanId}/transactions` and `.../{transactionId}` |Transaction list and detail. In date-filtered mode the list is fetched as a single upstream page of up to 10,000 rows.
+|`GET /v1/loans/{loanId}/charges` and `.../{chargeId}` |Charge list and detail.
+|`GET /v1/loans/{loanId}/guarantors` |Guarantor list.
+|`GET /v1/loanproducts` and `/v1/loanproducts/{productId}` |Product catalog and product detail template.
+|===
+
+Fineract DTO shapes never leave the service layer; each response is mapped to a module-owned `*QueryData` or `*CommandData` class.
+
+=== Loan repayment
+
+This module exposes no repayment endpoint. Repaying a loan from the UI reuses the transfers module: `POST /api/v1/transfers/initiate` and `POST /api/v1/transfers/confirm` with `toAccountType` set to `loan`, which the transfers service maps to a Fineract account transfer with destination account type code `1` (loan). The transfers service requires the destination loan to be owned by the caller. In the Angular client the repayment form lives on the loan detail page (a "make a payment" button shown only for active loans) and calls the transfers endpoints; the loans module has no backend repayment endpoint. See xref:transfers[Transfers].
+
+== Data model
+
+The loans module owns no database tables, entities, or repositories; it is a stateless authorization and translation layer over Fineract, which owns all loan data.
+
+== Testing coverage
+
+Unit tests (JUnit 5, mocked dependencies):
+
+* `LoansQueryServiceImplTest`: list mapping, the inactive flag when the status object is missing, empty-list handling, upstream failure translation, transaction page passthrough (Fineract totals carried into the envelope), the empty envelope when Fineract returns no content, date-filtered mode (BFF-computed totals, slicing of the requested page, and the empty page past the end of the filtered set), and ABAC denial.
+* `LoansCommandServiceImplTest`: submit authorization, ownership cache not evicted on upstream failure, derived idempotency key set before the upstream call and cleared after (including on failure) for submit, modify, and withdraw, and 425 replay translation.
+* `LoansCommandControllerTest`: each command passes the idempotency key into its command object and rejects a malformed key.
+
+End-to-end tests (Cucumber, `src/test/resources/features/loans.feature`, glue in `LoansSteps`): list own accounts, get own account, unauthenticated list rejected with 401, reading another client's loan denied with 403, double submit with one idempotency key creates exactly one loan, and submit without an idempotency key rejected. The savings-to-loan repayment path is exercised end to end in `transfers.feature` (transfer to own loan, denial when targeting another client's loan, exclusion from transfer history).
+
+Playwright specs (`frontend/playwright/tests/loans.spec.ts`) cover the loans UI against the full stack: the route guard redirect for unauthenticated access, the make-a-payment button hidden unless the loan is active, the full repay flow (loan detail, repay form, OTP step-up, confirm, success), and the error snackbar on a wrong OTP.
+
+== Design rationale
+
+* Stateless passthrough. Fineract is already the system of record for loans; persisting application state in the BFF would create a dual-write problem for no consumer-visible gain. The BFF's value here is authorization, DTO translation, and idempotency plumbing.
+* Product catalog folded into the template endpoint. This mirrors Fineract's own template convention (`GET /v1/loans/template`), where one endpoint serves both the browse list and the per-product defaults a client needs to build an application form, so a separate products module was not created.
+* Schedule preview on the query side. Fineract models preview as `POST /loans?command=calculateLoanSchedule` on the same resource as submit. The BFF separates them: preview creates nothing, so it belongs to the query side, and giving it its own path (`/schedule-preview`) keeps the submit endpoint free of a mode switch.
+* Ownership enforced in the BFF. Fineract's deprecated self-service layer used to scope data to the caller; with the BFF as the only Fineract client, the caller-to-loan check must happen here, before any upstream call, which is why every `{loanId}` endpoint runs the owned-resource policy.
+* Per-side exception sets with stable error codes (`error.msg.consumer.loans.*`) let API clients branch on machine-readable codes rather than messages, consistent with the repository-wide exception convention.
+
+== Limitations and future work
+
+* *No server-side draft.* An application form abandoned before submit is lost with the browser session; supporting resumable drafts would require the module's first BFF table.
+* *Transaction date filtering happens in the BFF.* Fineract's loan transaction API has no date parameters, so a date-filtered request fetches up to 10,000 transactions in one upstream call and filters in memory; a loan with more transactions than that would return a truncated result, and each filtered request re-fetches the full set.
+* *Statuses are raw Fineract code strings.* Clients must know the upstream vocabulary (`loanStatusType.*`); the BFF adds only a boolean `active` convenience flag and does not translate the codes into a consumer-facing status enum.
+* *Template browse carries only product id and name.* A client must fetch each product individually to compare terms.

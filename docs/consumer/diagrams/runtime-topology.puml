@@ -1,0 +1,39 @@
+@startuml
+' Licensed to the Apache Software Foundation (ASF) under one or more
+' contributor license agreements. See the NOTICE file distributed with
+' this work for additional information regarding copyright ownership.
+' The ASF licenses this file to you under the Apache License, Version 2.0.
+
+title Local runtime topology (consumer/compose.yaml + docker-compose.e2e.yml)
+
+left to right direction
+
+actor Browser as browser
+
+node "Docker Compose network" {
+    node "frontend\n(nginx, host :4443)" as frontend {
+        artifact "Angular bundle" as angular
+    }
+    node "bff\n(Spring Boot, host :8080)" as bff
+    node "fineract\n(Fineract Core 1.12.1,\nhost :8888 -> :8080)" as fineract
+    database "bff-db\n(PostgreSQL, host :5432)" as bffdb
+    database "fineract-db\n(PostgreSQL, host :5433)" as fineractdb
+    database "valkey\n(Valkey 8, host :6379)" as valkey
+    node "mailpit\n(dev SMTP, host :8025 UI / :1025 SMTP)" as mailpit
+}
+
+browser --> frontend : HTTP :4443\nstatic app + /api/*
+frontend --> bff : proxy /api/ -> bff:8080\n(X-Forwarded-* headers)
+bff --> fineract : Feign, service account\nhttp://fineract:8080/fineract-provider/api
+bff --> bffdb : JDBC\nusers, refresh tokens, consents, audit
+bff --> valkey : JWT denylist, OTP hashes,\nrate-limit counters, ownership cache
+bff --> mailpit : SMTP :1025\nOTP emails
+fineract --> fineractdb : JDBC\ntenant database
+
+note bottom of frontend
+  e2e stack only (docker-compose.e2e.yml).
+  Backend-only runs hit the BFF
+  directly on localhost:8080.
+end note
+
+@enduml

@@ -1,0 +1,72 @@
+/*
+ Licensed to the Apache Software Foundation (ASF) under one
+ or more contributor license agreements.  See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership.  The ASF licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+ */
+
+// Compiles the AsciiDoc manuals in docs/consumer/ and docs/frontend/ to single HTML pages.
+// see also: https://asciidoctor.github.io/asciidoctor-gradle-plugin/master/user-guide/
+
+plugins {
+    id 'org.asciidoctor.jvm.convert' version '4.0.5'
+}
+
+repositories {
+    mavenCentral()
+}
+
+asciidoctorj {
+    attributes = [
+        docdate: new Date(),
+        toc: 'left',
+        icons: 'font',
+        'source-highlighter': 'rouge',
+        sectanchors: '',
+        sectlinks: '',
+        diagramsdir: "${projectDir}/consumer/diagrams".toString(),
+        imagesdir: 'images',
+        imagesoutdir: layout.buildDirectory.dir('docs/html/images').get().asFile.absolutePath,
+    ]
+
+    modules {
+        diagram.use()
+    }
+
+    fatalWarnings ~/include file not found|missing callout|image to embed not found or not readable/
+    fatalWarnings missingIncludes()
+}
+
+asciidoctor {
+    baseDir 'consumer'
+    sourceDir 'consumer'
+    sources {
+        include('index.adoc')
+    }
+    outputDir layout.buildDirectory.dir('docs/html')
+
+    logging.captureStandardError LogLevel.INFO
+}
+
+tasks.register('asciidoctorFrontend', org.asciidoctor.gradle.jvm.AsciidoctorTask) {
+    baseDir 'frontend'
+    sourceDir 'frontend'
+    sources {
+        include('index.adoc')
+    }
+    outputDir layout.buildDirectory.dir('docs/html-frontend')
+
+    logging.captureStandardError LogLevel.INFO
+}

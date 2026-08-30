@@ -1,0 +1,20 @@
+= Fineract Consumer Frontend
+
+This manual documents the Angular demo client for the consumer-facing BFF (backend-for-frontend). The frontend is intentionally narrow in scope: it exists to exercise every BFF endpoint end to end with a minimal, clear surface. It talks only to the BFF, never to Fineract Core directly, and it holds no security policy of its own: the BFF decides, and the frontend renders state and dispatches actions.
+
+The manual is organized into four chapters, mirroring the BFF manual in `docs/consumer/`:
+
+* Architecture: the application shell, routing, state management, and the generated BFF client integration.
+* Security: how the client cooperates with the BFF's security model (sessions, device fingerprint, step-up, and data hygiene).
+* Features: one section per feature area, covering screens, flows, and the BFF endpoints each exercises.
+* Development: building, testing, and how the built app is served.
+
+Terms shared with the backend (BFF, ABAC, TPP, consent, step-up, idempotency key) are defined in the BFF manual's glossary at `docs/consumer/glossary.adoc`; this manual defines only frontend-specific jargon inline.
+
+include::architecture/index.adoc[leveloffset=+1]
+
+include::security/index.adoc[leveloffset=+1]
+
+include::features/index.adoc[leveloffset=+1]
+
+include::development/index.adoc[leveloffset=+1]

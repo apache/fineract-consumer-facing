@@ -1,0 +1,159 @@
+= Technology Stack
+
+== Language and build
+
+The BFF is built with Gradle from `consumer/build.gradle`. Versions below are taken from that file and from `consumer/compose.yaml`.
+
+[cols="1,1,3"]
+|===
+|Component |Version |Notes
+
+|Java
+|21
+|Gradle toolchain (`JavaLanguageVersion.of(21)`).
+
+|Spring Boot
+|4.0.6
+|Via the `org.springframework.boot` Gradle plugin.
+
+|Spring Cloud
+|2025.1.0
+|BOM imported through `io.spring.dependency-management` 1.1.7.
+
+|Spring Modulith
+|2.0.2
+|BOM `spring-modulith-bom`.
+
+|Liquibase
+|4.33.0
+|Pinned via `ext['liquibase.version']`, overriding the Boot BOM. The pin is deliberate: 4.33.0 is the newest Liquibase release under an Apache Category A license, so do not let the BOM manage the version.
+
+|OpenAPI Generator
+|7.13.0
+|Gradle plugin `org.openapi.generator`.
+
+|PostgreSQL
+|18 (server)
+|`postgres:18-alpine` in compose; JDBC driver `org.postgresql:postgresql` at runtime.
+
+|Valkey
+|8
+|`valkey/valkey:8-alpine` in compose; accessed through Spring's Redis client stack (Valkey speaks the Redis wire protocol).
+|===
+
+== Backend dependencies
+
+One line per dependency, as declared in `consumer/build.gradle`.
+
+[cols="2,3"]
+|===
+|Dependency |Purpose
+
+|`spring-boot-starter-web`
+|Spring MVC REST controllers.
+
+|`spring-boot-starter-security`
+|Authentication and authorization framework; all endpoints are deny-by-default.
+
+|`spring-boot-starter-oauth2-resource-server`
+|Validates the BFF's own JWTs (JSON Web Tokens, signed bearer tokens) on incoming requests.
+
+|`spring-boot-starter-oauth2-authorization-server`
+|Runs an in-process OAuth2 authorization server for the open banking consent flow (authorization code with PKCE for third-party providers).
+
+|`spring-boot-starter-data-jpa`
+|JPA (Java Persistence API) entity mapping and Spring Data repositories over PostgreSQL.
+
+|`spring-boot-starter-liquibase`
+|Liquibase runs versioned database migrations (changelogs under `src/main/resources/db/changelog/`) at startup. No `ddl-auto=update`; the schema is migration-owned and Hibernate only validates it.
+
+|`spring-boot-starter-data-redis`
+|Redis-protocol client used against Valkey: JWT denylist, OTP state, rate-limit counters, ownership cache.
+
+|`spring-boot-starter-validation`
+|Bean Validation annotations on request DTOs.
+
+|`spring-boot-starter-mail`
+|SMTP delivery of OTP emails (Mailpit locally).
+
+|`spring-boot-starter-actuator`
+|Health and operational endpoints. The compose healthcheck does not call Actuator; it is a raw TCP probe of the app port.
+
+|`spring-cloud-starter-openfeign`
+|Feign, a declarative HTTP client: you write a Java interface, Spring generates the HTTP calls. Used for all Fineract Core calls.
+
+|`spring-modulith-starter-core` / `-starter-jdbc` / `-core`
+|Spring Modulith module-boundary enforcement plus a JDBC-backed event publication log (transactional outbox for application events, completed rows deleted on success).
+
+|`springdoc-openapi-starter-webmvc-ui` 3.0.3
+|Serves the BFF's own OpenAPI spec at `/v3/api-docs`, which the client-generation tasks consume.
+
+|`caffeine`
+|In-process cache, the L1 in front of Valkey for the ABAC ownership cache.
+
+|`lombok`
+|Compile-time code generation for getters, constructors, builders; the project uses Lombok-annotated classes instead of Java records. Spring Boot 4.0.x ships Jackson 3 (`tools.jackson.*`), with which Lombok's `@Value`/`@Jacksonized` combination does not work, so the codebase standardizes on `@Getter` plus `@RequiredArgsConstructor`.
+
+|`postgresql` (runtime)
+|JDBC driver.
+|===
+
+Test-scope dependencies:
+
+[cols="2,3"]
+|===
+|Dependency |Purpose
+
+|`spring-boot-starter-test`, JUnit 5
+|Unit tests for services, policy logic, and mapping.
+
+|`spring-security-test`
+|Security assertions for protected endpoints.
+
+|`spring-modulith-starter-test`
+|Verifies module boundaries.
+
+|`cucumber-java` 7.20.1
+|End-to-end tests written as Gherkin features in `src/test/resources/features/`, run by the `cucumber` Gradle task against the Docker stack.
+
+|`feign-okhttp`, `feign-jackson`, `feign-slf4j`, `jackson-databind-nullable`
+|Runtime pieces for the generated Java test client used by the Cucumber harness.
+|===
+
+== OpenAPI client generation pipeline
+
+The BFF's API contract is machine-generated in both directions.
+
+Outbound (clients of the BFF), all in `consumer/build.gradle`:
+
+[cols="1,3"]
+|===
+|Gradle task |What it does
+
+|`openapi`
+|Downloads the live spec from the running app at `http://localhost:8080/v3/api-docs` into `build/openapi/openapi.json`. The Docker stack must be up.
+
+|`generateJavaClient`
+|Generates a Java Feign client from that spec into `build/generated/java-client` (packages `org.apache.fineract.consumer.client.*`). This is the Cucumber test harness client.
+
+|`generateTypescriptClient`
+|Generates a typescript-angular client into `frontend/src/openapi-client` as npm package `@bff/client`. The Angular app imports only these typed services and models.
+
+|`generateClients`
+|Runs both of the above.
+|===
+
+Inbound (the BFF's client for Fineract): the `sanitizeFineractSpec` and `generateFineractClient` tasks generate the Fineract Feign client at every build from a vendored copy of Fineract's OpenAPI spec. See xref:fineract-integration[Fineract Core Integration] for the details.
+
+Because the outbound spec is scraped from the running application, regenerating clients requires the compose stack. Old output directories must be deleted first, since the generator does not remove files for endpoints that no longer exist.
+
+== Frontend
+
+The frontend is an Angular 22 client (standalone components, signals), built with Node 22 and served by `nginx:1.27-alpine` in its Docker image. Unit tests run with Vitest, end-to-end tests with Playwright. It consumes the generated `@bff/client` and contains no business logic.
+
+== Design rationale
+
+* Generating both API clients from the BFF's own OpenAPI spec makes the contract single-sourced: a controller change propagates to the Java test client and the Angular client mechanically, and drift shows up as a compile error rather than a runtime surprise.
+* Spring Modulith gives module-boundary enforcement without the operational cost of microservices; a boundary violation fails a test instead of surviving until a refactor.
+* Liquibase-owned schema plus `ddl-auto=validate` means the database is reproducible from changelogs alone, which the ephemeral `tmpfs` databases rely on.
+* Valkey with a Caffeine L1 keeps hot ABAC lookups in-process while remaining correct if the BFF is ever scaled beyond one instance.

@@ -1,0 +1,114 @@
+= Architecture Overview
+
+== What this project is
+
+This repository contains a consumer-facing banking application built on top of Apache Fineract Core. It has two deliverables:
+
+* A backend-for-frontend (BFF): a Spring Boot service in `consumer/`. A BFF is a server that sits between a specific client application and the systems of record, exposing exactly the API that client needs and nothing more.
+* A demo Angular client in `frontend/` that exercises the BFF endpoints end to end.
+
+The BFF is the only component allowed to talk to upstream Fineract Core. The Angular client talks only to the BFF. This boundary is the reason the project exists and is not negotiable.
+
+== Why the BFF exists
+
+Fineract previously shipped Self-Service APIs that allowed consumer clients to call Fineract directly. Those APIs were deprecated and removed in 2025 because direct client-to-Fineract access was insecure: Fineract's authorization model is built for back-office staff, not for anonymous consumers on the public internet.
+
+The BFF replaces that model. It is the policy enforcement point for consumer-facing rules:
+
+* It owns consumer identity: registration, OTP verification, login, JWT issuance, refresh-token rotation, and device-fingerprint binding.
+* It enforces attribute-based access control (ABAC) on every request before anything reaches Fineract. Fineract only ever sees a trusted service account, so the BFF's checks are the consumer-level authorization, not a duplicate of Fineract's.
+* It translates between consumer-shaped DTOs and Fineract's internal API shapes, so Fineract response formats never leak to the browser.
+
+== Repository layout
+
+[cols="1,3"]
+|===
+|Path |Contents
+
+|`consumer/`
+|The Spring Boot BFF (Java 21, Gradle). Source under `src/main/java/org/apache/fineract/consumer`, Liquibase changelogs under `src/main/resources/db/changelog/`, Cucumber features under `src/test/resources/features/`, the local Docker stack in `compose.yaml`.
+
+|`frontend/`
+|The Angular demo client (TypeScript). Built into a static bundle and served by nginx (see `frontend/Dockerfile` and `frontend/nginx.conf`). Consumes the generated `@bff/client` OpenAPI client in `frontend/src/openapi-client/`.
+
+|`.github/`
+|CI workflows: backend and frontend build-and-test, CodeQL, Apache RAT license checks, ASF allowlist checks, Category X dependency checks, frontend Prettier and ESLint checks, i18n checks, PR test-count checks, zizmor workflow linting.
+
+|`docs/`
+|Project documentation, including this manual.
+|===
+
+Within the BFF, code is packaged by feature (bounded context), not by layer: `audit`, `authentication`, `beneficiaries`, `identity`, `loans`, `openbanking`, `registration`, `savings`, `summary`, `transfers`, `user`, plus a shared `infrastructure` package (which also hosts cross-feature capabilities such as OTP challenges). Spring Modulith (a library that treats each top-level package as a module and verifies that modules only use each other's exposed interfaces) enforces these boundaries at test time. Each feature is split into `command` (writes) and `query` (reads) sub-trees.
+
+== Runtime topology
+
+.Local stack: containers, ports, and who talks to whom
+[plantuml,format=svg]
+----
+include::{diagramsdir}/runtime-topology.puml[]
+----
+
+The local stack is defined in `consumer/compose.yaml`. Docker Compose (a tool that starts a set of containers with one command) brings up:
+
+[cols="1,2,3"]
+|===
+|Service |Image |Role
+
+|`bff`
+|built from `consumer/Dockerfile`
+|The BFF itself, host port 8080.
+
+|`bff-db`
+|`postgres:18-alpine`
+|The BFF's own PostgreSQL database, host port 5432. Holds users, refresh tokens, beneficiaries, audit events, open banking consents, registered third-party providers (TPPs), OAuth2 authorization state, and the Modulith event publication log.
+
+|`fineract`
+|`apache/fineract:1.12.1`
+|Upstream Fineract Core, host port 8888 (container port 8080), SSL disabled inside the compose network.
+
+|`fineract-db`
+|`postgres:18-alpine`
+|Fineract's tenant database, host port 5433.
+
+|`valkey`
+|`valkey/valkey:8-alpine`
+|Valkey, a Redis-compatible in-memory store, host port 6379. Used by the BFF for the JWT denylist, pending OTP hashes, rate-limit counters, and the ownership cache.
+
+|`mailpit`
+|`axllent/mailpit:v1.30.2`
+|Development SMTP catcher. OTP emails land in a web inbox on host port 8025; SMTP on host port 1025.
+|===
+
+The full end-to-end stack in `docker-compose.e2e.yml` at the repository root reuses `consumer/compose.yaml` via Compose's `include:` directive and adds one service:
+
+* `frontend`: the Angular bundle served by nginx on host port 4443. Its `nginx.conf` proxies `/api/` to `http://bff:8080/api/` and serves the static app for everything else.
+
+Database containers use `tmpfs` volumes, so all data is wiped whenever the stack stops. This is deliberate: every test run starts from a clean database.
+
+== Request path
+
+A browser request travels through the following hops in the e2e stack:
+
+. Browser calls `http://localhost:4443`. nginx in the `frontend` container serves the Angular app and adds security response headers.
+. The Angular app calls `/api/...`. nginx proxies these to `bff:8080`, adding `X-Forwarded-*` headers, which the BFF honors via `server.forward-headers-strategy=framework`.
+. The BFF authenticates the JWT, checks the `X-Device-Fingerprint` header against the token's claim, evaluates ABAC policy, and reads or writes its own PostgreSQL and Valkey state as needed.
+. If Fineract data is required, the BFF calls `http://fineract:8080/fineract-provider/api` over the Docker network through its generated Feign client, authenticating with a Fineract service account and the `Fineract-Platform-TenantId` header.
+. The response is mapped from Fineract's shapes into the BFF's own DTOs before returning to the browser.
+
+When running the backend stack alone (Cucumber tests, manual curl), clients hit the BFF directly on `http://localhost:8080` and the nginx hop is absent.
+
+== Design rationale
+
+* A single choke point between consumers and Fineract means every consumer-facing rule (KYC standing, account ownership, device trust, rate limits, consent scope) is enforced in one codebase instead of being scattered across clients or bolted onto Fineract.
+* Fineract sees only a service account. This keeps upstream Fineract unmodified and lets the BFF's authorization model evolve independently of back-office roles.
+* Package-by-feature with Spring Modulith keeps a multi-year codebase navigable: a feature's controllers, services, entities, and migrations live together, and the module test fails when a boundary is crossed.
+* Docker Compose with ephemeral databases makes local development and CI identical: every run starts from the same clean state, and there is no drift between "works on my machine" environments.
+
+== Limitations and future work
+
+* *The compose stack is a development and demo runtime.* Production deployments bring their own orchestration (Kubernetes, ECS) and high-availability setup.
+* *All in-network traffic is cleartext HTTP.* This includes BFF to Fineract, and TLS termination exists only conceptually (the nginx layer runs plain HTTP on port 4443). Production requires TLS on every wire; mutual TLS is reserved for connections between open banking providers and the open banking endpoints.
+* *No correlation ID reaches Fineract calls.* A correlation ID is stored on audit events (`correlation_id` column in the `audit` changelog entity), but there is no Feign interceptor that forwards a request ID, so tracing a request across BFF and Fineract logs is manual.
+* *Actuator endpoints share the application port.* Production deployments move them to a separate management port.
+* *Logging uses Spring Boot defaults.* Production deployments enable structured JSON logging.
+* *The `tmpfs` databases are wiped on every restart.* This suits local development and tests; a deployment that needs data to survive restarts replaces them with persistent volumes.

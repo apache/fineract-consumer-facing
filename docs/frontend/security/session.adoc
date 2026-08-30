@@ -1,0 +1,58 @@
+[[session]]
+= Session Model
+
+This section describes how the Angular client logs in, stays logged in, and is logged out under the BFF's token model. The client never sees a token value. Both session tokens travel in httpOnly cookies (browser cookies that page JavaScript cannot read), set and read only by the BFF. The server half (token contents, lifetimes, rotation, and validation) is described in `docs/consumer/security/tokens.adoc`.
+
+The client code involved is `frontend/src/app/core/auth/auth.service.ts`, `core/interceptors/error.interceptor.ts`, `core/guards/auth.guard.ts`, `app.config.ts`, and `features/auth/login.component.ts`.
+
+== What the client actually holds
+
+`AuthService` keeps exactly one piece of session state: a signal (an Angular reactive value that templates re-render from) named `sessionExpiresAt`, holding the access-token expiry timestamp the BFF returns in the 2FA and refresh response bodies. A computed `isAuthenticated` is simply `sessionExpiresAt() !== null`.
+
+Nothing else exists on the client: no token string, no user object, no entry in localStorage (a persistent key-value store in the browser). The cookies ride along automatically on every request because the browser attaches them; the client cannot inspect them even if it wanted to. A consequence worth knowing: `isAuthenticated` is a belief, not a fact. The authoritative check happens on the BFF for every request.
+
+== Login is two steps
+
+`LoginComponent` drives the flow with a `step` signal (`credentials` or `otp`):
+
+. The credentials form posts email and password via `AuthService.login` (`POST /api/v1/authentication/login`). A success does not create a session; it returns a challenge (a `challengeToken` string plus `sentTo`, the masked email an OTP was mailed to). The component keeps the challenge token in a private field and switches to the OTP step, rendered by the shared `OtpComponent`.
+. The submitted code goes to `AuthService.verifyTwoFactor` (`POST /api/v1/authentication/2fa`) together with the challenge token. On success the BFF sets both session cookies and the service adopts the returned `expiresAt` into the signal. The component then navigates to `/summary`, or to a `returnUrl` query parameter. The `returnUrl` is honored only if it starts with `/api/v1/oauth2/` (`allowedReturnUrl`), which is the open banking consent hand-off; any other value is ignored to prevent open redirects.
+
+== Silent restore at boot
+
+Because the session lives in cookies, a page reload does not lose it, but the in-memory signal starts empty. `app.config.ts` registers a `provideAppInitializer` (code Angular runs before the first screen renders) that calls `auth.refresh()` once and swallows any failure with `.catch(() => undefined)`. If the refresh cookie is still valid, the BFF rotates it, sets fresh cookies, and the signal is populated, so the user stays logged in across reloads. If not, the app simply boots unauthenticated and the route guard sends the user to `/login`.
+
+== Refresh, and why it is deduplicated
+
+`AuthService.refresh()` calls `POST /api/v1/authentication/refresh`; the browser supplies the refresh cookie. The service keeps a single in-flight observable guarded by `shareReplay(1)`, an RxJS operator that lets many subscribers share one HTTP call and its result. If several requests fail with 401 at the same moment, they all wait on the same refresh instead of racing the BFF with parallel rotations. The BFF has a 30-second grace window for honest races (see `docs/consumer/security/tokens.adoc`), but the client avoids creating them in the first place. `finalize` clears the slot when the call settles so the next refresh starts fresh.
+
+== The 401 path in the error interceptor
+
+`errorInterceptor` wraps every HTTP call. Its handling, in order:
+
+[cols="2,3", options="header"]
+|===
+|Failure |Client behavior
+
+|Any error on the audit endpoint or on the refresh endpoint itself
+|Passed through untouched, so audit retries and refresh failures are handled by their callers, not recursively
+
+|403 with code `error.msg.consumer.auth.device.fingerprint.forbidden`
+|Device mismatch: clear the session signal and redirect to `/login` (see xref:device-fingerprint[Device Fingerprint])
+
+|401 with no BFF error code
+|Treated as an expired access token: call `auth.refresh()`, then retry the original request once. If the retry fails 401 or 403, clear the session and redirect to `/login`; a 429 on retry shows the rate-limited toast
+
+|401 carrying a BFF error code
+|Not a session problem (for example an invalid step-up token); shown as a translated toast like any other error
+|===
+
+The distinction in the last two rows matters: the BFF's business denials arrive as 401 plus a machine-readable code, while a dead access token arrives as a bare 401. Only the latter should trigger a refresh.
+
+== Logout
+
+`AuthService.logout()` calls `POST /api/v1/authentication/logout`, then clears the local signal. On that call the BFF denylists the access token, revokes the refresh token, and expires both cookies. The layout shell also records a `LOGOUT` audit event before calling it.
+
+== What the route guard checks
+
+`authGuard` is one line of policy: it returns `true` when `isAuthenticated()` is set, and a redirect to `/login` otherwise. It reads only the in-memory signal; it makes no network call and proves nothing. Its job is user experience (do not render account screens that would immediately 401), not security. A user who tampers with client state past the guard still holds no valid cookie, and every BFF endpoint rejects them.
