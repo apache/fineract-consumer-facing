@@ -12,5 +12,3 @@ SECURITY.md
 *.jar
 **/.nvmrc
 **/.prettierignore
-docs/**/*.adoc
-docs/**/*.puml

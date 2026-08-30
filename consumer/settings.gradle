@@ -18,6 +18,3 @@
  */
 
 rootProject.name = 'consumer'
-
-include ':docs'
-project(':docs').projectDir = new File(settingsDir, '../docs')

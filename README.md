@@ -62,38 +62,23 @@ The BFF is organized by feature and bounded context, not by layer. Feature servi
 
 ```
 fineract-consumer-facing/
-├── consumer/                  Spring Boot BFF (Java 21, Gradle)
-│   ├── src/main/java/org/apache/fineract/consumer/
-│   │   ├── registration/          sign-up and account binding
-│   │   ├── authentication/        login, tokens, password reset
-│   │   ├── identity/              government-ID check against Fineract
-│   │   ├── savings/               accounts, balances, transactions
-│   │   ├── loans/                 accounts, schedules, applications, repayment
-│   │   ├── transfers/             money movement between accounts and payees
-│   │   ├── beneficiaries/         saved payees
-│   │   ├── summary/               aggregated savings and loans dashboard
-│   │   ├── openbanking/           OAuth2 consent and third-party read access
-│   │   ├── user/                  profile and settings
-│   │   ├── audit/                 audit event ingest and query
-│   │   └── infrastructure/        cross-cutting: Fineract client, ABAC, JWT, OTP, rate limiting
-│   ├── compose.yaml           backend stack (BFF, databases, Fineract, Mailpit, Valkey)
-│   └── scripts/               dev key generation and demo seeding
-├── frontend/                  Angular demo client (TypeScript)
-│   └── src/
-│       ├── app/features/          one folder per screen group, mirroring a BFF context
-│       ├── app/core/              auth, interceptors, guards, audit, i18n, notifications
-│       ├── app/shared/            reusable UI, OTP entry, shared styles
-│       ├── app/layout/            shell for authenticated screens
-│       └── openapi-client/        generated BFF client (alias @bff/client)
-├── docs/                      AsciiDoc manuals
-│   ├── consumer/                  BFF manual: architecture, security, features, appendix, diagrams
-│   ├── frontend/                  Angular client manual: architecture, security, features
-│   └── build.gradle               Asciidoctor build pipeline
+├── consumer/            Spring Boot BFF (Java 21, Gradle)
+│   └── src/main/java/org/apache/fineract/consumer/
+│       ├── registration/
+│       ├── authentication/
+│       ├── otp/
+│       ├── savings/
+│       ├── loans/
+│       ├── transfers/
+│       ├── user/
+│       ├── audit/
+│       └── infrastructure/
+├── consumer/
+│   └── compose.yaml      backend stack (BFF, databases, Fineract, Mailpit)
+├── frontend/            Angular demo client (TypeScript) 
 ├── docker-compose.e2e.yml     full stack including frontend, for E2E tests
 └── .github/workflows/         CI: backend and frontend builds, CodeQL, RAT
 ```
-
-The manuals under `docs/` are built with Gradle. The Documentation section below has the commands and output locations.
 
 
 Instructions
@@ -225,32 +210,6 @@ cd consumer
 ./gradlew generateFineractClient
 ```
 
-
-
-Documentation
-============
-
-The repository carries two AsciiDoc manuals under `docs/`. `docs/consumer/` documents the BFF (architecture, security, features). `docs/frontend/` documents the Angular client. Both compile to standalone HTML with AsciiDoctor through a Gradle subproject defined in `docs/build.gradle` and wired in through `consumer/settings.gradle`.
-
-Unlike the other backend Gradle commands in this README, the documentation build needs no running Docker stack. It is pure file compilation: there is no live application to scrape.
-
-The BFF manual can be built and opened:
-```bash
-cd consumer
-./gradlew :docs:asciidoctor
-open ../docs/build/docs/html/index.html
-```
-
-The frontend manual:
-```bash
-cd consumer
-./gradlew :docs:asciidoctorFrontend
-open ../docs/build/docs/html-frontend/index.html
-```
-
-Replace `open` with `xdg-open` on Linux or `start` on Windows. Those paths are relative to `consumer/`; from the repository root the manuals are at `docs/build/docs/html/index.html` and `docs/build/docs/html-frontend/index.html`.
-
-The build uses strict validation. A broken include or a missing image fails the build rather than silently producing a broken page.
 
 
 Community

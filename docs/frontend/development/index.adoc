@@ -1,7 +1,0 @@
-= Development
-
-This chapter covers the day-to-day developer workflow for the Angular client. It describes the npm script inventory, running the dev server against the backend stack, unit and end-to-end tests, regenerating the typed API client, and how the built app is served through nginx in the local Docker stack.
-
-include::build-and-test.adoc[leveloffset=+1]
-
-include::serving.adoc[leveloffset=+1]
