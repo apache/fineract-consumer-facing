@@ -1,0 +1,82 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+vars: {
+  d2-config: {
+    sketch: true
+    theme-id: 4
+    layout-engine: dagre
+    center: true
+    pad: 20
+  }
+}
+
+direction: right
+
+*.style.font-size: 20
+*.style.stroke-width: 2
+bff.*.style.font-size: 20
+bff.*.style.stroke-width: 2
+frontend.*.style.font-size: 20
+frontend.*.style.stroke-width: 2
+(** -> **)[*].style.font-size: 18
+(** -> **)[*].style.stroke-width: 2
+
+title: "Open Banking — Share your data, on your terms" {
+  near: top-center
+  shape: text
+  style.font-size: 28
+  style.bold: true
+}
+
+customer: "Customer" {shape: person}
+
+tpp: "Third-Party App" {shape: person}
+
+bff: "Consumer Backend (BFF)" {
+  consent: "Consent\ntime-limited · read-only · revocable" {shape: page}
+  oauth: "OAuth2 + PKCE\nshort-lived access tokens"
+  api: "Accounts API\naccounts · balances\nconsent checked every call"
+}
+
+frontend: "Banking App" {
+  approve: "Login + consent screen\nAllow / Deny"
+  settings: "Settings\nConnected apps"
+}
+
+fineract: "Fineract\nCore Banking" {shape: cylinder}
+
+tpp -> bff.consent: "1. request\naccess" {style.stroke: "#b06000"; style.font-color: "#b06000"}
+tpp -> customer: "2. sends you\nto your bank" {style.stroke: "#b06000"; style.font-color: "#b06000"}
+customer -> frontend.approve: "3. log in (2FA)\n+ approve"
+frontend.approve -> bff.consent: "4. consent\nAUTHORISED"
+tpp -> bff.oauth: "5. get\ntoken" {style.stroke: "#b06000"; style.font-color: "#b06000"}
+tpp -> bff.api: "6. read\naccounts" {style.stroke: "#b06000"; style.font-color: "#b06000"}
+bff.api -> fineract: "7. fetch\ndata"
+
+customer -> frontend.settings: "revoke\nanytime"
+frontend.settings -> bff.consent: "REVOKED\napp is cut off" {
+  style.stroke: "#c62828"
+  style.font-color: "#c62828"
+}
+
+note: "v1 = account information only (read-only). No payment initiation." {
+  near: bottom-center
+  shape: text
+  style.font-size: 16
+  style.italic: true
+}

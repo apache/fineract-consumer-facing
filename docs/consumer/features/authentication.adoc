@@ -30,10 +30,10 @@ It delegates to infrastructure components:
 
 Login is a two-step flow. The password check alone never yields a session; the OTP verification is the second factor and is required on every login.
 
-.Login, OTP verify, session mint, and refresh rotation
-[plantuml,format=svg]
+.Two-factor login: password, emailed one-time code, session mint
+[d2,format=svg]
 ----
-include::{diagramsdir}/auth-sequence.puml[]
+include::{diagramsdir}/2fa.d2[]
 ----
 
 . `POST /api/v1/authentication/login` carries email and password in the body and the device fingerprint in the `X-Device-Fingerprint` header. The service looks the user up by email, requires the account to be in `BOUND` state (bound to a Fineract client, see the registration section), then checks the password with the Spring Security `PasswordEncoder`. Any failure, unknown email, unbound account, or wrong password, produces the same generic 401 `error.msg.consumer.auth.invalid.credentials` and publishes a `LOGIN_FAILURE` audit event. No account lockout counter is kept.

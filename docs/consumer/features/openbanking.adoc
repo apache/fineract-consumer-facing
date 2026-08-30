@@ -89,10 +89,10 @@ All authorization-server endpoints are remapped under `/api/v1/oauth2/` (see `OA
 
 === Step by step
 
-.Consent ceremony: authorization code with PKCE, end to end
-[plantuml,format=svg]
+.Consent ceremony: the customer grants, the TPP reads, revocation cuts access
+[d2,format=svg]
 ----
-include::{diagramsdir}/openbanking-consent-sequence.puml[]
+include::{diagramsdir}/open-banking.d2[]
 ----
 
 . *The TPP creates a consent.* It obtains a `client_credentials` token (scope `openbanking:consents`) from `POST /api/v1/oauth2/token`, then calls `POST /api/v1/openbanking/account-access-consents` with the requested permissions. The consent is stored as `AWAITING_AUTHORISATION` and its UUID is returned.

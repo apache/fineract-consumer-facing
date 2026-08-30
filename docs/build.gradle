@@ -42,7 +42,9 @@ asciidoctorj {
     ]
 
     modules {
+        // 2.2.3 (plugin default) predates d2 support, which arrived in 2.2.4
         diagram.use()
+        diagram.version '2.3.1'
     }
 
     fatalWarnings ~/include file not found|missing callout|image to embed not found or not readable/

@@ -1,0 +1,78 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+vars: {
+  d2-config: {
+    sketch: true
+    theme-id: 4
+    layout-engine: dagre
+    center: true
+    pad: 20
+  }
+}
+
+direction: right
+
+*.style.font-size: 20
+*.style.stroke-width: 2
+browser.*.style.font-size: 20
+browser.*.style.stroke-width: 2
+bff.*.style.font-size: 20
+bff.*.style.stroke-width: 2
+db.*.style.font-size: 20
+(** -> **)[*].style.font-size: 18
+(** -> **)[*].style.stroke-width: 2
+
+title: "Audit Trail — One table, two trust levels" {
+  near: top-center
+  shape: text
+  style.font-size: 28
+  style.bold: true
+}
+
+browser: "Banking App (browser)" {
+  events: "What the user does\nnavigation · errors\nsensitive views\n& actions"
+  scrub: "PII scrub\n(client-side)"
+  events -> scrub
+}
+
+bff: "Consumer Backend (BFF)" {
+  label.near: top-left
+  ingest: "Client event intake\nUNTRUSTED\nvalidate · allowlist\nPII screen · dedupe"
+  server_events: "Server security\nevents\nlogins · denials · OTP\npassword changes"
+  outbox: "Durable outbox\n(no event lost\non crash)" {shape: queue}
+  retention: "Retention job\nshort client retention\nlong server retention"
+
+  server_events -> outbox
+}
+
+db: "audit_events\nappend-only table" {shape: cylinder}
+
+activity: "Activity view\nusers see their\nown history"
+
+browser.scrub -> bff.ingest: "batched"
+bff.ingest -> db
+bff.outbox -> db: "marked\nTRUSTED"
+bff.retention -> db: "purge\nold rows" {style.stroke-dash: 3}
+db -> activity: "read-only" {style.stroke-dash: 3}
+
+note: "Client rows = behavioral signal. Server rows = the security record.\nA failed audit write never blocks a login." {
+  near: bottom-center
+  shape: text
+  style.font-size: 16
+  style.italic: true
+}
