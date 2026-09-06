@@ -21,10 +21,12 @@ on:
   push:
     paths:
       - 'consumer/**'
+      - 'docs/build.gradle'
       - '.github/workflows/build-tests-backend.yml'
   pull_request:
     paths:
       - 'consumer/**'
+      - 'docs/build.gradle'
       - '.github/workflows/build-tests-backend.yml'
 
 permissions:

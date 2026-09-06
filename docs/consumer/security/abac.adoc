@@ -5,6 +5,12 @@ This section describes how the consumer BFF (backend-for-frontend, the Spring Bo
 
 ABAC (attribute-based access control) means authorization decisions are computed from attributes of the principal (who is asking), the resource (what they are asking about), and the environment (the circumstances of the request), rather than from role checks alone. A role check answers "is this user an admin". An ABAC check answers "is this KYC-verified consumer, on the device the session was issued to, asking about a savings account that actually belongs to them".
 
+.The ABAC guard: policy checks, the two-level ownership cache, and both outcomes
+[d2,format=svg]
+----
+include::{diagramsdir}/abac.d2[]
+----
+
 == Deny by default
 
 Every HTTP request must pass authentication before any controller runs. There are three Spring Security filter chains, and each one ends in `anyRequest().authenticated()`:

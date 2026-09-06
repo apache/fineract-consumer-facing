@@ -9,6 +9,12 @@ The two halves meet in the feature module: `ServerAuditEventListener` (in `consu
 
 Responsibility is split with Fineract Core. Fineract, as the system of record, audits backend financial operations and keeps the authoritative record of every posted transaction. The BFF audits the consumer channel instead, covering security events observed at the gateway (logins, denials, OTP challenges, consent grants) and telemetry reported by the browser. Successful financial operations are therefore not duplicated into `audit_events`; a completed transfer, for example, is recorded by Fineract and re-read from there on demand.
 
+.One table, two trust levels: client telemetry and server security events
+[d2,format=svg]
+----
+include::{diagramsdir}/audit.d2[]
+----
+
 == Frontend event ingestion (consumer.audit, command side)
 
 The Angular client batches audit events (navigation, sensitive views and actions, client errors, API failures, logout) and posts them to one endpoint.
