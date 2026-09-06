@@ -46,27 +46,22 @@ public class StepUpTokenService {
     private final JwtIssuer jwtIssuer;
     private final JwtDecoder jwtDecoder;
 
-    public String actionFingerprint(String endpoint, Long fromAccountId, Long toAccountId, BigDecimal amount) {
-        String canonical =
-                endpoint + "|" + fromAccountId + "|" + toAccountId + "|" + amount.stripTrailingZeros().toPlainString();
-        return hash(canonical);
+    public String actionFingerprint(String endpoint, Object... parts) {
+        StringBuilder canonical = new StringBuilder(endpoint).append('|');
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                canonical.append('|');
+            }
+            canonical.append(fingerprintPart(parts[i]));
+        }
+        return hash(canonical.toString());
     }
 
-    public String actionFingerprint(
-            String endpoint, Long fromAccountId, Long toAccountId, String toAccountType, BigDecimal amount) {
-        String canonical = endpoint + "|" + fromAccountId + "|" + toAccountId + "|" + toAccountType + "|"
-                + amount.stripTrailingZeros().toPlainString();
-        return hash(canonical);
-    }
-
-    public String actionFingerprint(String endpoint, Long fromAccountId, Long toAccountId) {
-        String canonical = endpoint + "|" + fromAccountId + "|" + toAccountId;
-        return hash(canonical);
-    }
-
-    public String actionFingerprint(String endpoint, String... parts) {
-        String canonical = endpoint + "|" + String.join("|", parts);
-        return hash(canonical);
+    private String fingerprintPart(Object part) {
+        if (part instanceof BigDecimal decimal) {
+            return decimal.stripTrailingZeros().toPlainString();
+        }
+        return String.valueOf(part);
     }
 
     private String hash(String canonical) {
