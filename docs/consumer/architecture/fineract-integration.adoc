@@ -107,7 +107,7 @@ This keeps the BFF's public contract stable when Fineract's API changes: a spec 
 
 == Limitations and future work
 
-* *No correlation ID is propagated to Fineract.* There is no request-ID Feign interceptor, so cross-system log tracing is manual.
+* *Correlation ID is established at the BFF edge but not yet propagated to Fineract.* Inbound requests receive or generate `X-Correlation-ID` (MDC + request holder + response header). A Feign interceptor to forward it upstream is still future work.
 * *Fineract calls have no resilience wrapping.* There is no retry, timeout tuning, or circuit breaker around them, so a slow Fineract stalls BFF request threads.
 * *BFF-to-Fineract traffic is cleartext HTTP.* It travels over the Docker network unencrypted. Production needs TLS on this wire; mutual TLS is reserved for connections between open banking providers and the open banking endpoints.
 * *Tenant selection is a static property.* Supporting multiple tenants would require deriving the tenant per request instead of per deployment.

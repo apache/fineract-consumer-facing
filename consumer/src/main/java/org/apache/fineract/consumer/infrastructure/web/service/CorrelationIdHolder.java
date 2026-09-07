@@ -17,16 +17,21 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.web.data;
+package org.apache.fineract.consumer.infrastructure.web.service;
 
-public final class ConsumerHeaders {
+public class CorrelationIdHolder {
 
-    private ConsumerHeaders() {
+    private String correlationId;
+
+    public void set(String correlationId) {
+        this.correlationId = correlationId;
     }
 
-    public static final String DEVICE_FINGERPRINT = "X-Device-Fingerprint";
-    public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
+    public String get() {
+        return correlationId;
+    }
 
-    public static final String CORRELATION_ID = "X-Correlation-ID";
+    public void clear() {
+        this.correlationId = null;
+    }
 }
-

@@ -19,14 +19,25 @@
 
 package org.apache.fineract.consumer.infrastructure.web.data;
 
-public final class ConsumerHeaders {
+import java.util.regex.Pattern;
 
-    private ConsumerHeaders() {
+public final class CorrelationConstants {
+
+    private CorrelationConstants() {
     }
 
-    public static final String DEVICE_FINGERPRINT = "X-Device-Fingerprint";
-    public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
+    /** SLF4J MDC key used for request correlation. */
+    public static final String MDC_KEY = "correlationId";
 
-    public static final String CORRELATION_ID = "X-Correlation-ID";
+    /**
+     * Maximum accepted length for an inbound correlation identifier. Oversized
+     * values are discarded and replaced with a generated id.
+     */
+    public static final int MAX_LENGTH = 128;
+
+    /**
+     * Allowed characters for inbound correlation identifiers: URL-safe token
+     * characters commonly used by UUIDs and opaque request ids.
+     */
+    public static final Pattern ALLOWED = Pattern.compile("^[A-Za-z0-9._-]{1," + MAX_LENGTH + "}$");
 }
-

@@ -17,16 +17,34 @@
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.web.data;
+package org.apache.fineract.consumer.infrastructure.web.service;
 
-public final class ConsumerHeaders {
+import static org.assertj.core.api.Assertions.assertThat;
 
-    private ConsumerHeaders() {
+import org.junit.jupiter.api.Test;
+
+class CorrelationIdHolderTest {
+
+    private final CorrelationIdHolder holder = new CorrelationIdHolder();
+
+    @Test
+    void getReturnsNullBeforeSet() {
+        assertThat(holder.get()).isNull();
     }
 
-    public static final String DEVICE_FINGERPRINT = "X-Device-Fingerprint";
-    public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
+    @Test
+    void getReturnsStoredValueAfterSet() {
+        holder.set("corr-1");
 
-    public static final String CORRELATION_ID = "X-Correlation-ID";
+        assertThat(holder.get()).isEqualTo("corr-1");
+    }
+
+    @Test
+    void getReturnsNullAfterClear() {
+        holder.set("corr-1");
+
+        holder.clear();
+
+        assertThat(holder.get()).isNull();
+    }
 }
-

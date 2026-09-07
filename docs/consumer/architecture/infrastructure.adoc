@@ -114,7 +114,7 @@ Step-up authentication: requiring a fresh proof (an OTP challenge) immediately b
 
 Small web-boundary helpers, split data and behavior:
 
-* `data/ConsumerHeaders` names the custom request headers `X-Device-Fingerprint` and `Idempotency-Key`.
+* `data/ConsumerHeaders` names the custom request headers `X-Device-Fingerprint`, `Idempotency-Key`, and `X-Correlation-ID`. `filter/CorrelationIdFilter` (registered at highest precedence) accepts or generates the correlation id, places it in MDC and the request-scoped `CorrelationIdHolder`, echoes it on the response, and clears both after the chain.
 * `data/PasswordPolicy` holds the password input-format constants (minimum length 15, maximum 64, and the complexity regular expression) referenced from request DTO Bean Validation annotations.
 * `service/EmailMaskingService` is a static utility that masks an email address for logs and OTP delivery notices (`a***@example.com`).
 
@@ -130,6 +130,6 @@ The rate-limiting and device-fingerprint filters live in `access/filter`, not he
 
 == Limitations and future work
 
-* *No correlation id or structured request logging yet.* The web package contains only header constants, a password policy, and an email masker. Propagating a correlation id from inbound requests through Feign calls to Fineract remains future work.
+* *Correlation id is established inbound; Feign propagation and structured request logging remain future work.* The web package now includes `CorrelationIdFilter` / `CorrelationIdHolder` for `X-Correlation-ID`. Forwarding that value on outbound Fineract calls is still outstanding.
 * *Valkey is a hard runtime dependency.* Rate limiting, the JWT denylist, OTP storage, and the level-2 ownership cache all assume a reachable Valkey; degraded-mode behavior when it is unavailable is not uniformly defined across these consumers.
 * *No tracing or metrics backend is bundled.* Production deployments wire Actuator and Micrometer into their own observability stack.
