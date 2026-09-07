@@ -20,6 +20,7 @@
 package org.apache.fineract.consumer.infrastructure.stepup.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import java.math.BigDecimal;
@@ -52,4 +53,18 @@ class StepUpTokenServiceTest {
         assertThat(service.actionFingerprint("endpoint", 10L, 20L, new BigDecimal("12.3400")))
                 .isEqualTo(service.actionFingerprint("endpoint", 10L, 20L, new BigDecimal("12.34")));
     }
+
+    @Test
+    void shouldTreatNullEndpointLikeLiteralNullString() {
+        assertThat(service.actionFingerprint(null, 10L, 20L))
+                .isEqualTo(service.actionFingerprint("null", 10L, 20L));
+    }
+
+    @Test
+    void shouldRejectUnsupportedFingerprintPartTypes() {
+        assertThatThrownBy(() -> service.actionFingerprint("endpoint", new Object()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported action fingerprint part type");
+    }
+
 }
