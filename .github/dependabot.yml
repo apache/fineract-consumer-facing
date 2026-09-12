@@ -24,6 +24,11 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    groups:
+      # init/analyze must run the same version; bump them together
+      codeql:
+        patterns:
+          - "github/codeql-action*"
 
   # Maintain dependencies for npm (Frontend/Node.js)
   - package-ecosystem: "npm"
@@ -32,6 +37,12 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    groups:
+      # Angular packages pin each other to exact versions; bump in lockstep
+      angular:
+        patterns:
+          - "@angular/*"
+          - "angular-eslint"
 
   # Maintain dependencies for Gradle (Backend)
   - package-ecosystem: "gradle"
