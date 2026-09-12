@@ -46,27 +46,34 @@ public class StepUpTokenService {
     private final JwtIssuer jwtIssuer;
     private final JwtDecoder jwtDecoder;
 
-    public String actionFingerprint(String endpoint, Long fromAccountId, Long toAccountId, BigDecimal amount) {
-        String canonical =
-                endpoint + "|" + fromAccountId + "|" + toAccountId + "|" + amount.stripTrailingZeros().toPlainString();
-        return hash(canonical);
+    public String actionFingerprint(String endpoint, Object... parts) {
+        // String.valueOf preserves the prior null-endpoint behavior ("null|...") without NPE.
+        StringBuilder canonical = new StringBuilder(String.valueOf(endpoint)).append('|');
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                canonical.append('|');
+            }
+            canonical.append(fingerprintPart(parts[i]));
+        }
+        return hash(canonical.toString());
     }
 
-    public String actionFingerprint(
-            String endpoint, Long fromAccountId, Long toAccountId, String toAccountType, BigDecimal amount) {
-        String canonical = endpoint + "|" + fromAccountId + "|" + toAccountId + "|" + toAccountType + "|"
-                + amount.stripTrailingZeros().toPlainString();
-        return hash(canonical);
-    }
-
-    public String actionFingerprint(String endpoint, Long fromAccountId, Long toAccountId) {
-        String canonical = endpoint + "|" + fromAccountId + "|" + toAccountId;
-        return hash(canonical);
-    }
-
-    public String actionFingerprint(String endpoint, String... parts) {
-        String canonical = endpoint + "|" + String.join("|", parts);
-        return hash(canonical);
+    private String fingerprintPart(Object part) {
+        if (part == null) {
+            return "null";
+        }
+        if (part instanceof BigDecimal decimal) {
+            return decimal.stripTrailingZeros().toPlainString();
+        }
+        if (part instanceof String string) {
+            return string;
+        }
+        // Only allow integral boxed numbers whose string form is stable across JVMs.
+        if (part instanceof Long || part instanceof Integer || part instanceof Short || part instanceof Byte) {
+            return part.toString();
+        }
+        throw new IllegalArgumentException(
+                "Unsupported action fingerprint part type: " + part.getClass().getName());
     }
 
     private String hash(String canonical) {
