@@ -35,7 +35,7 @@ The client to BFF to Fineract boundary is the reason the project exists: the fro
 
 Requirements
 ============
-* Java >= 21 (Azul Zulu JVM is tested by upstream Fineract CI on GitHub Actions)
+* Java 25 (the Gradle build targets a Java 25 toolchain)
 * Node.js >= 22 and npm >= 10 (for the frontend)
 * PostgreSQL >= 18 (the BFF keeps its own database, separate from Fineract's)
 * Docker and Docker Compose (the bundled compose stack runs the BFF database, Fineract Core, a development SMTP server, and the BFF)
@@ -62,7 +62,7 @@ The BFF is organized by feature and bounded context, not by layer. Feature servi
 
 ```
 fineract-consumer-facing/
-├── consumer/                  Spring Boot BFF (Java 21, Gradle)
+├── consumer/                  Spring Boot BFF (Java 25, Gradle)
 │   ├── src/main/java/org/apache/fineract/consumer/
 │   │   ├── registration/          sign-up and account binding
 │   │   ├── authentication/        login, tokens, password reset
