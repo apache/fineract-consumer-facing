@@ -56,7 +56,7 @@ class ServerAuditEventListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new ServerAuditEventListener(auditEventCommandRepository, JsonMapper.builder().build());
+        listener = new ServerAuditEventListener(auditEventCommandRepository, JsonMapper.builder().build(), null);
     }
 
     @Test
@@ -126,6 +126,66 @@ class ServerAuditEventListenerTest {
                 AuditEventType.LOGIN_SUCCESS,
                 USER_ID, false, DEVICE_FINGERPRINT, null)))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void duplicateKeyExceptionIsIgnored() {
+        when(auditEventCommandRepository.save(any(AuditEvent.class)))
+                .thenThrow(new DuplicateKeyException("duplicate"));
+
+        assertThatCode(() -> listener.onTransactionalEvent(TransactionalAuditEvent.of(
+                AuditEventType.LOGIN_SUCCESS,
+                USER_ID, false, DEVICE_FINGERPRINT, Map.of("flow", "change"))))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void eventPersistsCorrelationIdFromHolder() {
+        org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder holder =
+                new org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder();
+        holder.set("test-corr-id-456");
+        ServerAuditEventListener listenerWithCorrelation = new ServerAuditEventListener(
+                auditEventCommandRepository, JsonMapper.builder().build(), holder);
+
+        TransactionalAuditEvent event = TransactionalAuditEvent.of(
+                AuditEventType.LOGIN_SUCCESS,
+                USER_ID, false, DEVICE_FINGERPRINT, Map.of("flow", "change"));
+
+        listenerWithCorrelation.onTransactionalEvent(event);
+
+        AuditEvent saved = capturedEntity();
+        assertThat(saved.getCorrelationId()).isEqualTo("test-corr-id-456");
+        holder.clear();
+    }
+
+    @Test
+    void eventCarriedCorrelationIdIsPersistedEvenWhenHolderIsEmptyOrOffThread() {
+        org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder holder =
+                new org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder();
+        holder.clear();
+        ServerAuditEventListener listenerWithEmptyHolder = new ServerAuditEventListener(
+                auditEventCommandRepository, JsonMapper.builder().build(), holder);
+
+        TransactionalAuditEvent event = TransactionalAuditEvent.of(
+                AuditEventType.LOGIN_SUCCESS,
+                USER_ID, false, DEVICE_FINGERPRINT, Map.of("flow", "change"), "event-corr-id-789");
+
+        listenerWithEmptyHolder.onTransactionalEvent(event);
+
+        AuditEvent saved = capturedEntity();
+        assertThat(saved.getCorrelationId()).isEqualTo("event-corr-id-789");
+    }
+
+    @Test
+    void nonTransactionalEventCarriedCorrelationIdIsPersisted() {
+        NonTransactionalAuditEvent event = NonTransactionalAuditEvent.of(
+                AuditEventType.LOGIN_FAILURE,
+                null, true, DEVICE_FINGERPRINT, Map.of("reason", "revoked"), "async-corr-id-999");
+
+        listener.onNonTransactionalEvent(event);
+
+        AuditEvent saved = capturedEntity();
+        assertThat(saved.getCorrelationId()).isEqualTo("async-corr-id-999");
     }
 
     @Test

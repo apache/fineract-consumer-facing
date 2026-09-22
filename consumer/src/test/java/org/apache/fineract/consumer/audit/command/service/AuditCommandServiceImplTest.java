@@ -91,12 +91,16 @@ class AuditCommandServiceImplTest {
     @Mock
     private UserClientResolver userClientResolver;
 
+    private final org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder correlationIdHolder =
+            new org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder();
+
     private AuditCommandServiceImpl service;
 
     @BeforeEach
     void setUp() {
+        correlationIdHolder.clear();
         service = new AuditCommandServiceImpl(repository, accessPolicyEvaluator, userClientResolver,
-                new AuditPiiScreen(), JsonMapper.builder().build(), MAX_BATCH_SIZE, MAX_DETAILS_BYTES);
+                new AuditPiiScreen(), JsonMapper.builder().build(), correlationIdHolder, MAX_BATCH_SIZE, MAX_DETAILS_BYTES);
     }
 
     private static Jwt jwt() {
@@ -156,6 +160,26 @@ class AuditCommandServiceImplTest {
             AuditEvent error = saved.getAllValues().get(1);
             assertThat(error.getSeverity()).isEqualTo(AuditSeverity.WARN);
             assertThat(error.getDetails()).isNull();
+        }
+
+        @Test
+        void submittingEventsPersistsCorrelationIdFromHolder() {
+            stubPrincipal();
+            org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder holder =
+                    new org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder();
+            holder.set("client-audit-corr-id-789");
+
+            AuditCommandServiceImpl serviceWithHolder = new AuditCommandServiceImpl(
+                    repository, accessPolicyEvaluator, userClientResolver,
+                    new AuditPiiScreen(), JsonMapper.builder().build(), holder,
+                    MAX_BATCH_SIZE, MAX_DETAILS_BYTES);
+
+            serviceWithHolder.submitEvents(jwt(), DEVICE_FINGERPRINT, batch(
+                    event(EVENT_UUID, AuditEventType.NAVIGATION.name(), null)));
+
+            ArgumentCaptor<AuditEvent> saved = ArgumentCaptor.forClass(AuditEvent.class);
+            verify(repository).save(saved.capture());
+            assertThat(saved.getValue().getCorrelationId()).isEqualTo("client-audit-corr-id-789");
         }
 
         @Test

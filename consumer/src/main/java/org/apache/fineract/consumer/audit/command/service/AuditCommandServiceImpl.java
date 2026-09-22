@@ -32,6 +32,8 @@ import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
+import org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -54,12 +56,15 @@ public class AuditCommandServiceImpl implements AuditCommandService {
     private final UserClientResolver userClientResolver;
     private final AuditPiiScreen auditPiiScreen;
     private final ObjectMapper objectMapper;
+    private final CorrelationIdHolder correlationIdHolder;
     private final int maxBatchSize;
     private final int maxDetailsBytes;
 
+    @Autowired
     public AuditCommandServiceImpl(AuditEventCommandRepository auditEventCommandRepository,
             AccessPolicyEvaluator accessPolicyEvaluator, UserClientResolver userClientResolver,
             AuditPiiScreen auditPiiScreen, ObjectMapper objectMapper,
+            CorrelationIdHolder correlationIdHolder,
             @Value(MAX_BATCH_SIZE_PROPERTY) int maxBatchSize,
             @Value(MAX_DETAILS_BYTES_PROPERTY) int maxDetailsBytes) {
         this.auditEventCommandRepository = auditEventCommandRepository;
@@ -67,6 +72,7 @@ public class AuditCommandServiceImpl implements AuditCommandService {
         this.userClientResolver = userClientResolver;
         this.auditPiiScreen = auditPiiScreen;
         this.objectMapper = objectMapper;
+        this.correlationIdHolder = correlationIdHolder;
         this.maxBatchSize = maxBatchSize;
         this.maxDetailsBytes = maxDetailsBytes;
     }
@@ -106,8 +112,9 @@ public class AuditCommandServiceImpl implements AuditCommandService {
                 return null;
             }
         }
+        String correlationId = correlationIdHolder != null ? correlationIdHolder.get() : null;
         return AuditEvent.forClientEvent(eventUuid, eventType, eventType.getSeverity(),
-                userId, deviceFingerprint, event.getOccurredAt(), detailsJson);
+                userId, deviceFingerprint, event.getOccurredAt(), detailsJson, correlationId);
     }
 
     private boolean saveDeduplicating(AuditEvent auditEvent) {

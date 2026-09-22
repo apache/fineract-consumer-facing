@@ -30,6 +30,7 @@ import org.apache.fineract.consumer.infrastructure.audit.annotation.Transactiona
 import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
 import org.apache.fineract.consumer.infrastructure.audit.data.NonTransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.audit.data.TransactionalAuditEvent;
+import org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -41,24 +42,31 @@ public class ServerAuditEventListener {
 
     private final AuditEventCommandRepository auditEventCommandRepository;
     private final ObjectMapper objectMapper;
+    private final CorrelationIdHolder correlationIdHolder;
 
     @TransactionalAuditListener
     public void onTransactionalEvent(TransactionalAuditEvent event) {
         persist(event.getEventUuid(), event.getEventType(),
-                event.getUserId(), event.isUnknownPrincipal(), event.getDeviceFingerprint(), event.getDetails());
+                event.getUserId(), event.isUnknownPrincipal(), event.getDeviceFingerprint(), event.getDetails(),
+                event.getCorrelationId());
     }
 
     @NonTransactionalAuditListener
     public void onNonTransactionalEvent(NonTransactionalAuditEvent event) {
         persist(event.getEventUuid(), event.getEventType(),
-                event.getUserId(), event.isUnknownPrincipal(), event.getDeviceFingerprint(), event.getDetails());
+                event.getUserId(), event.isUnknownPrincipal(), event.getDeviceFingerprint(), event.getDetails(),
+                event.getCorrelationId());
     }
 
     private void persist(UUID eventUuid, AuditEventType eventType, Long userId,
-            boolean unknownPrincipal, String deviceFingerprint, Map<String, Object> details) {
+            boolean unknownPrincipal, String deviceFingerprint, Map<String, Object> details,
+            String eventCorrelationId) {
         try {
+            String correlationId = eventCorrelationId != null
+                    ? eventCorrelationId
+                    : (correlationIdHolder != null ? correlationIdHolder.get() : null);
             AuditEvent entity = AuditEvent.forServerEvent(eventUuid, eventType, eventType.getSeverity(), userId,
-                    unknownPrincipal, deviceFingerprint, serialize(details));
+                    unknownPrincipal, deviceFingerprint, serialize(details), correlationId);
             auditEventCommandRepository.save(entity);
         } catch (DuplicateKeyException e) {
             log.debug("audit event {} already recorded; duplicate ignored", eventUuid);

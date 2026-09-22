@@ -22,17 +22,22 @@ package org.apache.fineract.consumer.infrastructure.fineractclient.configs;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import feign.codec.Encoder;
 import java.util.stream.Stream;
+import org.apache.fineract.consumer.infrastructure.correlation.filter.CorrelationIdFilter;
+import org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder;
 import org.apache.fineract.consumer.infrastructure.fineractclient.interceptors.FineractBasicAuthInterceptor;
+import org.apache.fineract.consumer.infrastructure.fineractclient.interceptors.FineractCorrelationIdInterceptor;
 import org.apache.fineract.consumer.infrastructure.fineractclient.interceptors.FineractIdempotencyKeyInterceptor;
 import org.apache.fineract.consumer.infrastructure.fineractclient.interceptors.FineractTenantHeaderInterceptor;
 import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyHolder;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.cloud.openfeign.support.FeignHttpMessageConverters;
 import org.springframework.cloud.openfeign.support.HttpMessageConverterCustomizer;
 import org.springframework.cloud.openfeign.support.SpringEncoder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.web.context.annotation.RequestScope;
@@ -62,6 +67,26 @@ public class FineractClientConfig {
     public FineractIdempotencyKeyInterceptor fineractIdempotencyKeyInterceptor(
             IdempotencyKeyHolder idempotencyKeyHolder) {
         return new FineractIdempotencyKeyInterceptor(idempotencyKeyHolder);
+    }
+
+    @Bean
+    public CorrelationIdHolder correlationIdHolder() {
+        return new CorrelationIdHolder();
+    }
+
+    @Bean
+    public FilterRegistrationBean<CorrelationIdFilter> correlationIdFilter(
+            CorrelationIdHolder correlationIdHolder) {
+        FilterRegistrationBean<CorrelationIdFilter> registration = new FilterRegistrationBean<>(
+                new CorrelationIdFilter(correlationIdHolder));
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        return registration;
+    }
+
+    @Bean
+    public FineractCorrelationIdInterceptor fineractCorrelationIdInterceptor(
+            CorrelationIdHolder correlationIdHolder) {
+        return new FineractCorrelationIdInterceptor(correlationIdHolder);
     }
 
     @Bean
