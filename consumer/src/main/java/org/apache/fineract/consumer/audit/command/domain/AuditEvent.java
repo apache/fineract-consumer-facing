@@ -90,6 +90,11 @@ public class AuditEvent {
 
     public static AuditEvent forServerEvent(UUID eventUuid, AuditEventType eventType, AuditSeverity severity,
             Long userId, boolean unknownPrincipal, String deviceFingerprint, String details) {
+        return forServerEvent(eventUuid, eventType, severity, userId, unknownPrincipal, deviceFingerprint, details, null);
+    }
+
+    public static AuditEvent forServerEvent(UUID eventUuid, AuditEventType eventType, AuditSeverity severity,
+            Long userId, boolean unknownPrincipal, String deviceFingerprint, String details, String correlationId) {
         AuditEvent event = new AuditEvent();
         event.eventUuid = eventUuid;
         event.source = AuditEventSource.SERVER;
@@ -99,12 +104,18 @@ public class AuditEvent {
         event.unknownPrincipal = unknownPrincipal;
         event.deviceFingerprint = deviceFingerprint;
         event.details = details;
+        event.correlationId = correlationId;
         event.receivedAt = Instant.now();
         return event;
     }
 
     public static AuditEvent forClientEvent(UUID eventUuid, AuditEventType eventType, AuditSeverity severity,
             Long userId, String deviceFingerprint, Instant occurredAtClaimed, String details) {
+        return forClientEvent(eventUuid, eventType, severity, userId, deviceFingerprint, occurredAtClaimed, details, null);
+    }
+
+    public static AuditEvent forClientEvent(UUID eventUuid, AuditEventType eventType, AuditSeverity severity,
+            Long userId, String deviceFingerprint, Instant occurredAtClaimed, String details, String correlationId) {
         AuditEvent event = new AuditEvent();
         event.eventUuid = eventUuid;
         event.source = AuditEventSource.CLIENT;
@@ -115,6 +126,7 @@ public class AuditEvent {
         event.deviceFingerprint = deviceFingerprint;
         event.occurredAtClaimed = occurredAtClaimed;
         event.details = details;
+        event.correlationId = correlationId;
         event.receivedAt = Instant.now();
         return event;
     }

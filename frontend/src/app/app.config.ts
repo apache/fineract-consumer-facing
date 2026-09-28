@@ -37,6 +37,7 @@ import { routes } from './app.routes';
 import { AuditErrorHandler } from './core/audit/audit-error-handler';
 import { AuthService } from './core/auth/auth.service';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { correlationIdInterceptor } from './core/interceptors/correlation-id.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 
 export const appConfig: ApplicationConfig = {
@@ -46,7 +47,9 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection(),
     provideIonicAngular({ mode: 'md' }),
     provideRouter(routes),
-    provideHttpClient(withInterceptors([errorInterceptor, authInterceptor])),
+    provideHttpClient(
+      withInterceptors([correlationIdInterceptor, errorInterceptor, authInterceptor]),
+    ),
     provideTranslateService({
       loader: provideTranslateHttpLoader({
         prefix: '/i18n/',

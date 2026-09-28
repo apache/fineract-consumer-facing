@@ -12,19 +12,30 @@
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
+ * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
 
-package org.apache.fineract.consumer.infrastructure.web.data;
+package org.apache.fineract.consumer.infrastructure.correlation.service;
 
-public final class ConsumerHeaders {
+public class CorrelationIdHolder {
 
-    private ConsumerHeaders() {
+    private static final ThreadLocal<String> CURRENT = new ThreadLocal<>();
+
+    public void set(String correlationId) {
+        CURRENT.set(correlationId);
     }
 
-    public static final String DEVICE_FINGERPRINT = "X-Device-Fingerprint";
-    public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
-    public static final String CORRELATION_ID = "X-Correlation-ID";
+    public String get() {
+        return CURRENT.get();
+    }
+
+    public static String getCurrentCorrelationId() {
+        return CURRENT.get();
+    }
+
+    public void clear() {
+        CURRENT.remove();
+    }
 }

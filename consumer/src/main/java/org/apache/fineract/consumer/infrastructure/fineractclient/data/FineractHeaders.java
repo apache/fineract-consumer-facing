@@ -27,4 +27,5 @@ public final class FineractHeaders {
 
     public static final String TENANT_ID = "Fineract-Platform-TenantId";
     public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
+    public static final String CORRELATION_ID = "X-Correlation-ID";
 }

@@ -26,6 +26,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
+import org.apache.fineract.consumer.infrastructure.correlation.service.CorrelationIdHolder;
 
 @Getter
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
@@ -39,10 +40,19 @@ public final class TransactionalAuditEvent {
     private final boolean unknownPrincipal;
     private final String deviceFingerprint;
     private final Map<String, Object> details;
+    private final String correlationId;
 
     public static TransactionalAuditEvent of(AuditEventType eventType, Long userId,
             boolean unknownPrincipal, String deviceFingerprint, Map<String, Object> details) {
+        return of(eventType, userId, unknownPrincipal, deviceFingerprint, details,
+                CorrelationIdHolder.getCurrentCorrelationId());
+    }
+
+    public static TransactionalAuditEvent of(AuditEventType eventType, Long userId,
+            boolean unknownPrincipal, String deviceFingerprint, Map<String, Object> details,
+            String correlationId) {
         return new TransactionalAuditEvent(UUID.randomUUID(), eventType, userId, unknownPrincipal,
-                deviceFingerprint, details);
+                deviceFingerprint, details,
+                correlationId != null ? correlationId : CorrelationIdHolder.getCurrentCorrelationId());
     }
 }
