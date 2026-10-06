@@ -49,7 +49,7 @@
     "@angular/core": "^22.0.1",
     "@angular/forms": "^22.0.1",
     "@angular/platform-browser": "^22.0.1",
-    "@angular/router": "^22.0.1",
+    "@angular/router": "^22.2.0",
     "@fontsource/inter": "^5.3.0",
     "@ionic/angular": "^8.8.16",
     "@ngx-translate/core": "^18.0.0",
