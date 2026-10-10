@@ -28,7 +28,7 @@ import {
   IonCardSubtitle,
   IonCardTitle,
 } from '@ionic/angular/standalone';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe } from '../../core/adapters';
 import { SavingsStore } from './savings.store';
 
 @Component({
@@ -51,23 +51,23 @@ import { SavingsStore } from './savings.store';
       <ion-card>
         <ion-card-header>
           <ion-card-title>{{
-            'common.transaction.title' | translate: { id: tx.id }
+            'common.transaction.title' | appTranslate: { id: tx.id }
           }}</ion-card-title>
           <ion-card-subtitle>{{ tx.date | date: 'mediumDate' }}</ion-card-subtitle>
         </ion-card-header>
         <ion-card-content>
-          <p>{{ 'savings.transaction.typeLabel' | translate }} {{ tx.type | translate }}</p>
+          <p>{{ 'savings.transaction.typeLabel' | appTranslate }} {{ tx.type | appTranslate }}</p>
           <p>
-            {{ 'savings.transaction.amountLabel' | translate }}
+            {{ 'savings.transaction.amountLabel' | appTranslate }}
             {{ tx.amount | currency: tx.currency }}
           </p>
           <p>
-            {{ 'savings.transaction.runningBalanceLabel' | translate }}
+            {{ 'savings.transaction.runningBalanceLabel' | appTranslate }}
             {{ tx.runningBalance | currency: tx.currency }}
           </p>
           <div class="card-actions">
             <ion-button fill="outline" [routerLink]="['/savings', savingsId]">
-              {{ 'common.action.backToAccount' | translate }}
+              {{ 'common.action.backToAccount' | appTranslate }}
             </ion-button>
           </div>
         </ion-card-content>

@@ -36,7 +36,7 @@ import {
   IonModal,
   IonProgressBar,
 } from '@ionic/angular/standalone';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe } from '../../core/adapters';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
 import { toIsoDate } from '../../shared/utils/date';
@@ -66,7 +66,7 @@ import { SavingsStore } from './savings.store';
     StatusBadgeComponent,
   ],
   template: `
-    <app-page-header [title]="'savings.detail.title' | translate" />
+    <app-page-header [title]="'savings.detail.title' | appTranslate" />
 
     @if (store.loading()) {
       <ion-progress-bar type="indeterminate" />
@@ -82,15 +82,15 @@ import { SavingsStore } from './savings.store';
         </ion-card-header>
         <ion-card-content>
           <p>
-            {{ 'savings.detail.balanceLabel' | translate }}
+            {{ 'savings.detail.balanceLabel' | appTranslate }}
             <span class="amount">{{ account.balance | currency: account.currency }}</span>
           </p>
           <p>
-            {{ 'savings.detail.availableLabel' | translate }}
+            {{ 'savings.detail.availableLabel' | appTranslate }}
             <span class="amount">{{ account.availableBalance | currency: account.currency }}</span>
           </p>
           <p>
-            {{ 'savings.detail.interestRateLabel' | translate }}
+            {{ 'savings.detail.interestRateLabel' | appTranslate }}
             {{ account.nominalAnnualInterestRate }}%
           </p>
         </ion-card-content>
@@ -99,18 +99,18 @@ import { SavingsStore } from './savings.store';
 
     <ion-card>
       <ion-card-header>
-        <ion-card-title>{{ 'common.section.charges' | translate }}</ion-card-title>
+        <ion-card-title>{{ 'common.section.charges' | appTranslate }}</ion-card-title>
       </ion-card-header>
       <ion-card-content>
         <div class="table-scroll">
           <table cdk-table [dataSource]="store.charges()">
             <ng-container cdkColumnDef="name">
-              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.charge' | translate }}</th>
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.charge' | appTranslate }}</th>
               <td cdk-cell *cdkCellDef="let row">{{ row.name }}</td>
             </ng-container>
             <ng-container cdkColumnDef="amount">
               <th cdk-header-cell *cdkHeaderCellDef class="num">
-                {{ 'common.table.amount' | translate }}
+                {{ 'common.table.amount' | appTranslate }}
               </th>
               <td cdk-cell *cdkCellDef="let row" class="num">
                 {{ row.amount | currency: row.currency }}
@@ -118,7 +118,7 @@ import { SavingsStore } from './savings.store';
             </ng-container>
             <ng-container cdkColumnDef="amountOutstanding">
               <th cdk-header-cell *cdkHeaderCellDef class="num">
-                {{ 'common.table.outstanding' | translate }}
+                {{ 'common.table.outstanding' | appTranslate }}
               </th>
               <td cdk-cell *cdkCellDef="let row" class="num">
                 {{ row.amountOutstanding | currency: row.currency }}
@@ -129,7 +129,7 @@ import { SavingsStore } from './savings.store';
             <tr cdk-row *cdkRowDef="let row; columns: chargeColumns"></tr>
             <tr class="empty-row" *cdkNoDataRow>
               <td [attr.colspan]="chargeColumns.length">
-                {{ 'common.table.noCharges' | translate }}
+                {{ 'common.table.noCharges' | appTranslate }}
               </td>
             </tr>
           </table>
@@ -139,20 +139,20 @@ import { SavingsStore } from './savings.store';
 
     <ion-card>
       <ion-card-header>
-        <ion-card-title>{{ 'common.section.transactions' | translate }}</ion-card-title>
+        <ion-card-title>{{ 'common.section.transactions' | appTranslate }}</ion-card-title>
       </ion-card-header>
       <ion-card-content>
         <form class="filter" [formGroup]="filterForm" (ngSubmit)="applyFilter()">
           <!-- Ionic has no range picker (design.md §4): two date fields, same fromDate/toDate output -->
           <div class="field">
-            <span class="field-label">{{ 'common.filter.from' | translate }}</span>
+            <span class="field-label">{{ 'common.filter.from' | appTranslate }}</span>
             <!-- Ionic renders today when the value is null; own the label so "no filter" reads as such -->
             <ion-datetime-button datetime="savingsFromDate">
               <span slot="date-target">
                 @if (fromDate(); as selected) {
                   {{ selected | date: 'mediumDate' }}
                 } @else {
-                  {{ 'common.filter.date' | translate }}
+                  {{ 'common.filter.date' | appTranslate }}
                 }
               </span>
             </ion-datetime-button>
@@ -169,13 +169,13 @@ import { SavingsStore } from './savings.store';
             </ion-modal>
           </div>
           <div class="field">
-            <span class="field-label">{{ 'common.filter.to' | translate }}</span>
+            <span class="field-label">{{ 'common.filter.to' | appTranslate }}</span>
             <ion-datetime-button datetime="savingsToDate">
               <span slot="date-target">
                 @if (toDate(); as selected) {
                   {{ selected | date: 'mediumDate' }}
                 } @else {
-                  {{ 'common.filter.date' | translate }}
+                  {{ 'common.filter.date' | appTranslate }}
                 }
               </span>
             </ion-datetime-button>
@@ -197,24 +197,24 @@ import { SavingsStore } from './savings.store';
             formControlName="size"
             fill="outline"
             labelPlacement="stacked"
-            [label]="'common.filter.size' | translate"
+            [label]="'common.filter.size' | appTranslate"
           />
-          <ion-button type="submit">{{ 'common.action.applyFilter' | translate }}</ion-button>
+          <ion-button type="submit">{{ 'common.action.applyFilter' | appTranslate }}</ion-button>
         </form>
 
         <div class="table-scroll">
           <table cdk-table [dataSource]="store.transactions()">
             <ng-container cdkColumnDef="date">
-              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.date' | translate }}</th>
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.date' | appTranslate }}</th>
               <td cdk-cell *cdkCellDef="let row">{{ row.date | date: 'mediumDate' }}</td>
             </ng-container>
             <ng-container cdkColumnDef="type">
-              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.type' | translate }}</th>
-              <td cdk-cell *cdkCellDef="let row">{{ row.type | translate }}</td>
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.type' | appTranslate }}</th>
+              <td cdk-cell *cdkCellDef="let row">{{ row.type | appTranslate }}</td>
             </ng-container>
             <ng-container cdkColumnDef="amount">
               <th cdk-header-cell *cdkHeaderCellDef class="num">
-                {{ 'common.table.amount' | translate }}
+                {{ 'common.table.amount' | appTranslate }}
               </th>
               <td cdk-cell *cdkCellDef="let row" class="num">
                 {{ row.amount | currency: row.currency }}
@@ -222,7 +222,7 @@ import { SavingsStore } from './savings.store';
             </ng-container>
             <ng-container cdkColumnDef="runningBalance">
               <th cdk-header-cell *cdkHeaderCellDef class="num">
-                {{ 'common.table.balance' | translate }}
+                {{ 'common.table.balance' | appTranslate }}
               </th>
               <td cdk-cell *cdkCellDef="let row" class="num">
                 {{ row.runningBalance | currency: row.currency }}
@@ -238,7 +238,7 @@ import { SavingsStore } from './savings.store';
             ></tr>
             <tr class="empty-row" *cdkNoDataRow>
               <td [attr.colspan]="txColumns.length">
-                {{ 'common.table.noTransactions' | translate }}
+                {{ 'common.table.noTransactions' | appTranslate }}
               </td>
             </tr>
           </table>
@@ -246,13 +246,13 @@ import { SavingsStore } from './savings.store';
 
         <div class="pager">
           <span class="showing">
-            {{ 'common.pagination.showing' | translate: showingParams() }}
+            {{ 'common.pagination.showing' | appTranslate: showingParams() }}
           </span>
           <ion-button size="small" fill="outline" [disabled]="prevDisabled()" (click)="prev()">
-            {{ 'common.action.prev' | translate }}
+            {{ 'common.action.prev' | appTranslate }}
           </ion-button>
           <ion-button size="small" fill="outline" [disabled]="nextDisabled()" (click)="next()">
-            {{ 'common.action.next' | translate }}
+            {{ 'common.action.next' | appTranslate }}
           </ion-button>
         </div>
       </ion-card-content>
