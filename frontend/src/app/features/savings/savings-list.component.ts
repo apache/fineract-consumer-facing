@@ -21,7 +21,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { CdkTableModule } from '@angular/cdk/table';
 import { IonCard, IonCardContent, IonProgressBar } from '@ionic/angular/standalone';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe } from '../../core/adapters';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatusBadgeComponent } from '../../shared/ui/status-badge.component';
 import { SavingsStore } from './savings.store';
@@ -39,7 +39,7 @@ import { SavingsStore } from './savings.store';
     StatusBadgeComponent,
   ],
   template: `
-    <app-page-header [title]="'savings.list.title' | translate" />
+    <app-page-header [title]="'savings.list.title' | appTranslate" />
 
     <ion-card>
       @if (store.loading()) {
@@ -50,15 +50,15 @@ import { SavingsStore } from './savings.store';
         <div class="table-scroll">
           <table cdk-table [dataSource]="store.accounts()">
             <ng-container cdkColumnDef="accountNo">
-              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.account' | translate }}</th>
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.account' | appTranslate }}</th>
               <td cdk-cell *cdkCellDef="let row">{{ row.accountNo }}</td>
             </ng-container>
             <ng-container cdkColumnDef="productName">
-              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.product' | translate }}</th>
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.product' | appTranslate }}</th>
               <td cdk-cell *cdkCellDef="let row">{{ row.productName }}</td>
             </ng-container>
             <ng-container cdkColumnDef="status">
-              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.status' | translate }}</th>
+              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.status' | appTranslate }}</th>
               <td cdk-cell *cdkCellDef="let row">
                 @if (row.status) {
                   <app-status-badge [status]="row.status" />
@@ -66,7 +66,9 @@ import { SavingsStore } from './savings.store';
               </td>
             </ng-container>
             <ng-container cdkColumnDef="currency">
-              <th cdk-header-cell *cdkHeaderCellDef>{{ 'common.table.currency' | translate }}</th>
+              <th cdk-header-cell *cdkHeaderCellDef>
+                {{ 'common.table.currency' | appTranslate }}
+              </th>
               <td cdk-cell *cdkCellDef="let row">{{ row.currency }}</td>
             </ng-container>
 
@@ -78,7 +80,7 @@ import { SavingsStore } from './savings.store';
               (click)="open(row.id)"
             ></tr>
             <tr class="empty-row" *cdkNoDataRow>
-              <td [attr.colspan]="columns.length">{{ 'savings.list.empty' | translate }}</td>
+              <td [attr.colspan]="columns.length">{{ 'savings.list.empty' | appTranslate }}</td>
             </tr>
           </table>
         </div>

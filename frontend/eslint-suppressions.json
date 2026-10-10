@@ -102,21 +102,6 @@
       "count": 1
     }
   },
-  "src/app/features/savings/savings-detail.component.ts": {
-    "local/no-i18n-library-import": {
-      "count": 1
-    }
-  },
-  "src/app/features/savings/savings-list.component.ts": {
-    "local/no-i18n-library-import": {
-      "count": 1
-    }
-  },
-  "src/app/features/savings/savings-transaction.component.ts": {
-    "local/no-i18n-library-import": {
-      "count": 1
-    }
-  },
   "src/app/features/settings/change-password.component.spec.ts": {
     "local/no-i18n-library-import": {
       "count": 1
