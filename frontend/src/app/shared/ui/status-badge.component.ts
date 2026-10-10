@@ -18,7 +18,7 @@
  */
 
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe } from '../../core/adapters';
 
 type Tone = 'success' | 'warning' | 'error' | 'neutral';
 
@@ -43,7 +43,7 @@ function classify(status: string): Tone {
   selector: 'app-status-badge',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [TranslatePipe],
-  template: `<span class="badge" [class]="tone()">{{ status() | translate }}</span>`,
+  template: `<span class="badge" [class]="tone()">{{ status() | appTranslate }}</span>`,
   styles: `
     .badge {
       display: inline-block;

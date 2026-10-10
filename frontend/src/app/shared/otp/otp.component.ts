@@ -20,7 +20,7 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { InputCustomEvent, IonButton, IonInput } from '@ionic/angular/standalone';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe } from '../../core/adapters';
 
 @Component({
   selector: 'app-otp',
@@ -29,9 +29,9 @@ import { TranslatePipe } from '@ngx-translate/core';
   template: `
     <p>
       @if (sentTo()) {
-        {{ 'common.otp.promptSentTo' | translate: { target: sentTo() } }}
+        {{ 'common.otp.promptSentTo' | appTranslate: { target: sentTo() } }}
       } @else {
-        {{ 'common.otp.prompt' | translate }}
+        {{ 'common.otp.prompt' | appTranslate }}
       }
     </p>
     <form [formGroup]="form" (ngSubmit)="submit()">
@@ -39,7 +39,7 @@ import { TranslatePipe } from '@ngx-translate/core';
         formControlName="otp"
         fill="outline"
         labelPlacement="stacked"
-        [label]="'common.otp.codeLabel' | translate"
+        [label]="'common.otp.codeLabel' | appTranslate"
         autocomplete="one-time-code"
         autocapitalize="characters"
         [maxlength]="6"
@@ -53,11 +53,11 @@ import { TranslatePipe } from '@ngx-translate/core';
             [disabled]="loading()"
             (click)="cancelled.emit()"
           >
-            {{ 'common.action.cancel' | translate }}
+            {{ 'common.action.cancel' | appTranslate }}
           </ion-button>
         }
         <ion-button type="submit" [disabled]="loading() || form.invalid">
-          {{ 'common.action.verify' | translate }}
+          {{ 'common.action.verify' | appTranslate }}
         </ion-button>
       </div>
     </form>

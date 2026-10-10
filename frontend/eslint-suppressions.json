@@ -151,25 +151,5 @@
     "local/no-i18n-library-import": {
       "count": 1
     }
-  },
-  "src/app/layout/shell.component.ts": {
-    "local/no-i18n-library-import": {
-      "count": 1
-    }
-  },
-  "src/app/shared/language-switcher.component.ts": {
-    "local/no-i18n-library-import": {
-      "count": 1
-    }
-  },
-  "src/app/shared/otp/otp.component.ts": {
-    "local/no-i18n-library-import": {
-      "count": 1
-    }
-  },
-  "src/app/shared/ui/status-badge.component.ts": {
-    "local/no-i18n-library-import": {
-      "count": 1
-    }
   }
 }

@@ -28,7 +28,7 @@ import {
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { globeOutline } from 'ionicons/icons';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe } from '../core/adapters';
 import { I18nService } from '../core/i18n/i18n.service';
 
 interface LanguageOption {
@@ -46,7 +46,7 @@ interface LanguageOption {
       id="language-trigger"
       fill="clear"
       class="icon-button-lg"
-      [attr.aria-label]="'common.action.changeLanguage' | translate"
+      [attr.aria-label]="'common.action.changeLanguage' | appTranslate"
     >
       <ion-icon slot="icon-only" name="globe-outline" aria-hidden="true" />
     </ion-button>
@@ -58,9 +58,9 @@ interface LanguageOption {
               <ion-label>
                 {{ lang.endonym
                 }}{{
-                  (lang.nameKey | translate) === lang.endonym
+                  (lang.nameKey | appTranslate) === lang.endonym
                     ? ''
-                    : ' (' + (lang.nameKey | translate) + ')'
+                    : ' (' + (lang.nameKey | appTranslate) + ')'
                 }}
               </ion-label>
             </ion-item>
