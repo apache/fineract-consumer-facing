@@ -408,6 +408,37 @@ def fixClientImageResponseShape(paths) {
 	]]
 }
 
+def addMissingSavingsAccountCommandFields(schemas) {
+	def missingAccountFields = [
+		withdrawnOnDate: [type: 'string'],
+		note           : [type: 'string']
+	]
+	def properties = schemas.PostSavingsAccountsAccountIdRequest?.properties
+	if (properties == null) {
+		throw new GradleException("Fineract spec schema 'PostSavingsAccountsAccountIdRequest' missing — revisit addMissingSavingsAccountCommandFields")
+	}
+	missingAccountFields.each { propName, propDef ->
+		if (!properties.containsKey(propName)) {
+			properties[propName] = propDef
+		}
+	}
+
+	def missingPutFields = [
+		productId      : [type: 'integer', format: 'int64'],
+		submittedOnDate: [type: 'string'],
+		dateFormat     : [type: 'string']
+	]
+	def putProps = schemas.PutSavingsAccountsAccountIdRequest?.properties
+	if (putProps == null) {
+		throw new GradleException("Fineract spec schema 'PutSavingsAccountsAccountIdRequest' missing — revisit addMissingSavingsAccountCommandFields")
+	}
+	missingPutFields.each { propName, propDef ->
+		if (!putProps.containsKey(propName)) {
+			putProps[propName] = propDef
+		}
+	}
+}
+
 // Fineract code generation is scoped to the APIs the BFF and the Cucumber seeder call. Generating the
 // whole spec (~150 tags) put ~1,500 models and ~140 unused Feign clients in the jar, each one a bean
 // with its own child context at startup. Add a tag here before using a new generated *Api.
@@ -489,6 +520,7 @@ task sanitizeFineractSpec {
 		retypeIntegerMoneyFields(spec.components.schemas)
 		addMissingClientAccountBalanceFields(spec.components.schemas)
 		addMissingClientProfileFields(spec.components.schemas)
+		addMissingSavingsAccountCommandFields(spec.components.schemas)
 		fixObligeeDetailsResponseShape(spec.paths)
 		fixClientImageResponseShape(spec.paths)
 		pruneToUsedFineractApis(spec, fineractApiTags, fineractUntaggedOperationIds)
