@@ -39,8 +39,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsData;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsCommandData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCommandData;
 import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginChallengeCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginCommand;
@@ -133,16 +133,16 @@ class AuthenticationCommandServiceImplTest {
                 FINERACT_PROPERTIES, eventPublisher);
     }
 
-    private static PrincipalUserAuthCredentialsData credentials(boolean bound) {
-        return PrincipalUserAuthCredentialsData.builder()
+    private static PrincipalUserAuthCredentialsCommandData credentials(boolean bound) {
+        return PrincipalUserAuthCredentialsCommandData.builder()
                 .publicId(PUBLIC_ID)
                 .bound(bound)
                 .passwordHash(PASSWORD_HASH)
                 .build();
     }
 
-    private static PrincipalUserAuthData boundPrincipal() {
-        return PrincipalUserAuthData.builder()
+    private static PrincipalUserAuthCommandData boundPrincipal() {
+        return PrincipalUserAuthCommandData.builder()
                 .id(USER_ID)
                 .publicId(PUBLIC_ID)
                 .fineractClientId(FINERACT_CLIENT_ID)
@@ -150,8 +150,8 @@ class AuthenticationCommandServiceImplTest {
                 .build();
     }
 
-    private static PrincipalUserAuthData unboundPrincipal() {
-        return PrincipalUserAuthData.builder()
+    private static PrincipalUserAuthCommandData unboundPrincipal() {
+        return PrincipalUserAuthCommandData.builder()
                 .id(USER_ID)
                 .publicId(PUBLIC_ID)
                 .fineractClientId(FINERACT_CLIENT_ID)

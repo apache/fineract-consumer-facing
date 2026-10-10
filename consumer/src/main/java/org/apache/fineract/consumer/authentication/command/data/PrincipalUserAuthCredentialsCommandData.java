@@ -31,7 +31,7 @@ import lombok.ToString;
 @Builder
 @EqualsAndHashCode
 @ToString(onlyExplicitlyIncluded = true)
-public final class PrincipalUserAuthCredentialsData {
+public final class PrincipalUserAuthCredentialsCommandData {
 
     private final UUID publicId;
     private final boolean bound;
