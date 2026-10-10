@@ -31,7 +31,7 @@ import org.apache.fineract.consumer.beneficiaries.command.data.ConfirmAddBenefic
 import org.apache.fineract.consumer.beneficiaries.command.data.ConfirmUpdateBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.data.InitiateAddBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.data.InitiateUpdateBeneficiaryCommand;
-import org.apache.fineract.consumer.beneficiaries.command.data.ResolvedBeneficiaryAccount;
+import org.apache.fineract.consumer.beneficiaries.command.data.ResolvedBeneficiaryAccountCommandData;
 import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
@@ -118,7 +118,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
 
         UserQueryData user = userQueryService.findByPublicId(publicId);
         requireNameAvailable(user.getId(), command.getName());
-        ResolvedBeneficiaryAccount resolved =
+        ResolvedBeneficiaryAccountCommandData resolved =
                 resolveSavingsAccount(command.getAccountNumber(), command.getOfficeName());
         requireNotOwnAccount(resolved, user);
 
@@ -177,7 +177,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         beneficiaryCommandRepository.save(beneficiary);
     }
 
-    private ResolvedBeneficiaryAccount resolveSavingsAccount(String accountNumber, String officeName) {
+    private ResolvedBeneficiaryAccountCommandData resolveSavingsAccount(String accountNumber, String officeName) {
         List<GetSearchResponse> matches =
                 call(() -> searchApiApi.searchData(accountNumber, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true));
         if (matches != null) {
@@ -196,12 +196,12 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         throw new BeneficiaryAccountInvalidException();
     }
 
-    private ResolvedBeneficiaryAccount withVerifiedOffice(Long clientId, String officeName, Long accountId) {
+    private ResolvedBeneficiaryAccountCommandData withVerifiedOffice(Long clientId, String officeName, Long accountId) {
         GetClientsClientIdResponse client = call(() -> clientApi.retrieveOneClient(clientId, false));
         if (client.getOfficeId() == null || !officeName.equals(client.getOfficeName())) {
             throw new BeneficiaryAccountInvalidException();
         }
-        return ResolvedBeneficiaryAccount.builder()
+        return ResolvedBeneficiaryAccountCommandData.builder()
                 .officeId(client.getOfficeId())
                 .clientId(clientId)
                 .accountId(accountId)
@@ -217,7 +217,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
                 .orElseThrow(BeneficiaryNotFoundException::new);
     }
 
-    private static void requireNotOwnAccount(ResolvedBeneficiaryAccount resolved, UserQueryData user) {
+    private static void requireNotOwnAccount(ResolvedBeneficiaryAccountCommandData resolved, UserQueryData user) {
         if (resolved.getClientId().equals(user.getFineractClientId())) {
             throw new BeneficiarySelfAccountException();
         }

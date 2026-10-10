@@ -22,8 +22,8 @@ package org.apache.fineract.consumer.user.query.service;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsData;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsCommandData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCommandData;
 import org.apache.fineract.consumer.authentication.command.service.PrincipalUserAuthLookupPort;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.exception.UserQueryNotFoundException;
@@ -38,9 +38,9 @@ public class PrincipalUserAuthLookupAdapter implements PrincipalUserAuthLookupPo
     private final UserQueryRepository userQueryRepository;
 
     @Override
-    public Optional<PrincipalUserAuthCredentialsData> findCredentialsByEmail(String email) {
+    public Optional<PrincipalUserAuthCredentialsCommandData> findCredentialsByEmail(String email) {
         return userQueryRepository.findCredentialsByEmail(email)
-                .map(credentials -> PrincipalUserAuthCredentialsData.builder()
+                .map(credentials -> PrincipalUserAuthCredentialsCommandData.builder()
                         .publicId(credentials.getPublicId())
                         .bound(credentials.getStatus() == UserStatus.BOUND)
                         .passwordHash(credentials.getPasswordHash())
@@ -48,19 +48,19 @@ public class PrincipalUserAuthLookupAdapter implements PrincipalUserAuthLookupPo
     }
 
     @Override
-    public PrincipalUserAuthData findByPublicId(UUID publicId) {
+    public PrincipalUserAuthCommandData findByPublicId(UUID publicId) {
         return toPrincipal(userQueryRepository.findByPublicId(publicId)
                 .orElseThrow(UserQueryNotFoundException::new));
     }
 
     @Override
-    public PrincipalUserAuthData findById(Long id) {
+    public PrincipalUserAuthCommandData findById(Long id) {
         return toPrincipal(userQueryRepository.findById(id)
                 .orElseThrow(UserQueryNotFoundException::new));
     }
 
-    private static PrincipalUserAuthData toPrincipal(UserQueryData user) {
-        return PrincipalUserAuthData.builder()
+    private static PrincipalUserAuthCommandData toPrincipal(UserQueryData user) {
+        return PrincipalUserAuthCommandData.builder()
                 .id(user.getId())
                 .publicId(user.getPublicId())
                 .fineractClientId(user.getFineractClientId())

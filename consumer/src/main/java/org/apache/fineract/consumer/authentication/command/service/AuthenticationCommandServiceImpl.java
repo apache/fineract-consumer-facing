@@ -33,8 +33,8 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.consumer.infrastructure.access.data.AuthenticationConstants;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsData;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsCommandData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCommandData;
 import org.apache.fineract.consumer.authentication.command.data.EstablishedSessionCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginChallengeCommandData;
 import org.apache.fineract.consumer.authentication.command.data.LoginCommand;
@@ -98,9 +98,9 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
 
     @Override
     public LoginChallengeCommandData login(LoginCommand command) {
-        Optional<PrincipalUserAuthCredentialsData> candidate = principalUserAuthLookup.findCredentialsByEmail(command.getEmail());
-        PrincipalUserAuthCredentialsData user = candidate
-                .filter(PrincipalUserAuthCredentialsData::isBound)
+        Optional<PrincipalUserAuthCredentialsCommandData> candidate = principalUserAuthLookup.findCredentialsByEmail(command.getEmail());
+        PrincipalUserAuthCredentialsCommandData user = candidate
+                .filter(PrincipalUserAuthCredentialsCommandData::isBound)
                 .filter(match -> passwordEncoder.matches(command.getPassword(), match.getPasswordHash()))
                 .orElseThrow(() -> {
                     publishLoginFailure(candidate.orElse(null), command.getDeviceFingerprint());
@@ -142,7 +142,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         UUID publicId = UUID.fromString(challenge.getSubject());
         otpService.validateOtp(publicId, command.getToken(), TwoFactorInvalidException::new);
 
-        PrincipalUserAuthData user = principalUserAuthLookup.findByPublicId(publicId);
+        PrincipalUserAuthCommandData user = principalUserAuthLookup.findByPublicId(publicId);
         EstablishedSessionCommandData session = establishSession(user.getId(), publicId, user.isBound(),
                 user.getFineractClientId(), command.getDeviceFingerprint(), null);
         eventPublisher.publishEvent(TransactionalAuditEvent.of(AuditEventType.LOGIN_SUCCESS,
@@ -182,7 +182,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
             predecessor = current;
         }
 
-        PrincipalUserAuthData user = principalUserAuthLookup.findById(current.getUserId());
+        PrincipalUserAuthCommandData user = principalUserAuthLookup.findById(current.getUserId());
         return establishSession(user.getId(), user.getPublicId(), user.isBound(),
                 user.getFineractClientId(), command.getDeviceFingerprint(), predecessor);
     }
@@ -216,7 +216,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
         revokeAllActiveTokens(userId);
         jwtDenylist.denyAllIssuedUpTo(publicId.toString(),
                 Instant.now().truncatedTo(ChronoUnit.SECONDS).minusMillis(1));
-        PrincipalUserAuthData user = principalUserAuthLookup.findById(userId);
+        PrincipalUserAuthCommandData user = principalUserAuthLookup.findById(userId);
         return establishSession(user.getId(), user.getPublicId(), user.isBound(),
                 user.getFineractClientId(), deviceFingerprint, null);
     }
@@ -252,7 +252,7 @@ public class AuthenticationCommandServiceImpl implements AuthenticationCommandSe
                 .build();
     }
 
-    private void publishLoginFailure(PrincipalUserAuthCredentialsData knownUser, String deviceFingerprint) {
+    private void publishLoginFailure(PrincipalUserAuthCredentialsCommandData knownUser, String deviceFingerprint) {
         Long userId = null;
         if (knownUser != null) {
             try {

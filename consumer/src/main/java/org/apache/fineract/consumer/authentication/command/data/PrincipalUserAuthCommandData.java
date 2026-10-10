@@ -16,8 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.consumer.beneficiaries.command.data;
 
+package org.apache.fineract.consumer.authentication.command.data;
+
+import java.util.UUID;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -29,9 +31,10 @@ import lombok.ToString;
 @Builder
 @EqualsAndHashCode
 @ToString
-public final class ResolvedBeneficiaryAccount {
+public final class PrincipalUserAuthCommandData {
 
-    private final Long officeId;
-    private final Long clientId;
-    private final Long accountId;
+    private final Long id;
+    private final UUID publicId;
+    private final Long fineractClientId;
+    private final boolean bound;
 }
