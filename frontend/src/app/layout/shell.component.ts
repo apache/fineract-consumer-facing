@@ -58,7 +58,7 @@ import {
   swapHorizontalOutline,
   walletOutline,
 } from 'ionicons/icons';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe } from '../core/adapters';
 import { AuditService } from '../core/audit/audit.service';
 import { buildDetails } from '../core/audit/pii-scrub';
 import { AuthService } from '../core/auth/auth.service';
@@ -111,7 +111,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
           <ion-button
             fill="clear"
             class="icon-button-lg nav-toggle-btn"
-            [attr.aria-label]="'layout.shell.toggleNav' | translate"
+            [attr.aria-label]="'layout.shell.toggleNav' | appTranslate"
             (click)="toggleSidenav()"
           >
             <ion-icon slot="icon-only" name="menu-outline" aria-hidden="true" />
@@ -126,14 +126,14 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
             class="brand-icon"
             priority
           />
-          <span>{{ 'layout.shell.brand' | translate }}</span>
+          <span>{{ 'layout.shell.brand' | appTranslate }}</span>
         </div>
         <ion-buttons slot="end">
           <app-language-switcher />
           <ion-button
             fill="clear"
             class="icon-button-lg logout-btn"
-            [attr.aria-label]="'layout.shell.logout' | translate"
+            [attr.aria-label]="'layout.shell.logout' | appTranslate"
             (click)="logout()"
           >
             <ion-icon slot="icon-only" name="log-out-outline" aria-hidden="true" />
@@ -154,7 +154,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
                 routerLinkActive="active-link"
               >
                 <ion-icon slot="start" name="grid-outline" aria-hidden="true" />
-                <ion-label>{{ 'layout.nav.summary' | translate }}</ion-label>
+                <ion-label>{{ 'layout.nav.summary' | appTranslate }}</ion-label>
               </ion-item>
               <ion-item
                 [button]="true"
@@ -163,7 +163,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
                 routerLinkActive="active-link"
               >
                 <ion-icon slot="start" name="wallet-outline" aria-hidden="true" />
-                <ion-label>{{ 'layout.nav.savings' | translate }}</ion-label>
+                <ion-label>{{ 'layout.nav.savings' | appTranslate }}</ion-label>
               </ion-item>
               <ion-item
                 [button]="true"
@@ -172,7 +172,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
                 routerLinkActive="active-link"
               >
                 <ion-icon slot="start" name="cash-outline" aria-hidden="true" />
-                <ion-label>{{ 'layout.nav.loans' | translate }}</ion-label>
+                <ion-label>{{ 'layout.nav.loans' | appTranslate }}</ion-label>
               </ion-item>
               <ion-item
                 [button]="true"
@@ -181,7 +181,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
                 routerLinkActive="active-link"
               >
                 <ion-icon slot="start" name="swap-horizontal-outline" aria-hidden="true" />
-                <ion-label>{{ 'layout.nav.transfers' | translate }}</ion-label>
+                <ion-label>{{ 'layout.nav.transfers' | appTranslate }}</ion-label>
               </ion-item>
               <ion-item
                 [button]="true"
@@ -190,7 +190,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
                 routerLinkActive="active-link"
               >
                 <ion-icon slot="start" name="people-outline" aria-hidden="true" />
-                <ion-label>{{ 'layout.nav.beneficiaries' | translate }}</ion-label>
+                <ion-label>{{ 'layout.nav.beneficiaries' | appTranslate }}</ion-label>
               </ion-item>
               <ion-item
                 [button]="true"
@@ -199,7 +199,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
                 routerLinkActive="active-link"
               >
                 <ion-icon slot="start" name="person-outline" aria-hidden="true" />
-                <ion-label>{{ 'layout.nav.profile' | translate }}</ion-label>
+                <ion-label>{{ 'layout.nav.profile' | appTranslate }}</ion-label>
               </ion-item>
               <ion-item
                 [button]="true"
@@ -208,7 +208,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
                 routerLinkActive="active-link"
               >
                 <ion-icon slot="start" name="settings-outline" aria-hidden="true" />
-                <ion-label>{{ 'layout.nav.settings' | translate }}</ion-label>
+                <ion-label>{{ 'layout.nav.settings' | appTranslate }}</ion-label>
               </ion-item>
               <ion-item
                 [button]="true"
@@ -217,7 +217,7 @@ const RESOURCE_ID_PARAMS = ['savingsId', 'loanId'];
                 routerLinkActive="active-link"
               >
                 <ion-icon slot="start" name="flask-outline" aria-hidden="true" />
-                <ion-label>{{ 'layout.nav.demo' | translate }}</ion-label>
+                <ion-label>{{ 'layout.nav.demo' | appTranslate }}</ion-label>
               </ion-item>
             </ion-list>
           </ion-content>
