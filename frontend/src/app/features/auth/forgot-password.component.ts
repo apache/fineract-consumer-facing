@@ -31,8 +31,7 @@ import {
   IonInput,
   IonProgressBar,
 } from '@ionic/angular/standalone';
-import { OVERLAY } from '../../core/adapters';
-import { TranslatePipe } from '@ngx-translate/core';
+import { OVERLAY, TranslatePipe } from '../../core/adapters';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { NotificationService } from '../../core/notifications/notification.service';
 import { ProfileStore } from '../profile/profile.store';
@@ -67,7 +66,7 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
           class="page-logo"
           priority
         />
-        <ion-card-title>{{ 'auth.forgotPassword.title' | translate }}</ion-card-title>
+        <ion-card-title>{{ 'auth.forgotPassword.title' | appTranslate }}</ion-card-title>
       </ion-card-header>
 
       @if (loading()) {
@@ -82,22 +81,22 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
               formControlName="email"
               fill="outline"
               labelPlacement="stacked"
-              [label]="'common.field.email' | translate"
+              [label]="'common.field.email' | appTranslate"
               autocomplete="username"
             />
             <ion-button type="submit" [disabled]="loading()">
-              {{ 'auth.forgotPassword.sendCta' | translate }}
+              {{ 'auth.forgotPassword.sendCta' | appTranslate }}
             </ion-button>
           </form>
         } @else {
-          <p>{{ 'auth.forgotPassword.sentNotice' | translate }}</p>
+          <p>{{ 'auth.forgotPassword.sentNotice' | appTranslate }}</p>
           <form [formGroup]="resetForm" (ngSubmit)="reset()">
             <ion-input
               class="otp-input"
               formControlName="otp"
               fill="outline"
               labelPlacement="stacked"
-              [label]="'common.otp.codeLabel' | translate"
+              [label]="'common.otp.codeLabel' | appTranslate"
               autocomplete="one-time-code"
               autocapitalize="characters"
               [maxlength]="6"
@@ -108,17 +107,17 @@ const OTP_PATTERN = /^[A-Z0-9]{6}$/;
               formControlName="newPassword"
               fill="outline"
               labelPlacement="stacked"
-              [label]="'auth.forgotPassword.newPasswordLabel' | translate"
-              [helperText]="'registration.identity.passwordHint' | translate"
+              [label]="'auth.forgotPassword.newPasswordLabel' | appTranslate"
+              [helperText]="'registration.identity.passwordHint' | appTranslate"
               autocomplete="new-password"
             />
             <ion-button type="submit" [disabled]="loading()">
-              {{ 'auth.forgotPassword.resetCta' | translate }}
+              {{ 'auth.forgotPassword.resetCta' | appTranslate }}
             </ion-button>
           </form>
         }
         <p class="prompt">
-          <a routerLink="/login">{{ 'auth.forgotPassword.backToLogin' | translate }}</a>
+          <a routerLink="/login">{{ 'auth.forgotPassword.backToLogin' | appTranslate }}</a>
         </p>
       </ion-card-content>
     </ion-card>

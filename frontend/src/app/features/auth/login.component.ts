@@ -31,7 +31,7 @@ import {
   IonInput,
   IonProgressBar,
 } from '@ionic/angular/standalone';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe } from '../../core/adapters';
 import { AuthService } from '../../core/auth/auth.service';
 import { OtpComponent } from '../../shared/otp/otp.component';
 
@@ -67,7 +67,7 @@ export function allowedReturnUrl(returnUrl: string | null): string | null {
           class="page-logo"
           priority
         />
-        <ion-card-title>{{ 'auth.login.title' | translate }}</ion-card-title>
+        <ion-card-title>{{ 'auth.login.title' | appTranslate }}</ion-card-title>
       </ion-card-header>
 
       @if (loading()) {
@@ -82,7 +82,7 @@ export function allowedReturnUrl(returnUrl: string | null): string | null {
               formControlName="email"
               fill="outline"
               labelPlacement="stacked"
-              [label]="'common.field.email' | translate"
+              [label]="'common.field.email' | appTranslate"
               autocomplete="username"
             />
             <ion-input
@@ -90,19 +90,21 @@ export function allowedReturnUrl(returnUrl: string | null): string | null {
               formControlName="password"
               fill="outline"
               labelPlacement="stacked"
-              [label]="'common.field.password' | translate"
+              [label]="'common.field.password' | appTranslate"
               autocomplete="current-password"
             />
             <ion-button type="submit" [disabled]="loading() || credentialsForm.invalid">
-              {{ 'common.action.continue' | translate }}
+              {{ 'common.action.continue' | appTranslate }}
             </ion-button>
           </form>
           <p class="prompt">
-            {{ 'auth.login.registerPrompt' | translate }}
-            <a routerLink="/register">{{ 'auth.login.registerLink' | translate }}</a>
+            {{ 'auth.login.registerPrompt' | appTranslate }}
+            <a routerLink="/register">{{ 'auth.login.registerLink' | appTranslate }}</a>
           </p>
           <p class="prompt">
-            <a routerLink="/forgot-password">{{ 'auth.login.forgotPasswordLink' | translate }}</a>
+            <a routerLink="/forgot-password">{{
+              'auth.login.forgotPasswordLink' | appTranslate
+            }}</a>
           </p>
         } @else {
           <app-otp

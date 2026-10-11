@@ -23,7 +23,7 @@ import { FormControl, FormGroup } from '@angular/forms';
 import { provideRouter, Router } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular/standalone';
 import { OVERLAY } from '../../core/adapters';
-import { provideTranslateService } from '@ngx-translate/core';
+import { provideI18nTesting } from '../../testing/i18n-testing';
 import { of } from 'rxjs';
 import { NotificationService } from '../../core/notifications/notification.service';
 import { ProfileStore } from '../profile/profile.store';
@@ -55,7 +55,7 @@ function createComponent(): ComponentFixture<ForgotPasswordComponent> {
     providers: [
       provideZonelessChangeDetection(),
       provideIonicAngular({ mode: 'md' }),
-      provideTranslateService(),
+      ...provideI18nTesting(),
       provideRouter([]),
       { provide: NotificationService, useValue: { showError } },
       { provide: ProfileStore, useValue: { forgotPassword, resetPassword } },
