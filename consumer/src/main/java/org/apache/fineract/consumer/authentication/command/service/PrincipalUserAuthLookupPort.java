@@ -21,14 +21,14 @@ package org.apache.fineract.consumer.authentication.command.service;
 
 import java.util.Optional;
 import java.util.UUID;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsData;
-import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthCredentialsCommandData;
+import org.apache.fineract.consumer.authentication.command.data.PrincipalUserAuthDataCommandData;
 
 public interface PrincipalUserAuthLookupPort {
 
-    Optional<PrincipalUserAuthCredentialsData> findCredentialsByEmail(String email);
+    Optional<PrincipalUserAuthCredentialsCommandData> findCredentialsByEmail(String email);
 
-    PrincipalUserAuthData findByPublicId(UUID publicId);
+    PrincipalUserAuthDataCommandData findByPublicId(UUID publicId);
 
-    PrincipalUserAuthData findById(Long id);
+    PrincipalUserAuthDataCommandData findById(Long id);
 }

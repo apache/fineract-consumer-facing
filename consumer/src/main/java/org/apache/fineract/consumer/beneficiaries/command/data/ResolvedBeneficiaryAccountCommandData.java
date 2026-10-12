@@ -29,7 +29,7 @@ import lombok.ToString;
 @Builder
 @EqualsAndHashCode
 @ToString
-public final class ResolvedBeneficiaryAccount {
+public final class ResolvedBeneficiaryAccountCommandData {
 
     private final Long officeId;
     private final Long clientId;
