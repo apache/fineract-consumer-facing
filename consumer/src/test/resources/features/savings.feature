@@ -44,3 +44,23 @@ Feature: Consumer savings reads
     When I get the other client's savings account
     Then the savings request is denied as forbidden
 
+  Scenario: Submitting the same savings application twice with one idempotency key creates one account
+    When I submit a savings application twice with the same idempotency key
+    Then both savings submissions return the same savings id
+    And I have exactly one more savings account
+
+  Scenario: Submitting a savings application without an idempotency key is rejected
+    When I submit a savings application without an idempotency key
+    Then the savings submission is rejected for the missing idempotency key
+
+  Scenario: Modifying a pending savings application
+    Given I have submitted a savings application
+    When I modify my pending savings application
+    Then the savings application is updated successfully
+
+  Scenario: Withdrawing a pending savings application
+    Given I have submitted a savings application
+    When I withdraw my pending savings application
+    Then the savings application is withdrawn successfully
+
+
