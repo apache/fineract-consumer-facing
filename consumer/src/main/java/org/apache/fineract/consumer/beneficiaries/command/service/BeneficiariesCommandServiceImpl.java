@@ -42,21 +42,19 @@ import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryU
 import org.apache.fineract.consumer.beneficiaries.command.repository.BeneficiaryCommandRepository;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SearchApiApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSearchResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.BeneficiariesFineractClient;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
-import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpPurpose;
 import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
+import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
+import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -81,9 +79,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     private final OtpService otpService;
     private final StepUpTokenService stepUpTokenService;
     private final BeneficiaryCommandRepository beneficiaryCommandRepository;
-    private final SavingsAccountApi savingsAccountApi;
-    private final SearchApiApi searchApiApi;
-    private final ClientApi clientApi;
+    private final BeneficiariesFineractClient beneficiariesFineractClient;
 
     @Override
     @Transactional(readOnly = true)
@@ -180,14 +176,16 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
 
     private ResolvedBeneficiaryAccountCommandData resolveSavingsAccount(String accountNumber, String officeName) {
         List<GetSearchResponse> matches =
-                call(() -> searchApiApi.searchData(accountNumber, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true));
+                call(() -> beneficiariesFineractClient.searchData(
+                        accountNumber, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true));
         if (matches != null) {
             for (GetSearchResponse match : matches) {
                 if (match.getEntityId() == null) {
                     continue;
                 }
                 SavingsAccountData account =
-                        call(() -> savingsAccountApi.retrieveSavingsAccount(match.getEntityId(), null, null, null));
+                        call(() -> beneficiariesFineractClient.retrieveSavingsAccount(
+                                match.getEntityId(), null, null, null));
                 if (accountNumber.equals(account.getAccountNo()) && account.getClientId() != null
                         && isNonClosed(account.getStatus() == null ? null : account.getStatus().getId())) {
                     return withVerifiedOffice(account.getClientId(), officeName, match.getEntityId());
@@ -198,7 +196,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     }
 
     private ResolvedBeneficiaryAccountCommandData withVerifiedOffice(Long clientId, String officeName, Long accountId) {
-        GetClientsClientIdResponse client = call(() -> clientApi.retrieveOneClient(clientId, false));
+        GetClientsClientIdResponse client = call(() -> beneficiariesFineractClient.retrieveOneClient(clientId, false));
         if (client.getOfficeId() == null || !officeName.equals(client.getOfficeName())) {
             throw new BeneficiaryAccountInvalidException();
         }
@@ -257,7 +255,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     }
 
     private String addActionFingerprint(String name, String officeName, String accountNumber,
-            BigDecimal transferLimit) {
+                                        BigDecimal transferLimit) {
         return stepUpTokenService.actionFingerprint(BeneficiaryConstants.ADD_ACTION_ID,
                 name, officeName, accountNumber, transferLimit == null ? "" : transferLimit);
     }
