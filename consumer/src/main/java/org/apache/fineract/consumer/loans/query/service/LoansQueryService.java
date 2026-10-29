@@ -34,8 +34,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface LoansQueryService {
 
-    String CALCULATE_SCHEDULE_COMMAND = "calculateLoanSchedule";
-
     List<LoanAccountListItemQueryData> listAccounts(Jwt jwt);
 
     LoanScheduleQueryData calculateSchedule(Jwt jwt, CalculateLoanScheduleQuery query);
