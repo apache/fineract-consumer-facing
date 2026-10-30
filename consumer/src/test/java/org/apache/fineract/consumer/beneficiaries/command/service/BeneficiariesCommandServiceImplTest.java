@@ -39,9 +39,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryChallengeCommandData;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryCommandData;
-import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryConstants;
 import org.apache.fineract.consumer.beneficiaries.command.data.ConfirmAddBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.data.ConfirmUpdateBeneficiaryCommand;
@@ -58,21 +58,19 @@ import org.apache.fineract.consumer.beneficiaries.command.repository.Beneficiary
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SearchApiApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSearchResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountStatusEnumData;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.BeneficiariesFineractClient;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpPurpose;
 import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
-import org.apache.fineract.consumer.user.query.data.UserStatus;
+import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
+import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -125,13 +123,7 @@ class BeneficiariesCommandServiceImplTest {
     private BeneficiaryCommandRepository beneficiaryCommandRepository;
 
     @Mock
-    private SavingsAccountApi savingsAccountApi;
-
-    @Mock
-    private SearchApiApi searchApiApi;
-
-    @Mock
-    private ClientApi clientApi;
+    private BeneficiariesFineractClient beneficiariesFineractClient;
 
     @InjectMocks
     private BeneficiariesCommandServiceImpl service;
@@ -236,19 +228,21 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     private void stubSavingsResolution() {
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(savingsAccount(ACCOUNT_NUMBER, ACTIVE_STATUS_ID));
-        when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false)).thenReturn(destinationClient(OFFICE_NAME));
+        when(beneficiariesFineractClient.retrieveOneClient(DEST_CLIENT_ID, false))
+                .thenReturn(destinationClient(OFFICE_NAME));
     }
 
     private void stubCallerOwnedSavingsResolution() {
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(callerOwnedSavingsAccount());
-        when(clientApi.retrieveOneClient(CALLER_CLIENT_ID, false)).thenReturn(destinationClient(OFFICE_NAME));
+        when(beneficiariesFineractClient.retrieveOneClient(CALLER_CLIENT_ID, false))
+                .thenReturn(destinationClient(OFFICE_NAME));
     }
 
     private void stubValidConfirmAdd() {
@@ -301,7 +295,7 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of());
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
@@ -316,9 +310,9 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(savingsAccount(ACCOUNT_NUMBER, CLOSED_STATUS_ID));
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
@@ -332,11 +326,12 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(savingsAccount(ACCOUNT_NUMBER, ACTIVE_STATUS_ID));
-        when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false)).thenReturn(destinationClient(OTHER_OFFICE_NAME));
+        when(beneficiariesFineractClient.retrieveOneClient(DEST_CLIENT_ID, false))
+                .thenReturn(destinationClient(OTHER_OFFICE_NAME));
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(BeneficiaryAccountInvalidException.class);
@@ -363,7 +358,7 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenThrow(mock(FeignException.NotFound.class));
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
@@ -375,7 +370,7 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenThrow(mock(FeignException.InternalServerError.class));
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
@@ -442,9 +437,9 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(savingsAccount(OTHER_ACCOUNT_NUMBER, ACTIVE_STATUS_ID));
 
         assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
