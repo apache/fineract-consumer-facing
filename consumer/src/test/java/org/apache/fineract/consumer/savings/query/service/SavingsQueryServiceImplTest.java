@@ -34,10 +34,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountTransactionsApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsChargesApi;
+import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetChargesCurrencyResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
@@ -50,7 +47,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionsSearchResponse;
-import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.SavingsFineractClient;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsChargeQueryData;
@@ -86,16 +83,7 @@ class SavingsQueryServiceImplTest {
     private static final Long TOTAL_ELEMENTS = 45L;
 
     @Mock
-    private ClientApi clientApi;
-
-    @Mock
-    private SavingsAccountApi savingsAccountApi;
-
-    @Mock
-    private SavingsChargesApi savingsChargesApi;
-
-    @Mock
-    private SavingsAccountTransactionsApi savingsAccountTransactionsApi;
+    private SavingsFineractClient savingsFineractClient;
 
     @Mock
     private AccessPolicyEvaluator accessPolicyEvaluator;
@@ -124,7 +112,7 @@ class SavingsQueryServiceImplTest {
                 .productName(PRODUCT_NAME)
                 .status(new GetClientsSavingsAccountsStatus().code(STATUS_ACTIVE).active(true))
                 .currency(new GetClientsSavingsAccountsCurrency().code(CURRENCY_CODE));
-        when(clientApi.retrieveAllClientAccounts(CLIENT_ID))
+        when(savingsFineractClient.retrieveAllClientAccounts(CLIENT_ID))
                 .thenReturn(new GetClientsClientIdAccountsResponse().savingsAccounts(Set.of(account)));
 
         List<SavingsAccountListItemQueryData> result = service.listAccounts(jwt);
@@ -144,7 +132,7 @@ class SavingsQueryServiceImplTest {
     void listAccountsEmptyWhenNoSavingsAccounts() {
         Jwt jwt = jwt();
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(clientApi.retrieveAllClientAccounts(CLIENT_ID))
+        when(savingsFineractClient.retrieveAllClientAccounts(CLIENT_ID))
                 .thenReturn(new GetClientsClientIdAccountsResponse());
 
         assertThat(service.listAccounts(jwt)).isEmpty();
@@ -154,7 +142,7 @@ class SavingsQueryServiceImplTest {
     void listAccountsTranslatesUpstreamFailure() {
         Jwt jwt = jwt();
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(clientApi.retrieveAllClientAccounts(CLIENT_ID)).thenThrow(mock(FeignException.class));
+        when(savingsFineractClient.retrieveAllClientAccounts(CLIENT_ID)).thenThrow(mock(FeignException.class));
 
         assertThatThrownBy(() -> service.listAccounts(jwt))
                 .isInstanceOf(SavingsUpstreamUnavailableException.class);
@@ -174,7 +162,7 @@ class SavingsQueryServiceImplTest {
     @Test
     void getAccountMapsCurrency() {
         Jwt jwt = jwt();
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(savingsFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(new SavingsAccountData()
                         .id(SAVINGS_ID)
                         .accountNo(ACCOUNT_NO)
@@ -190,7 +178,7 @@ class SavingsQueryServiceImplTest {
     @Test
     void getChargesMapsCurrency() {
         Jwt jwt = jwt();
-        when(savingsChargesApi.retrieveAllSavingsAccountCharges(SAVINGS_ID, null))
+        when(savingsFineractClient.retrieveAllSavingsAccountCharges(SAVINGS_ID, null))
                 .thenReturn(List.of(new GetSavingsAccountsSavingsAccountIdChargesResponse()
                         .id(9L)
                         .name("Withdrawal fee")
@@ -205,7 +193,7 @@ class SavingsQueryServiceImplTest {
     @Test
     void getTransactionMapsCurrency() {
         Jwt jwt = jwt();
-        when(savingsAccountTransactionsApi.retrieveOneSavingsAccountTransaction(SAVINGS_ID, TRANSACTION_ID))
+        when(savingsFineractClient.retrieveOneSavingsAccountTransaction(SAVINGS_ID, TRANSACTION_ID))
                 .thenReturn(new SavingsAccountTransactionData()
                         .id(TRANSACTION_ID)
                         .currency(new CurrencyData().code(CURRENCY_CODE)));
@@ -224,7 +212,7 @@ class SavingsQueryServiceImplTest {
                         .id(1L)
                         .currency(new GetTransactionsCurrency().code(CURRENCY_CODE))))
                 .total(TOTAL_ELEMENTS);
-        when(savingsAccountTransactionsApi.searchSavingsAccountTransactions(
+        when(savingsFineractClient.searchSavingsAccountTransactions(
                 SAVINGS_ID, null, null, null, null, null, null, null, null, null,
                 0, SIZE, SORT_BY_AMOUNT, SORT_ORDER_DESC, LOCALE, DATE_FORMAT))
                 .thenReturn(response);
@@ -249,7 +237,7 @@ class SavingsQueryServiceImplTest {
     @Test
     void searchTransactionsPassesBareSortAsOrderByOnly() {
         Jwt jwt = jwt();
-        when(savingsAccountTransactionsApi.searchSavingsAccountTransactions(
+        when(savingsFineractClient.searchSavingsAccountTransactions(
                 SAVINGS_ID, null, null, null, null, null, null, null, null, null,
                 0, SIZE, SORT_BY_AMOUNT, null, LOCALE, DATE_FORMAT))
                 .thenReturn(new SavingsAccountTransactionsSearchResponse()
@@ -270,7 +258,7 @@ class SavingsQueryServiceImplTest {
     @Test
     void searchTransactionsEmptyEnvelopeWhenNullContent() {
         Jwt jwt = jwt();
-        when(savingsAccountTransactionsApi.searchSavingsAccountTransactions(
+        when(savingsFineractClient.searchSavingsAccountTransactions(
                 SAVINGS_ID, null, null, null, null, null, null, null, null, null,
                 0, SIZE, null, null, LOCALE, DATE_FORMAT))
                 .thenReturn(new SavingsAccountTransactionsSearchResponse());

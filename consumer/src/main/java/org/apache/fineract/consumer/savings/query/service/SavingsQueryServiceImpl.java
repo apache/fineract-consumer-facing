@@ -23,12 +23,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountTransactionsApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsChargesApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsProductApi;
+import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSavingsAccountTransactionsPageItem;
@@ -39,9 +36,8 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountSummaryData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionsSearchResponse;
-import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
-import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.SavingsFineractClient;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsApplicationTemplateQueryData;
@@ -65,11 +61,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     private static final String LOCALE = "en";
     private static final String DATE_FORMAT = "yyyy-MM-dd";
 
-    private final SavingsAccountApi savingsAccountApi;
-    private final SavingsChargesApi savingsChargesApi;
-    private final SavingsAccountTransactionsApi savingsAccountTransactionsApi;
-    private final SavingsProductApi savingsProductApi;
-    private final ClientApi clientApi;
+    private final SavingsFineractClient savingsFineractClient;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final UserClientResolver userClientResolver;
 
@@ -77,7 +69,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     public List<SavingsAccountListItemQueryData> listAccounts(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_LIST);
         Long clientId = userClientResolver.resolveClientId(jwt);
-        GetClientsClientIdAccountsResponse accounts = fetch(() -> clientApi.retrieveAllClientAccounts(clientId));
+        GetClientsClientIdAccountsResponse accounts = fetch(() -> savingsFineractClient.retrieveAllClientAccounts(clientId));
         if (accounts == null || accounts.getSavingsAccounts() == null) {
             return List.of();
         }
@@ -88,7 +80,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     public SavingsAccountQueryData getAccount(Jwt jwt, Long savingsId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
                 SavingsQueryAccessDeniedException::new);
-        SavingsAccountData account = fetch(() -> savingsAccountApi.retrieveSavingsAccount(savingsId, null, null, null));
+        SavingsAccountData account = fetch(() -> savingsFineractClient.retrieveSavingsAccount(savingsId, null, null, null));
         return toAccountData(account);
     }
 
@@ -97,7 +89,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
                 SavingsQueryAccessDeniedException::new);
         List<GetSavingsAccountsSavingsAccountIdChargesResponse> charges =
-                fetch(() -> savingsChargesApi.retrieveAllSavingsAccountCharges(savingsId, null));
+                fetch(() -> savingsFineractClient.retrieveAllSavingsAccountCharges(savingsId, null));
         if (charges == null) {
             return List.of();
         }
@@ -113,7 +105,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
         String orderBy = orderByOf(query.getSort());
         String sortOrder = sortOrderOf(query.getSort());
         SavingsAccountTransactionsSearchResponse response = fetch(() ->
-                savingsAccountTransactionsApi.searchSavingsAccountTransactions(
+                savingsFineractClient.searchSavingsAccountTransactions(
                         query.getSavingsId(),
                         isoDate(query.getFromDate()),
                         isoDate(query.getToDate()),
@@ -137,7 +129,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
                 SavingsQueryAccessDeniedException::new);
         SavingsAccountTransactionData transaction = fetch(() ->
-                savingsAccountTransactionsApi.retrieveOneSavingsAccountTransaction(savingsId, transactionId));
+                savingsFineractClient.retrieveOneSavingsAccountTransaction(savingsId, transactionId));
         return toTransactionData(transaction);
     }
 
@@ -145,7 +137,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     public SavingsApplicationTemplateQueryData getApplicationTemplate(Jwt jwt, Long productId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_APPLICATION_TEMPLATE_VIEW);
         if (productId == null) {
-            List<GetSavingsProductsResponse> products = fetch(savingsProductApi::retrieveAllSavingsProducts);
+            List<GetSavingsProductsResponse> products = fetch(savingsFineractClient::retrieveAllSavingsProducts);
             return toBrowseTemplate(products);
         }
         GetSavingsProductsProductIdResponse product = fetchProduct(productId);
@@ -160,12 +152,11 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     }
 
     private GetSavingsProductsProductIdResponse fetchProduct(Long productId) {
-        return FineractCaller.call(() -> savingsProductApi.retrieveOneSavingsProduct(productId),
+        return FineractCaller.call(() -> savingsFineractClient.retrieveOneSavingsProduct(productId),
                 e -> new SavingsProductNotFoundException(),
                 SavingsUpstreamUnavailableException::new,
                 SavingsUpstreamUnavailableException::new);
     }
-
 
     private SavingsAccountListItemQueryData toListItem(GetClientsSavingsAccounts account) {
         return SavingsAccountListItemQueryData.builder()
@@ -229,11 +220,11 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
         List<SavingsProductOptionQueryData> options = products == null
                 ? List.of()
                 : products.stream()
-                        .map(product -> SavingsProductOptionQueryData.builder()
-                                .id(toLong(product.getId()))
-                                .name(product.getName())
-                                .build())
-                        .toList();
+                .map(product -> SavingsProductOptionQueryData.builder()
+                        .id(toLong(product.getId()))
+                        .name(product.getName())
+                        .build())
+                .toList();
         return SavingsApplicationTemplateQueryData.builder()
                 .productOptions(options)
                 .build();
