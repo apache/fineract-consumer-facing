@@ -476,6 +476,7 @@
   "error.msg.consumer.savings.request.invalid": "Please review the details and try again.",
   "error.msg.consumer.savings.upstream.unavailable": "Savings are temporarily unavailable. Please try again later.",
   "error.msg.consumer.transfers.command.access.denied": "You don't have access to one of these accounts.",
+  "error.msg.consumer.transfers.command.account.same": "The destination account cannot be the same as the source account.",
   "error.msg.consumer.transfers.command.beneficiary.limit.exceeded": "That amount is over the transfer limit set for this beneficiary.",
   "error.msg.consumer.transfers.command.invalid": "This transfer couldn't be processed. Please review the details and try again.",
   "error.msg.consumer.transfers.command.not.found": "We couldn't find that transfer.",

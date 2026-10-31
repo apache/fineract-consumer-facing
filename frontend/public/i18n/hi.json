@@ -476,6 +476,7 @@
   "error.msg.consumer.savings.request.invalid": "कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
   "error.msg.consumer.savings.upstream.unavailable": "बचत अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
   "error.msg.consumer.transfers.command.access.denied": "आपके पास इनमें से किसी एक खाते तक पहुँच नहीं है।",
+  "error.msg.consumer.transfers.command.account.same": "गंतव्य खाता स्रोत खाते के समान नहीं हो सकता है।",
   "error.msg.consumer.transfers.command.beneficiary.limit.exceeded": "यह राशि इस लाभार्थी के लिए निर्धारित स्थानांतरण सीमा से अधिक है।",
   "error.msg.consumer.transfers.command.invalid": "यह ट्रांसफ़र संसाधित नहीं हो सका। कृपया विवरण की समीक्षा करें और पुनः प्रयास करें।",
   "error.msg.consumer.transfers.command.not.found": "हमें वह ट्रांसफ़र नहीं मिला।",
