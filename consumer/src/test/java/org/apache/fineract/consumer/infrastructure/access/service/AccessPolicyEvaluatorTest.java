@@ -40,6 +40,7 @@ import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeI
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.loans.command.exception.LoanCommandAccessDeniedException;
 import org.apache.fineract.consumer.loans.query.exception.LoanQueryAccessDeniedException;
+import org.apache.fineract.consumer.savings.command.exception.SavingsCommandAccessDeniedException;
 import org.apache.fineract.consumer.savings.query.exception.SavingsQueryAccessDeniedException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferAccessDeniedException;
 import org.junit.jupiter.api.Test;
@@ -160,6 +161,26 @@ class AccessPolicyEvaluatorTest {
     }
 
     @Test
+    void authorizeDeniesNonOwnedSavingsModifyWithCommandSideException() {
+        stubOwnedAccounts();
+
+        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_APPLICATION_MODIFY, FOREIGN_ACCOUNT_ID,
+                SavingsCommandAccessDeniedException::new))
+                .isInstanceOf(SavingsCommandAccessDeniedException.class)
+                .hasFieldOrPropertyWithValue("code", SavingsCommandAccessDeniedException.CODE);
+    }
+
+    @Test
+    void authorizeDeniesNonOwnedSavingsWithdrawWithCommandSideException() {
+        stubOwnedAccounts();
+
+        assertThatThrownBy(() -> evaluator.authorize(validJwt(), ConsumerAction.SAVINGS_APPLICATION_WITHDRAW, FOREIGN_ACCOUNT_ID,
+                SavingsCommandAccessDeniedException::new))
+                .isInstanceOf(SavingsCommandAccessDeniedException.class)
+                .hasFieldOrPropertyWithValue("code", SavingsCommandAccessDeniedException.CODE);
+    }
+
+    @Test
     void authorizeDeniesNonOwnedTransferSource() {
         stubOwnedAccounts();
 
@@ -190,6 +211,15 @@ class AccessPolicyEvaluatorTest {
 
         assertThatCode(() -> evaluator.authorize(jwt, ConsumerAction.SAVINGS_LIST))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void authorizeRejectsOpenBankingScopeOnSavingsSubmit() {
+        Jwt jwt = jwt(AuthenticationConstants.SCOPE_OPENBANKING_ACCOUNTS_READ, true);
+
+        assertThatThrownBy(() -> evaluator.authorize(jwt, ConsumerAction.SAVINGS_APPLICATION_SUBMIT))
+                .isInstanceOf(AccessScopeInsufficientException.class)
+                .hasFieldOrPropertyWithValue("code", AccessScopeInsufficientException.CODE);
     }
 
     @Test

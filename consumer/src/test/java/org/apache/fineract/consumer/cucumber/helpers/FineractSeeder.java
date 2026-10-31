@@ -140,6 +140,7 @@ public class FineractSeeder {
     private static volatile Long cachedPassportCodeValueId;
     private static volatile Long cachedClosureReasonCodeValueId;
     private static volatile Long cachedSavingsProductId;
+    private static volatile Long cachedSecondarySavingsProductId;
     private static volatile Long cachedLoanProductId;
 
     public record SeededClient(long fineractClientId, String documentTypeName, String documentKey) {}
@@ -354,7 +355,7 @@ public class FineractSeeder {
         return loanId;
     }
 
-    private long savingsProductId() {
+    public long savingsProductId() {
         Long cached = cachedSavingsProductId;
         if (cached != null) {
             return cached;
@@ -380,6 +381,38 @@ public class FineractSeeder {
             cachedSavingsProductId = productId;
             return productId;
         }
+    }
+
+    public long secondarySavingsProductId() {
+        Long cached = cachedSecondarySavingsProductId;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (FineractSeeder.class) {
+            if (cachedSecondarySavingsProductId != null) {
+                return cachedSecondarySavingsProductId;
+            }
+            String suffix = UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+            PostSavingsProductsRequest body = new PostSavingsProductsRequest()
+                    .name(SAVINGS_PRODUCT_NAME_PREFIX + "ALT-" + suffix)
+                    .shortName("A" + suffix.substring(0, 3))
+                    .currencyCode(USD)
+                    .digitsAfterDecimal(4)
+                    .nominalAnnualInterestRate(BigDecimal.valueOf(3.5))
+                    .interestCompoundingPeriodType(4)
+                    .interestPostingPeriodType(4)
+                    .interestCalculationType(1)
+                    .interestCalculationDaysInYearType(365)
+                    .accountingRule(1)
+                    .locale(LOCALE);
+            long productId = SAVINGS_PRODUCTS.createSavingsProduct(body).getResourceId();
+            cachedSecondarySavingsProductId = productId;
+            return productId;
+        }
+    }
+
+    public SavingsAccountData getSavingsAccount(long savingsId) {
+        return SAVINGS_ACCOUNTS.retrieveSavingsAccount(savingsId, null, null, null);
     }
 
     public long loanProductId() {
