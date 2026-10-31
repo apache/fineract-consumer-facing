@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-Feature: Consumer savings reads
+Feature: Consumer savings reads and applications
 
   Background:
     Given a logged-in savings customer with seeded accounts
@@ -44,3 +44,43 @@ Feature: Consumer savings reads
     When I get the other client's savings account
     Then the savings request is denied as forbidden
 
+  Scenario: Submitting the same savings application twice with one idempotency key creates one account
+    When I submit a savings application twice with the same idempotency key
+    Then both savings submissions return the same savings id
+    And I have exactly one more savings account
+
+  Scenario: Submitting a savings application without an idempotency key is rejected
+    When I submit a savings application without an idempotency key
+    Then the savings submission is rejected for the missing idempotency key
+
+  Scenario: Modifying a pending savings application
+    Given I have submitted a savings application
+    When I modify my pending savings application
+    Then the savings application is updated successfully
+    And the savings application reflects the modified values
+
+  Scenario: Withdrawing a pending savings application
+    Given I have submitted a savings application
+    When I withdraw my pending savings application
+    Then the savings application is withdrawn successfully
+    And the savings account status is withdrawn by applicant
+
+  Scenario: Modifying another client's savings account is forbidden
+    Given another client owns a savings account
+    When I modify the other client's savings account
+    Then the savings command is denied as forbidden
+
+  Scenario: Withdrawing another client's savings account is forbidden
+    Given another client owns a savings account
+    When I withdraw the other client's savings account
+    Then the savings command is denied as forbidden
+
+  Scenario: Withdrawing an active savings account is rejected
+    When I withdraw my active savings account
+    Then the savings command is rejected as invalid
+
+  Scenario: Withdrawing an already-withdrawn savings application is rejected
+    Given I have submitted a savings application
+    And I withdraw my pending savings application
+    When I withdraw my pending savings application again
+    Then the savings command is rejected as invalid

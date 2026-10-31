@@ -263,7 +263,7 @@ public class FineractSeeder {
         return loanId;
     }
 
-    private long savingsProductId() {
+    public long savingsProductId() {
         Long cached = cachedSavingsProductId;
         if (cached != null) {
             return cached;

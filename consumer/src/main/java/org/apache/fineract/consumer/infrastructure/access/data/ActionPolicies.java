@@ -44,6 +44,7 @@ public final class ActionPolicies {
     private static final Map<ConsumerAction, ActionPolicy> POLICIES = Stream.of(
             unowned(ConsumerAction.SAVINGS_LIST, CONSUMER_OR_OPENBANKING),
             unowned(ConsumerAction.SAVINGS_APPLICATION_TEMPLATE_VIEW, CONSUMER_ONLY),
+            unowned(ConsumerAction.SAVINGS_APPLICATION_SUBMIT, CONSUMER_ONLY),
             unowned(ConsumerAction.LOANS_LIST, CONSUMER_OR_OPENBANKING),
             unowned(ConsumerAction.LOAN_SCHEDULE_CALCULATE, CONSUMER_ONLY),
             unowned(ConsumerAction.LOAN_APPLICATION_TEMPLATE_VIEW, CONSUMER_ONLY),
@@ -67,6 +68,8 @@ public final class ActionPolicies {
             unownedKycNonrequired(ConsumerAction.OPENBANKING_TPP_CONSENT_CREATE, OPENBANKING_CONSENTS_ONLY),
             unownedKycNonrequired(ConsumerAction.OPENBANKING_TPP_CONSENT_VIEW, OPENBANKING_CONSENTS_ONLY),
             owned(ConsumerAction.SAVINGS_VIEW, ResourceType.SAVINGS, CONSUMER_OR_OPENBANKING),
+            owned(ConsumerAction.SAVINGS_APPLICATION_MODIFY, ResourceType.SAVINGS, CONSUMER_ONLY),
+            owned(ConsumerAction.SAVINGS_APPLICATION_WITHDRAW, ResourceType.SAVINGS, CONSUMER_ONLY),
             owned(ConsumerAction.LOANS_VIEW, ResourceType.LOANS, CONSUMER_OR_OPENBANKING),
             owned(ConsumerAction.LOAN_APPLICATION_MODIFY, ResourceType.LOANS, CONSUMER_ONLY),
             owned(ConsumerAction.LOAN_APPLICATION_WITHDRAW, ResourceType.LOANS, CONSUMER_ONLY),
