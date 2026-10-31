@@ -68,6 +68,7 @@ import org.apache.fineract.consumer.transfers.command.exception.TransferInProgre
 import org.apache.fineract.consumer.transfers.command.exception.TransferInvalidException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferLoanNotActiveException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferLoanOverpaymentException;
+import org.apache.fineract.consumer.transfers.command.exception.TransferSameAccountException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferStepUpInvalidException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferUpstreamUnavailableException;
 import org.apache.fineract.consumer.user.query.data.UserStatus;
@@ -512,6 +513,24 @@ class TransfersCommandServiceImplTest {
     }
 
     @Test
+    void initiateRejectsTransferToSameAccount() {
+        InitiateTransferCommand command = InitiateTransferCommand.builder()
+                .fromAccountId(FROM_SAVINGS_ID)
+                .toAccountId(FROM_SAVINGS_ID)
+                .toAccountType(TransferConstants.SAVINGS_TYPE_NAME)
+                .amount(AMOUNT)
+                .deviceFingerprint(DEVICE_FINGERPRINT)
+                .build();
+
+        assertThatThrownBy(() -> service.initiate(jwt(), command))
+                .isInstanceOf(TransferSameAccountException.class)
+                .hasFieldOrPropertyWithValue("code", TransferSameAccountException.CODE);
+
+        verify(otpService, never()).createOtp(any(), any(), any());
+    }
+    }
+
+    @Test
     void confirmCompletesTransferToBeneficiaryDestination() {
         when(stepUpTokenService.actionFingerprint(
                 TransferConstants.ENDPOINT, FROM_SAVINGS_ID, TO_SAVINGS_ID, TransferConstants.SAVINGS_TYPE_CODE, AMOUNT))
@@ -750,5 +769,25 @@ class TransfersCommandServiceImplTest {
                 .hasFieldOrPropertyWithValue("code", TransferInProgressException.CODE);
 
         verify(idempotencyKeyHolder).clear();
+    }
+
+    @Test
+    void confirmRejectsTransferToSameAccount() {
+        ConfirmTransferCommand command = ConfirmTransferCommand.builder()
+                .stepUpToken(STEP_UP_TOKEN)
+                .otp(OTP)
+                .fromAccountId(FROM_SAVINGS_ID)
+                .toAccountId(FROM_SAVINGS_ID)
+                .toAccountType(TransferConstants.SAVINGS_TYPE_NAME)
+                .amount(AMOUNT)
+                .deviceFingerprint(DEVICE_FINGERPRINT)
+                .idempotencyKey(IDEMPOTENCY_KEY)
+                .build();
+
+        assertThatThrownBy(() -> service.confirm(jwt(), command))
+                .isInstanceOf(TransferSameAccountException.class)
+                .hasFieldOrPropertyWithValue("code", TransferSameAccountException.CODE);
+
+        verify(transferFineractClient, never()).createAccountTransfer(any());
     }
 }

@@ -56,6 +56,7 @@ import org.apache.fineract.consumer.transfers.command.exception.TransferInvalidE
 import org.apache.fineract.consumer.transfers.command.exception.TransferLoanNotActiveException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferLoanOverpaymentException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferNotFoundException;
+import org.apache.fineract.consumer.transfers.command.exception.TransferSameAccountException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferStepUpInvalidException;
 import org.apache.fineract.consumer.transfers.command.exception.TransferUpstreamUnavailableException;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
@@ -78,6 +79,7 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
     @Override
     public TransferChallengeCommandData initiate(Jwt jwt, InitiateTransferCommand command) {
         boolean toLoan = resolveToLoan(command.getToAccountType());
+        requireDistinctAccounts(command.getFromAccountId(), command.getToAccountId(), toLoan);
 
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
@@ -106,6 +108,7 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
     @Override
     public TransferCommandData confirm(Jwt jwt, ConfirmTransferCommand command) {
         boolean toLoan = resolveToLoan(command.getToAccountType());
+        requireDistinctAccounts(command.getFromAccountId(), command.getToAccountId(), toLoan);
 
         UUID publicId = publicId(jwt);
         String actionFingerprint = transferActionFingerprint(
@@ -189,6 +192,13 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
                 toAccountId,
                 toLoan ? TransferConstants.LOAN_TYPE_CODE : TransferConstants.SAVINGS_TYPE_CODE,
                 amount);
+    }
+
+    private static void requireDistinctAccounts(Long fromAccountId, Long toAccountId, boolean toLoan) {
+        if (!toLoan && fromAccountId.equals(toAccountId)) {
+            throw new TransferSameAccountException();
+        }
+    }
     }
 
     private void requireDestinationAllowed(Jwt jwt, Long userId, Long toAccountId, boolean toLoan, BigDecimal amount) {
