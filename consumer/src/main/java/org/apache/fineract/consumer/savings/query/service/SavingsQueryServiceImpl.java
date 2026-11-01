@@ -16,20 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.fineract.consumer.savings.query.service;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountTransactionsApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsChargesApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsProductApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.SavingsFineractClient;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSavingsAccountTransactionsPageItem;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSavingsAccountsSavingsAccountIdChargesResponse;
@@ -62,14 +55,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SavingsQueryServiceImpl implements SavingsQueryService {
 
-    private static final String LOCALE = "en";
-    private static final String DATE_FORMAT = "yyyy-MM-dd";
-
-    private final SavingsAccountApi savingsAccountApi;
-    private final SavingsChargesApi savingsChargesApi;
-    private final SavingsAccountTransactionsApi savingsAccountTransactionsApi;
-    private final SavingsProductApi savingsProductApi;
-    private final ClientApi clientApi;
+    private final SavingsFineractClient savingsFineractClient;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final UserClientResolver userClientResolver;
 
@@ -77,18 +63,15 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     public List<SavingsAccountListItemQueryData> listAccounts(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_LIST);
         Long clientId = userClientResolver.resolveClientId(jwt);
-        GetClientsClientIdAccountsResponse accounts = fetch(() -> clientApi.retrieveAllClientAccounts(clientId));
-        if (accounts == null || accounts.getSavingsAccounts() == null) {
-            return List.of();
-        }
-        return accounts.getSavingsAccounts().stream().map(this::toListItem).toList();
+        List<GetClientsSavingsAccounts> accounts = fetch(() -> savingsFineractClient.listClientSavingsAccounts(clientId));
+        return accounts.stream().map(this::toListItem).toList();
     }
 
     @Override
     public SavingsAccountQueryData getAccount(Jwt jwt, Long savingsId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
                 SavingsQueryAccessDeniedException::new);
-        SavingsAccountData account = fetch(() -> savingsAccountApi.retrieveSavingsAccount(savingsId, null, null, null));
+        SavingsAccountData account = fetch(() -> savingsFineractClient.getAccount(savingsId));
         return toAccountData(account);
     }
 
@@ -97,7 +80,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
                 SavingsQueryAccessDeniedException::new);
         List<GetSavingsAccountsSavingsAccountIdChargesResponse> charges =
-                fetch(() -> savingsChargesApi.retrieveAllSavingsAccountCharges(savingsId, null));
+                fetch(() -> savingsFineractClient.getCharges(savingsId));
         if (charges == null) {
             return List.of();
         }
@@ -108,21 +91,19 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     public SavingsTransactionQueryResponse searchTransactions(Jwt jwt, SavingsTransactionSearchQuery query) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, query.getSavingsId(),
                 SavingsQueryAccessDeniedException::new);
-        Integer limit = query.getSize();
-        Integer offset = query.getPage() * query.getSize();
+        int limit = query.getSize();
+        int offset = query.getPage() * query.getSize();
         String orderBy = orderByOf(query.getSort());
         String sortOrder = sortOrderOf(query.getSort());
         SavingsAccountTransactionsSearchResponse response = fetch(() ->
-                savingsAccountTransactionsApi.searchSavingsAccountTransactions(
+                savingsFineractClient.searchTransactions(
                         query.getSavingsId(),
-                        isoDate(query.getFromDate()),
-                        isoDate(query.getToDate()),
-                        null, null, null, null, null, null, null,
+                        query.getFromDate(),
+                        query.getToDate(),
                         offset,
                         limit,
                         orderBy,
-                        sortOrder,
-                        LOCALE, DATE_FORMAT));
+                        sortOrder));
         if (response == null || response.getContent() == null) {
             return toTransactionPage(List.of(), query.getPage(), query.getSize(), 0L);
         }
@@ -137,7 +118,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
                 SavingsQueryAccessDeniedException::new);
         SavingsAccountTransactionData transaction = fetch(() ->
-                savingsAccountTransactionsApi.retrieveOneSavingsAccountTransaction(savingsId, transactionId));
+                savingsFineractClient.getTransaction(savingsId, transactionId));
         return toTransactionData(transaction);
     }
 
@@ -145,7 +126,7 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     public SavingsApplicationTemplateQueryData getApplicationTemplate(Jwt jwt, Long productId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_APPLICATION_TEMPLATE_VIEW);
         if (productId == null) {
-            List<GetSavingsProductsResponse> products = fetch(savingsProductApi::retrieveAllSavingsProducts);
+            List<GetSavingsProductsResponse> products = fetch(savingsFineractClient::listSavingsProducts);
             return toBrowseTemplate(products);
         }
         GetSavingsProductsProductIdResponse product = fetchProduct(productId);
@@ -160,12 +141,11 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
     }
 
     private GetSavingsProductsProductIdResponse fetchProduct(Long productId) {
-        return FineractCaller.call(() -> savingsProductApi.retrieveOneSavingsProduct(productId),
+        return FineractCaller.call(() -> savingsFineractClient.getSavingsProduct(productId),
                 e -> new SavingsProductNotFoundException(),
                 SavingsUpstreamUnavailableException::new,
                 SavingsUpstreamUnavailableException::new);
     }
-
 
     private SavingsAccountListItemQueryData toListItem(GetClientsSavingsAccounts account) {
         return SavingsAccountListItemQueryData.builder()
@@ -303,9 +283,5 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
 
     private static Long toLong(Integer value) {
         return value == null ? null : value.longValue();
-    }
-
-    private static String isoDate(LocalDate date) {
-        return date == null ? null : date.toString();
     }
 }
