@@ -35,6 +35,7 @@ import static org.mockito.Mockito.when;
 
 import feign.FeignException;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +50,7 @@ import org.apache.fineract.consumer.beneficiaries.command.data.InitiateAddBenefi
 import org.apache.fineract.consumer.beneficiaries.command.data.InitiateUpdateBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiarySelfAccountException;
@@ -72,6 +74,7 @@ import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenSer
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -210,6 +213,11 @@ class BeneficiariesCommandServiceImplTest {
         return new GetClientsClientIdResponse().officeId(DEST_OFFICE_ID).officeName(officeName);
     }
 
+    private static DataIntegrityViolationException uniqueViolation(String constraintName) {
+        return new DataIntegrityViolationException(constraintName,
+                new ConstraintViolationException(constraintName, new SQLException(), constraintName));
+    }
+
     private void stubAddFingerprint() {
         when(stepUpTokenService.actionFingerprint(BeneficiaryConstants.ADD_ACTION_ID,
                 NAME, OFFICE_NAME, ACCOUNT_NUMBER, TRANSFER_LIMIT))
@@ -286,6 +294,22 @@ class BeneficiariesCommandServiceImplTest {
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(BeneficiaryDuplicateNameException.class)
                 .hasFieldOrPropertyWithValue("code", BeneficiaryDuplicateNameException.CODE);
+
+        verify(otpService, never()).createOtp(any(), any(), any());
+    }
+
+    @Test
+    void initiateAddRejectsDuplicateAccount() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
+                .thenReturn(false);
+        stubSavingsResolution();
+        when(beneficiaryCommandRepository.existsByUserIdAndFineractAccountIdAndActiveTrue(USER_ID, SAVINGS_ID))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
+                .isInstanceOf(BeneficiaryDuplicateAccountException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiaryDuplicateAccountException.CODE);
 
         verify(otpService, never()).createOtp(any(), any(), any());
     }
@@ -466,13 +490,46 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     @Test
-    void confirmAddMapsIntegrityViolationToDuplicateName() {
+    void confirmAddRejectsDuplicateAccount() {
+        stubValidConfirmAdd();
+        when(beneficiaryCommandRepository.existsByUserIdAndFineractAccountIdAndActiveTrue(USER_ID, SAVINGS_ID))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
+                .isInstanceOf(BeneficiaryDuplicateAccountException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiaryDuplicateAccountException.CODE);
+
+        verify(beneficiaryCommandRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void confirmAddMapsNameConstraintViolationToDuplicateName() {
         stubValidConfirmAdd();
         when(beneficiaryCommandRepository.saveAndFlush(any()))
-                .thenThrow(new DataIntegrityViolationException("duplicate"));
+                .thenThrow(uniqueViolation(BeneficiariesCommandServiceImpl.NAME_UNIQUE_CONSTRAINT));
 
         assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
                 .isInstanceOf(BeneficiaryDuplicateNameException.class);
+    }
+
+    @Test
+    void confirmAddMapsAccountConstraintViolationToDuplicateAccount() {
+        stubValidConfirmAdd();
+        when(beneficiaryCommandRepository.saveAndFlush(any()))
+                .thenThrow(uniqueViolation(BeneficiariesCommandServiceImpl.ACCOUNT_UNIQUE_CONSTRAINT));
+
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
+                .isInstanceOf(BeneficiaryDuplicateAccountException.class);
+    }
+
+    @Test
+    void confirmAddRethrowsUnrecognisedIntegrityViolation() {
+        stubValidConfirmAdd();
+        DataIntegrityViolationException violation = uniqueViolation("beneficiaries_public_id_key");
+        when(beneficiaryCommandRepository.saveAndFlush(any())).thenThrow(violation);
+
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
+                .isSameAs(violation);
     }
 
     @Test

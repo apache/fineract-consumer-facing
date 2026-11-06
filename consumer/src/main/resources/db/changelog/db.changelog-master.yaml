@@ -32,3 +32,5 @@ databaseChangeLog:
       file: db/changelog/infrastructure/007-create-oauth2-authorization.yaml
   - include:
       file: db/changelog/infrastructure/008-create-registered-tpps.yaml
+  - include:
+      file: db/changelog/beneficiaries/009-add-beneficiary-account-unique-index.yaml
