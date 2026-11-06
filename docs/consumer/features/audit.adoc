@@ -157,7 +157,9 @@ Classes: `AuditQueryController`, `AuditQueryService` / `AuditQueryServiceImpl`, 
 
 === Feature flag
 
-The controller is annotated `@ConditionalOnProperty(name = "consumer.audit.query-enabled", havingValue = "true")`, so the bean is not even created unless the flag is set. `application.properties` pins `consumer.audit.query-enabled=false`; a default deployment has no audit read endpoint. `consumer/compose.yaml` sets `CONSUMER_AUDIT_QUERY_ENABLED: "true"` on the BFF container, so the local Docker stack (local dev, Cucumber runs, the demo) has it on.
+The controller is always registered; the flag is checked on every call instead. `AuditQueryServiceImpl` reads `consumer.audit.query-enabled` at startup and, while it is false, `listEvents` throws `AuditQueryDisabledException` (HTTP 404, code `error.msg.consumer.audit.query.disabled`) before any authorization or database work. The check is per call rather than a `@ConditionalOnProperty` on the controller because AOT processing evaluates bean conditions at build time, so a native image would ignore the deployment's setting (see xref:native-image[Native Image]).
+
+`application.properties` pins `consumer.audit.query-enabled=false`, so a default deployment answers the read endpoint with that 404. `consumer/compose.yaml` sets `CONSUMER_AUDIT_QUERY_ENABLED: "true"` on the BFF container, so the local Docker stack (local dev, Cucumber runs, the demo) has it on.
 
 === Authorization and scoping
 
