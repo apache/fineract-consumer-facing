@@ -444,6 +444,7 @@
   "error.msg.consumer.rate.limit.exceeded": "Too many requests. Please wait a moment and try again.",
   "error.msg.consumer.beneficiaries.command.not.found": "We couldn't find that beneficiary.",
   "error.msg.consumer.beneficiaries.command.name.duplicate": "You already have a beneficiary with that name.",
+  "error.msg.consumer.beneficiaries.command.account.duplicate": "You already have a beneficiary for that account.",
   "error.msg.consumer.beneficiaries.command.account.invalid": "We couldn't find an account matching that office and account number.",
   "error.msg.consumer.beneficiaries.command.upstream.unavailable": "Beneficiaries are temporarily unavailable. Please try again later.",
   "error.msg.consumer.beneficiaries.command.account.self": "You can't add one of your own accounts as a beneficiary.",

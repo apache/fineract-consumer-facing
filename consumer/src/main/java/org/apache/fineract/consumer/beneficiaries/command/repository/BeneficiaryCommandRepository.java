@@ -29,4 +29,6 @@ public interface BeneficiaryCommandRepository extends JpaRepository<Beneficiary,
     Optional<Beneficiary> findByPublicIdAndUserIdAndActiveTrue(UUID publicId, Long userId);
 
     boolean existsByUserIdAndNameIgnoreCaseAndActiveTrue(Long userId, String name);
+
+    boolean existsByUserIdAndFineractAccountIdAndActiveTrue(Long userId, Long fineractAccountId);
 }

@@ -25,6 +25,11 @@ Feature: Consumer beneficiaries
     When I register the target account as a beneficiary with a transfer limit
     Then the beneficiary appears in my beneficiary list
 
+  Scenario: The same account cannot be registered twice
+    Given I register the target account as a beneficiary with a transfer limit
+    When I register the target account again under a different name
+    Then the beneficiary is rejected as a duplicate account
+
   Scenario: Beneficiary transfer limit is enforced
     Given I register the target account as a beneficiary with a transfer limit
     When I transfer an amount within the limit to the target account
