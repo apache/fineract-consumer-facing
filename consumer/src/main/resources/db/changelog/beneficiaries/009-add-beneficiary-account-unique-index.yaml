@@ -1,0 +1,38 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+databaseChangeLog:
+  - logicalFilePath: db/changelog/beneficiaries/009-add-beneficiary-account-unique-index.yaml
+  - changeSet:
+      id: 009-add-beneficiary-account-unique-index
+      author: fineract-consumer-facing
+      preConditions:
+        - onFail: HALT
+        - onFailMessage: >-
+            beneficiaries holds more than one active row for the same (user_id, fineract_account_id);
+            deactivate the extras before uq_beneficiaries_user_account can be created
+        - sqlCheck:
+            expectedResult: 0
+            sql: >-
+              SELECT COUNT(*) FROM (SELECT 1 FROM beneficiaries WHERE is_active
+              GROUP BY user_id, fineract_account_id HAVING COUNT(*) > 1) duplicates
+      changes:
+        - sql:
+            sql: "CREATE UNIQUE INDEX uq_beneficiaries_user_account ON beneficiaries (user_id, fineract_account_id) WHERE is_active"
+      rollback:
+        - sql:
+            sql: "DROP INDEX uq_beneficiaries_user_account"
