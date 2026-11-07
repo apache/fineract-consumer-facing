@@ -28,22 +28,36 @@ import io.cucumber.java.en.When;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
+import org.apache.fineract.consumer.client.api.SavingsCommandControllerApi;
 import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
+import org.apache.fineract.consumer.client.model.ModifySavingsApplicationCommandRequest;
 import org.apache.fineract.consumer.client.model.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.client.model.SavingsAccountQueryData;
+import org.apache.fineract.consumer.client.model.SavingsApplicationCommandData;
 import org.apache.fineract.consumer.client.model.SavingsChargeQueryData;
 import org.apache.fineract.consumer.client.model.SavingsTransactionQueryResponse;
+import org.apache.fineract.consumer.client.model.SubmitSavingsApplicationCommandRequest;
+import org.apache.fineract.consumer.client.model.WithdrawSavingsApplicationCommandRequest;
 import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
 import org.apache.fineract.consumer.cucumber.helpers.RegistrationHelper;
+import org.apache.fineract.consumer.infrastructure.exception.MissingRequestHeaderExceptionHandler;
+import org.apache.fineract.consumer.savings.command.exception.SavingsApplicationInvalidException;
+import org.apache.fineract.consumer.savings.command.exception.SavingsCommandAccessDeniedException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 public class SavingsSteps {
 
     private static final String DEVICE_FINGERPRINT = "cucumber-savings-device";
+    private static final String WITHDRAW_COMMAND = "withdrawnByApplicant";
+    private static final int BAD_REQUEST = 400;
     private static final int UNAUTHORIZED = 401;
     private static final int FORBIDDEN = 403;
     private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("125.00");
+    private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final FineractSeeder fineractSeeder = new FineractSeeder();
@@ -51,19 +65,28 @@ public class SavingsSteps {
 
     private RegistrationHelper.BoundUserWithAccounts user;
     private SavingsQueryControllerApi savingsApi;
+    private SavingsCommandControllerApi savingsCommandApi;
     private long foreignSavingsId;
 
     private List<SavingsAccountListItemQueryData> listResult;
     private SavingsAccountQueryData accountResult;
     private List<SavingsChargeQueryData> chargesResult;
     private SavingsTransactionQueryResponse transactionsResult;
+    private SavingsApplicationCommandData firstSubmission;
+    private SavingsApplicationCommandData secondSubmission;
+    private SavingsApplicationCommandData commandResult;
+    private Long pendingSavingsId;
+    private int savingsCountBeforeSubmit;
     private int errorStatus;
+    private FeignException lastError;
 
     @Given("a logged-in savings customer with seeded accounts")
     public void loggedInSavingsCustomer() {
         user = registrationHelper.registerBoundUserWithAccounts();
         String accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
         savingsApi = authenticatedClient(accessToken);
+        savingsCommandApi = ConsumerApiClientFactory.authenticated(
+                SavingsCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
     }
 
     @When("I list my savings accounts")
@@ -138,12 +161,157 @@ public class SavingsSteps {
         assertThat(errorStatus).isEqualTo(FORBIDDEN);
     }
 
+    @When("I submit a savings application twice with the same idempotency key")
+    public void submitSavingsApplicationTwiceWithSameKey() {
+        savingsCountBeforeSubmit = savingsApi.listSavingsAccounts().size();
+        String idempotencyKey = UUID.randomUUID().toString();
+        firstSubmission = savingsCommandApi.submitSavingsApplication(idempotencyKey, savingsApplicationRequest());
+        secondSubmission = savingsCommandApi.submitSavingsApplication(idempotencyKey, savingsApplicationRequest());
+    }
+
+    @Then("both savings submissions return the same savings id")
+    public void bothSavingsSubmissionsReturnSameSavingsId() {
+        assertThat(firstSubmission.getSavingsId()).isNotNull();
+        assertThat(secondSubmission.getSavingsId()).isEqualTo(firstSubmission.getSavingsId());
+    }
+
+    @Then("I have exactly one more savings account")
+    public void exactlyOneMoreSavingsAccount() {
+        assertThat(savingsApi.listSavingsAccounts()).hasSize(savingsCountBeforeSubmit + 1);
+    }
+
+    @When("I submit a savings application without an idempotency key")
+    public void submitSavingsApplicationWithoutKey() {
+        lastError = captureError(() -> savingsCommandApi.submitSavingsApplication(null, savingsApplicationRequest()));
+    }
+
+    @Then("the savings submission is rejected for the missing idempotency key")
+    public void savingsSubmissionRejectedForMissingKey() {
+        assertThat(lastError.status()).isEqualTo(BAD_REQUEST);
+        assertThat(readCode(lastError.contentUTF8())).isEqualTo(MissingRequestHeaderExceptionHandler.CODE);
+    }
+
+    @Given("I have submitted a savings application")
+    public void submittedSavingsApplication() {
+        String idempotencyKey = UUID.randomUUID().toString();
+        SavingsApplicationCommandData submission = savingsCommandApi.submitSavingsApplication(
+                idempotencyKey, savingsApplicationRequest());
+        pendingSavingsId = submission.getSavingsId();
+        assertThat(pendingSavingsId).isNotNull();
+    }
+
+    @When("I modify my pending savings application")
+    public void modifyPendingSavingsApplication() {
+        String idempotencyKey = UUID.randomUUID().toString();
+        commandResult = savingsCommandApi.modifySavingsApplication(
+                idempotencyKey, pendingSavingsId, modifySavingsApplicationRequest());
+    }
+
+    @Then("the savings application is updated successfully")
+    public void savingsApplicationUpdatedSuccessfully() {
+        assertThat(commandResult).isNotNull();
+        assertThat(commandResult.getSavingsId()).isEqualTo(pendingSavingsId);
+    }
+
+    @Then("the savings application reflects the modified values")
+    public void savingsApplicationReflectsModifiedValues() {
+        SavingsAccountQueryData account = savingsApi.getSavingsAccount(pendingSavingsId);
+        assertThat(account).isNotNull();
+        assertThat(account.getId()).isEqualTo(pendingSavingsId);
+    }
+
+    @When("I withdraw my pending savings application")
+    public void withdrawPendingSavingsApplication() {
+        String idempotencyKey = UUID.randomUUID().toString();
+        commandResult = savingsCommandApi.withdrawSavingsApplication(
+                idempotencyKey, pendingSavingsId, WITHDRAW_COMMAND, withdrawSavingsApplicationRequest());
+    }
+
+    @Then("the savings application is withdrawn successfully")
+    public void savingsApplicationWithdrawnSuccessfully() {
+        assertThat(commandResult).isNotNull();
+        assertThat(commandResult.getSavingsId()).isEqualTo(pendingSavingsId);
+    }
+
+    @Then("the savings account status is withdrawn by applicant")
+    public void savingsAccountStatusIsWithdrawnByApplicant() {
+        SavingsAccountQueryData account = savingsApi.getSavingsAccount(pendingSavingsId);
+        assertThat(account.getStatus()).containsIgnoringCase("withdrawn");
+    }
+
+    @When("I modify the other client's savings account")
+    public void modifyForeignSavingsAccount() {
+        String idempotencyKey = UUID.randomUUID().toString();
+        lastError = captureError(() -> savingsCommandApi.modifySavingsApplication(
+                idempotencyKey, foreignSavingsId, modifySavingsApplicationRequest()));
+    }
+
+    @When("I withdraw the other client's savings account")
+    public void withdrawForeignSavingsAccount() {
+        String idempotencyKey = UUID.randomUUID().toString();
+        lastError = captureError(() -> savingsCommandApi.withdrawSavingsApplication(
+                idempotencyKey, foreignSavingsId, WITHDRAW_COMMAND, withdrawSavingsApplicationRequest()));
+    }
+
+    @Then("the savings command is denied as forbidden")
+    public void savingsCommandDeniedForbidden() {
+        assertThat(lastError.status()).isEqualTo(FORBIDDEN);
+        assertThat(readCode(lastError.contentUTF8())).isEqualTo(SavingsCommandAccessDeniedException.CODE);
+    }
+
+    @When("I withdraw my active savings account")
+    public void withdrawActiveSavingsAccount() {
+        String idempotencyKey = UUID.randomUUID().toString();
+        lastError = captureError(() -> savingsCommandApi.withdrawSavingsApplication(
+                idempotencyKey, user.savingsAccountId(), WITHDRAW_COMMAND, withdrawSavingsApplicationRequest()));
+    }
+
+    @When("I withdraw my pending savings application again")
+    public void withdrawPendingSavingsApplicationAgain() {
+        String idempotencyKey = UUID.randomUUID().toString();
+        lastError = captureError(() -> savingsCommandApi.withdrawSavingsApplication(
+                idempotencyKey, pendingSavingsId, WITHDRAW_COMMAND, withdrawSavingsApplicationRequest()));
+    }
+
+    @Then("the savings command is rejected as invalid")
+    public void savingsCommandRejectedAsInvalid() {
+        assertThat(lastError.status()).isEqualTo(BAD_REQUEST);
+        assertThat(readCode(lastError.contentUTF8())).isEqualTo(SavingsApplicationInvalidException.CODE);
+    }
+
+    private SubmitSavingsApplicationCommandRequest savingsApplicationRequest() {
+        return new SubmitSavingsApplicationCommandRequest()
+                .productId(fineractSeeder.savingsProductId());
+    }
+
+    private ModifySavingsApplicationCommandRequest modifySavingsApplicationRequest() {
+        return new ModifySavingsApplicationCommandRequest()
+                .productId(fineractSeeder.savingsProductId());
+    }
+
+    private WithdrawSavingsApplicationCommandRequest withdrawSavingsApplicationRequest() {
+        return new WithdrawSavingsApplicationCommandRequest()
+                .note("Cucumber test withdrawal note");
+    }
+
     private static int captureErrorStatus(Runnable call) {
+        return captureError(call).status();
+    }
+
+    private static FeignException captureError(Runnable call) {
         try {
             call.run();
             throw new AssertionError("Expected the request to be rejected, but it succeeded");
         } catch (FeignException e) {
-            return e.status();
+            return e;
+        }
+    }
+
+    private static String readCode(String body) {
+        try {
+            return JSON.readTree(body).path("code").asString();
+        } catch (Exception e) {
+            throw new IllegalStateException("could not parse error response body: " + body, e);
         }
     }
 
