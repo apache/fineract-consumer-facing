@@ -11,7 +11,7 @@ consumer/src/main/java/org/apache/fineract/consumer/infrastructure/fineractclien
 ├── data/          FineractHeaders (header-name constants)
 ├── interceptors/  FineractBasicAuthInterceptor, FineractTenantHeaderInterceptor,
 │                  FineractIdempotencyKeyInterceptor
-├── service/       FineractCaller (exception translation helper)
+├── service/       *FineractClient adapters (interface + Impl) and FineractCaller (exception translation helper)
 ├── spec/          fineract.json (vendored Fineract OpenAPI spec) + fineract.ignore
 └── templates/     apiClient.mustache (custom generator template)
 ----
@@ -22,7 +22,7 @@ The transport is Feign, a declarative HTTP client: you write a Java interface wi
 
 The Feign interfaces are not written by hand. They are generated on every build from a vendored copy of Fineract's OpenAPI spec (`spec/fineract.json`) by two Gradle tasks in `consumer/build.gradle`:
 
-. `sanitizeFineractSpec` patches known defects in the upstream spec before generation: it strips null-only enums, retypes integer money fields (`principal`, `amount`, `depositAmount`) to `number`, adds balance fields missing from `GetClientsSavingsAccounts` and `GetClientsLoanAccounts`, adds `mobileNo` and `imagePresent` to `GetClientsClientIdResponse`, and fixes the response shapes of the obligee-details and client-image endpoints. The schema-targeted patches (the missing balance and profile fields, the obligee-details fix, and the client-image fix) fail the build with a `GradleException` if the schema or path they target disappears, so a spec upgrade cannot silently drop those fixes. The enum-stripping and money-retyping passes are pattern-based and simply match nothing if the spec changes. Finally, the spec is pruned to the operations whose tag is listed in `fineractApiTags` in `consumer/build.gradle` (plus the untagged operations in `fineractUntaggedOperationIds`), and to the schemas those operations reach. Only those APIs are generated, which keeps unused Feign clients and models out of the jar and out of startup. Using a new generated `*Api` means adding its tag to that list first; the build fails if a listed tag or operation disappears from the spec.
+. `sanitizeFineractSpec` patches known defects in the upstream spec before generation: it strips null-only enums, retypes integer money fields (`principal`, `amount`, `depositAmount`) to `number`, adds balance fields missing from `GetClientsSavingsAccounts` and `GetClientsLoanAccounts`, adds `mobileNo` and `imagePresent` to `GetClientsClientIdResponse`, fixes the response shapes of the obligee-details and client-image endpoints, and corrects three standing-instruction shapes: it adds the `validTill` that Fineract returns but the spec omits to both instruction read schemas, widens the create response's `resourceId` to int64, and drops `uniqueItems` from run-history pages so that two identical runs (a failed instruction retried on the same business date) are not merged into one. The schema-targeted patches (the missing balance and profile fields, the obligee-details fix, the client-image fix, and the standing-instruction fixes) fail the build with a `GradleException` if the schema or path they target disappears, so a spec upgrade cannot silently drop those fixes. The enum-stripping and money-retyping passes are pattern-based and simply match nothing if the spec changes. Finally, the spec is pruned to the operations whose tag is listed in `fineractApiTags` in `consumer/build.gradle` (plus the untagged operations in `fineractUntaggedOperationIds`), and to the schemas those operations reach. Only those APIs are generated, which keeps unused Feign clients and models out of the jar and out of startup. Using a new generated `*Api` means adding its tag to that list first; the build fails if a listed tag or operation disappears from the spec.
 . `generateFineractClient` runs the OpenAPI Generator (`spring` generator, `spring-cloud` library) over the sanitized spec into `build/generated/fineractclient`, producing one interface per listed Fineract API tag under `org.apache.fineract.consumer.infrastructure.fineractclient.generated.api` and model classes under `...generated.model`. `float` and `double` are mapped to `BigDecimal` so money is never a binary floating-point type. `compileJava` depends on this task, so the client is always regenerated before compilation.
 
 To upgrade Fineract, replace the vendored `spec/fineract.json` with the spec shipped in the target image (`/app/resources/static/fineract.json` in `apache/fineract`), point the `fineract` service in `consumer/compose.yaml` at that same image, and rebuild. Any schema-targeted sanitize patch whose target has changed fails the build at that point and is updated or retired as part of the upgrade.
@@ -41,18 +41,25 @@ public interface SavingsAccountApiClient extends SavingsAccountApi {
 
 == Narrow interfaces at the seam
 
-Feature services inject the plain `*Api` interfaces, never the `*ApiClient` Feign subinterfaces and never a hand-rolled HTTP client. For example, `SavingsQueryServiceImpl` declares:
+Feature services do not inject the generated clients. Each feature area has a thin adapter in `infrastructure.fineractclient.service`, an interface plus `Impl` (`SavingsFineractClient`, `TransferFineractClient`, `StandingInstructionFineractClient`, and so on), whose implementation is the only code that calls the generated `*Api` interfaces. For example, `SavingsQueryServiceImpl` declares:
 
 [source,java]
 ----
-private final SavingsAccountApi savingsAccountApi;
-private final SavingsChargesApi savingsChargesApi;
-private final SavingsAccountTransactionsApi savingsAccountTransactionsApi;
-private final SavingsProductApi savingsProductApi;
-private final ClientApi clientApi;
+private final SavingsFineractClient savingsFineractClient;
 ----
 
-Spring satisfies each `*Api` dependency with the Feign proxy because `*ApiClient extends *Api`. The effect is that a service depends only on a narrow, tag-scoped Java interface. In a unit test the same interface is mocked directly; nothing Feign-specific leaks into feature code. Hand-written `@FeignClient` interfaces are the exception, allowed only when the spec genuinely cannot produce a usable client for a call.
+An adapter holds the upstream calling conventions (fixed locale and date format, paging, command names) in one place and is unit-tested against mocked `*Api` interfaces; the feature service is unit-tested against the adapter interface. Inside the adapter, Spring satisfies each `*Api` dependency with the Feign proxy because `*ApiClient extends *Api`, so nothing Feign-specific leaks out. The ArchUnit rule `LayeringArchitectureTest.featuresDoNotCallFineractFeignClientsDirectly` enforces the seam; it is frozen, and its remaining violations (`UserQueryServiceImpl`) are listed in `consumer/src/test/resources/archunit_store/`. Hand-written `@FeignClient` interfaces are the exception, allowed only when the spec genuinely cannot produce a usable client for a call.
+
+== Standing instructions
+
+`StandingInstructionFineractClient` wraps Fineract's standing-instruction and run-history APIs (`POST /v1/standinginstructions`, `GET /v1/standinginstructions` and `/{id}`, `PUT /v1/standinginstructions/{id}?command=delete`, `GET /v1/standinginstructionrunhistory`). Fineract runs the instructions itself, in its *Execute Standing Instruction* job; the BFF only creates, reads and deletes them. Behaviour the adapter accounts for, verified against the pinned image:
+
+* *Paging.* The list endpoints page by offset and apply no order unless asked, so the adapter requests 200 rows at a time ordered by id (`atsi.id`, `atsih.id`, Fineract's own SQL aliases; Fineract answers an unknown `orderBy` column with HTTP 500) and returns every page.
+* *Delete is not idempotent upstream.* Deleting an already deleted instruction succeeds again and appends `_deleted_<id>` to its name a second time, so callers read the status first. A forwarded `Idempotency-Key` is honoured: a create retried with the same key returns the original id (`x-served-from-cache: true`).
+* *Run history* is filtered by source account, not by instruction, and includes runs of instructions deleted since. A failed run carries no `amount`; its `errorLog` holds Fineract's internal error text and must never reach a consumer.
+* *Recurrence.* Fineract stores the monthly day (`recurrence_on_day`) but returns it as separate `recurrenceOnDay` and `recurrenceOnMonth` fields that the spec does not declare, so the generated model does not carry it. Its scheduling code runs weekly instructions on the weekday of `validFrom`, and a monthly day the month does not have on the month's last day.
+
+The Fineract service account needs `READ_STANDINGINSTRUCTION` (list, read one, and run history), `CREATE_STANDINGINSTRUCTION` and `DELETE_STANDINGINSTRUCTION`.
 
 == Authentication and tenant handling
 
@@ -101,7 +108,7 @@ This keeps the BFF's public contract stable when Fineract's API changes: a spec 
 == Design rationale
 
 * Generating the client from Fineract's spec keeps the entire Fineract surface in one regenerated place instead of drifting across hand-maintained interfaces, and `BigDecimal` type mapping plus the sanitize step fix upstream spec defects once, centrally.
-* Injecting the plain `*Api` interfaces gives feature code a mockable seam with zero Feign coupling, which is why unit tests never need HTTP stubs.
+* Putting a thin adapter interface between feature services and the generated `*Api` interfaces gives feature code a mockable seam with zero Feign coupling, which is why unit tests never need HTTP stubs, and keeps upstream calling conventions out of the features.
 * Per-call exception translation via `FineractCaller` instead of a global `ErrorDecoder` keeps the decision "what does a 404 mean here" where the business context lives: a missing savings account and a missing loan are different consumer-facing errors.
 * The NON_EMPTY encoder is scoped to the Fineract client only, so the BFF's own API responses are unaffected.
 
