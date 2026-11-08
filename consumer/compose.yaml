@@ -59,7 +59,7 @@ services:
     # Pinned to the apache/fineract develop build that src/main/java/.../fineractclient/spec/fineract.json
     # was extracted from (/app/resources/static/fineract.json in the image). Bump both together;
     # FINERACT_IMAGE_TAG overrides it, e.g. to "develop" for the nightly upstream check.
-    image: apache/fineract:${FINERACT_IMAGE_TAG:-4a61d7c218413eca8310d30b098722047e891bb7}
+    image: apache/fineract:${FINERACT_IMAGE_TAG:-405c18dcabfc235325e71616e816290234eead87}
     container_name: fineract
     depends_on:
       fineract-db:
