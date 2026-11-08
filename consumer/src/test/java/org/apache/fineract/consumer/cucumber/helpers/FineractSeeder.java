@@ -31,6 +31,7 @@ import feign.jackson.JacksonEncoder;
 import feign.okhttp.OkHttpClient;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -218,7 +219,7 @@ public class FineractSeeder {
                 .priority(LOW_PRIORITY)
                 .status(ACTIVE)
                 .amount(SEED_INSTRUCTION_AMOUNT)
-                .validFrom(LocalDate.now().plusYears(1).toString())
+                .validFrom(LocalDate.now(ZoneId.systemDefault()).plusYears(1).toString())
                 .recurrenceType(PERIODIC)
                 .recurrenceFrequency(WEEKS)
                 .recurrenceInterval(EVERY_PERIOD)
