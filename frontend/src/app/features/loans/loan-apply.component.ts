@@ -161,7 +161,7 @@ const FIELD_ERROR_KEYS = [
           >
             {{ 'loans.apply.previewCta' | appTranslate }}
           </ion-button>
-          <ion-button type="button" [disabled]="loading()" (click)="submit()">
+          <ion-button type="button" [disabled]="loading() || !!store.draft()" (click)="submit()">
             {{ 'loans.apply.submitCta' | appTranslate }}
           </ion-button>
         </div>
@@ -374,6 +374,9 @@ export class LoanApplyComponent {
   }
 
   protected submit(): void {
+    if (this.store.draft()) {
+      return;
+    }
     if (this.reportFirstFieldError()) {
       return;
     }
