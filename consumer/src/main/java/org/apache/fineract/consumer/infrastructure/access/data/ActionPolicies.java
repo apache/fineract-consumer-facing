@@ -70,7 +70,8 @@ public final class ActionPolicies {
             owned(ConsumerAction.LOANS_VIEW, ResourceType.LOANS, CONSUMER_OR_OPENBANKING),
             owned(ConsumerAction.LOAN_APPLICATION_MODIFY, ResourceType.LOANS, CONSUMER_ONLY),
             owned(ConsumerAction.LOAN_APPLICATION_WITHDRAW, ResourceType.LOANS, CONSUMER_ONLY),
-            owned(ConsumerAction.TRANSFER_EXECUTE, ResourceType.SAVINGS, CONSUMER_ONLY))
+            owned(ConsumerAction.TRANSFER_EXECUTE, ResourceType.SAVINGS, CONSUMER_ONLY),
+            owned(ConsumerAction.SCHEDULED_TRANSFER_CREATE, ResourceType.SAVINGS, CONSUMER_ONLY))
             .collect(Collectors.toUnmodifiableMap(ActionPolicy::getAction, Function.identity()));
 
     public static Optional<ActionPolicy> forAction(ConsumerAction action) {

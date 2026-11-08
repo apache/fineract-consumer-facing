@@ -25,7 +25,7 @@ The code lives at `consumer/src/main/java/org/apache/fineract/consumer/infrastru
 
 `OtpServiceImpl.createOtp` generates a six-character code drawn from a 36-character alphabet (digits `0-9` and upper-case `A-Z`) using a shared `SecureRandom` instance. The raw code is handed to the delivery service and then discarded; only its hash is stored.
 
-Every mint and every redemption names an `OtpPurpose` -- `REGISTRATION`, `LOGIN_TWO_FACTOR`, `PASSWORD_CHANGE`, `PASSWORD_RESET`, `TRANSFER` or `BENEFICIARY`. The purpose is part of the Valkey key *and* of the hashed material, so a code minted for one ceremony does not validate for another.
+Every mint and every redemption names an `OtpPurpose` -- `REGISTRATION`, `LOGIN_TWO_FACTOR`, `PASSWORD_CHANGE`, `PASSWORD_RESET`, `TRANSFER`, `SCHEDULED_TRANSFER` or `BENEFICIARY`. The purpose is part of the Valkey key *and* of the hashed material, so a code minted for one ceremony does not validate for another.
 
 The hash is an unsalted SHA-256 digest of `{purpose.keySegment}:{upper-cased code}`, hex-encoded. Upper-casing before hashing makes validation case-insensitive, so a user may type `a1b2c3` for a delivered `A1B2C3`. There is no salt or keyed MAC; see the limitations section.
 
@@ -108,6 +108,10 @@ The project uses Spring Modulith (a library that enforces module boundaries at b
 |`transfers`
 |`createOtp` on initiate, `validateOtp` with `TransferStepUpInvalidException` on confirm
 |Step-up confirmation of a money transfer, paired with an action-bound step-up token.
+
+|`scheduledtransfers`
+|`createOtp` on initiate, `validateOtp` with `ScheduledTransferStepUpInvalidException` on confirm
+|Step-up confirmation for setting up a recurring transfer, paired with an action-bound step-up token.
 
 |`beneficiaries`
 |`createOtp`, `validateOtp` with `BeneficiaryStepUpInvalidException`

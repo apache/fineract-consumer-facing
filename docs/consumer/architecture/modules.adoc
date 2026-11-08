@@ -30,7 +30,7 @@ In practice this means a feature's service interfaces and its data-transfer clas
 
 == Module list
 
-The codebase has twelve top-level modules. Eleven are feature modules; `infrastructure` is shared plumbing (covered in the Infrastructure section).
+The codebase has thirteen top-level modules. Twelve are feature modules; `infrastructure` is shared plumbing (covered in the Infrastructure section).
 
 [cols="1,1,3"]
 |===
@@ -71,6 +71,10 @@ The codebase has twelve top-level modules. Eleven are feature modules; `infrastr
 |`savings`
 |query
 |Savings accounts: list, detail, charges, transactions, transaction detail, application template. Read only.
+
+|`scheduledtransfers`
+|command
+|Weekly or monthly savings transfers run by Fineract standing instructions: set up through an initiate/confirm step-up ceremony. Behind `consumer.scheduled-transfers.enabled`, off by default.
 
 |`summary`
 |query

@@ -146,7 +146,7 @@ The query side owns transfer history because it is a cross-account view: per-acc
 
 == Limitations and future work
 
-* *Transfers execute immediately.* They use the server's current date; there is no scheduling, no future-dated transfer, and no recurring transfer.
+* *Transfers execute immediately.* They use the server's current date; there is no future-dated one-off transfer. Recurring transfers are a separate feature, run by Fineract standing instructions (see xref:scheduled-transfers[Scheduled Transfers]).
 * *The transfer description is a fixed constant.* The customer cannot attach a note.
 * *No amount ceiling on own-savings transfers.* Transfers between the customer's own savings accounts are bounded only by the optional per-beneficiary `transferLimit` (loan repayments are capped at the loan's current payoff amount returned by `prepayLoan`). A global or per-tier transaction limit would need new policy data.
 * *The OTP channel is hard-coded to email.* This applies to the transfer step-up flow.
