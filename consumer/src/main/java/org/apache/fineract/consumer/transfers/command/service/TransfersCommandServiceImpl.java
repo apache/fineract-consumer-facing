@@ -158,7 +158,10 @@ public class TransfersCommandServiceImpl implements TransfersCommandService {
                     .locale(TransferConstants.LOCALE)
                     .transferDescription(TransferConstants.DEFAULT_DESCRIPTION);
 
-            Long transferId = callWrite(() -> transferFineractClient.createAccountTransfer(request));
+            Long transferDetailId = callWrite(() -> transferFineractClient.createAccountTransfer(request));
+            // Fineract answers with the details id. Transfer history and Fineract's own transfer reads use the
+            // transfer's id, which differs from it as soon as a standing instruction exists.
+            Long transferId = call(() -> transferFineractClient.getAccountTransferId(transferDetailId));
 
             return TransferCommandData.builder()
                     .transferId(transferId)
