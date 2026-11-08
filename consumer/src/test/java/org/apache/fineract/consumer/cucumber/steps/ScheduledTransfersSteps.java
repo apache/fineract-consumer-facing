@@ -27,6 +27,7 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
@@ -92,7 +93,7 @@ public class ScheduledTransfersSteps {
                 ScheduledTransfersCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
         beneficiariesApi = ConsumerApiClientFactory.authenticated(
                 BeneficiariesCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
-        startDate = LocalDate.now().plusDays(START_IN_DAYS);
+        startDate = LocalDate.now(ZoneId.systemDefault()).plusDays(START_IN_DAYS);
     }
 
     @Given("I own a second savings account for scheduled transfers")
@@ -165,7 +166,7 @@ public class ScheduledTransfersSteps {
         // Yesterday here is before the BFF's tomorrow even if the two clocks sit on different dates.
         lastError = captureError(() -> scheduledTransfersApi.initiateScheduledTransfer(DEVICE_FINGERPRINT,
                 initiateRequest(user.savingsAccountId(), secondSavingsId, TRANSFER_AMOUNT,
-                        ScheduledTransferFrequency.WEEKLY, LocalDate.now().minusDays(1), null)));
+                        ScheduledTransferFrequency.WEEKLY, LocalDate.now(ZoneId.systemDefault()).minusDays(1), null)));
     }
 
     @When("I confirm the same scheduled transfer twice with the same idempotency key")
