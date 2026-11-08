@@ -161,7 +161,7 @@ One row per endpoint, grouped by feature module. All paths sit under the `/api/v
 |===
 |Method |Path |Purpose
 |POST |`/api/v1/audit/events` |Ingest a batch of client-side audit events from the frontend
-|GET |`/api/v1/audit/events` |List the caller's own audit events, paginated (demo-only; registered only when `consumer.audit.query-enabled` is set, off by default)
+|GET |`/api/v1/audit/events` |List the caller's own audit events, paginated (demo-only; answers HTTP 404 unless `consumer.audit.query-enabled` is set, off by default)
 |===
 
 === Open banking
