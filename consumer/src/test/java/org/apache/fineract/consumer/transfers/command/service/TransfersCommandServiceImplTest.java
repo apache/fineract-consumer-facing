@@ -106,6 +106,7 @@ class TransfersCommandServiceImplTest {
     private static final BigDecimal BENEFICIARY_LIMIT = new BigDecimal("500.00");
     private static final BigDecimal AMOUNT_ABOVE_BENEFICIARY_LIMIT = new BigDecimal("501.00");
     private static final Long TRANSFER_ID = 999L;
+    private static final Long TRANSFER_DETAIL_ID = 1003L;
     private static final String IDEMPOTENCY_KEY = "txn-key-1";
 
     @Mock
@@ -253,6 +254,12 @@ class TransfersCommandServiceImplTest {
         when(transferFineractClient.getClientOfficeId(CLIENT_ID)).thenReturn(CALLER_OFFICE_ID);
         when(transferFineractClient.getSavingsAccountClientId(TO_SAVINGS_ID)).thenReturn(DEST_CLIENT_ID);
         when(transferFineractClient.getClientOfficeId(DEST_CLIENT_ID)).thenReturn(DEST_OFFICE_ID);
+    }
+
+    /** Fineract answers a create with the transfer's detail id; the transfer itself has a different id. */
+    private void stubTransferCreated() {
+        when(transferFineractClient.createAccountTransfer(any())).thenReturn(TRANSFER_DETAIL_ID);
+        when(transferFineractClient.getAccountTransferId(TRANSFER_DETAIL_ID)).thenReturn(TRANSFER_ID);
     }
 
     private void stubSavingsFingerprintAndIssue() {
@@ -500,7 +507,7 @@ class TransfersCommandServiceImplTest {
     void initiateAndConfirmUseIdenticalActionFingerprint() {
         stubSavingsFingerprintAndIssue();
         stubConfirmUpToUpstreamWrite();
-        when(transferFineractClient.createAccountTransfer(any())).thenReturn(TRANSFER_ID);
+        stubTransferCreated();
 
         service.initiate(jwt(), initiateSavingsCommand());
         service.confirm(jwt(), confirmSavingsCommand());
@@ -541,7 +548,7 @@ class TransfersCommandServiceImplTest {
         when(transferFineractClient.getClientOfficeId(CLIENT_ID)).thenReturn(CALLER_OFFICE_ID);
         when(transferFineractClient.getSavingsAccountClientId(TO_SAVINGS_ID)).thenReturn(DEST_CLIENT_ID);
         when(transferFineractClient.getClientOfficeId(DEST_CLIENT_ID)).thenReturn(DEST_OFFICE_ID);
-        when(transferFineractClient.createAccountTransfer(any())).thenReturn(TRANSFER_ID);
+        stubTransferCreated();
 
         TransferCommandData result = service.confirm(jwt(), confirmSavingsCommand());
 
@@ -579,7 +586,7 @@ class TransfersCommandServiceImplTest {
         when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.LOANS), eq(TO_LOAN_ID))).thenReturn(true);
         when(transferFineractClient.getLoanPayoff(TO_LOAN_ID)).thenReturn(activeLoanPayoff(new BigDecimal("500.00")));
         when(transferFineractClient.getClientOfficeId(CLIENT_ID)).thenReturn(CALLER_OFFICE_ID);
-        when(transferFineractClient.createAccountTransfer(any())).thenReturn(TRANSFER_ID);
+        stubTransferCreated();
 
         TransferCommandData result = service.confirm(jwt(), confirmLoanCommand());
 
@@ -605,7 +612,7 @@ class TransfersCommandServiceImplTest {
         when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.LOANS), eq(TO_LOAN_ID))).thenReturn(true);
         when(transferFineractClient.getLoanPayoff(TO_LOAN_ID)).thenReturn(activeLoanPayoff(AMOUNT));
         when(transferFineractClient.getClientOfficeId(CLIENT_ID)).thenReturn(CALLER_OFFICE_ID);
-        when(transferFineractClient.createAccountTransfer(any())).thenReturn(TRANSFER_ID);
+        stubTransferCreated();
 
         TransferCommandData result = service.confirm(jwt(), confirmLoanCommand(AMOUNT));
 
@@ -736,7 +743,7 @@ class TransfersCommandServiceImplTest {
     @Test
     void confirmSetsDerivedIdempotencyKeyBeforeUpstreamWriteAndClearsAfter() {
         stubConfirmUpToUpstreamWrite();
-        when(transferFineractClient.createAccountTransfer(any())).thenReturn(TRANSFER_ID);
+        stubTransferCreated();
 
         service.confirm(jwt(), confirmSavingsCommand());
 
@@ -750,6 +757,32 @@ class TransfersCommandServiceImplTest {
     void confirmClearsIdempotencyKeyWhenUpstreamFails() {
         stubConfirmUpToUpstreamWrite();
         when(transferFineractClient.createAccountTransfer(any())).thenThrow(feignException(503));
+
+        assertThatThrownBy(() -> service.confirm(jwt(), confirmSavingsCommand()))
+                .isInstanceOf(TransferUpstreamUnavailableException.class)
+                .hasFieldOrPropertyWithValue("code", TransferUpstreamUnavailableException.CODE);
+
+        verify(idempotencyKeyHolder).clear();
+    }
+
+    @Test
+    void confirmReturnsTheTransferIdRatherThanTheDetailIdFineractAnswersWith() {
+        stubConfirmUpToUpstreamWrite();
+        stubTransferCreated();
+
+        TransferCommandData result = service.confirm(jwt(), confirmSavingsCommand());
+
+        assertThat(result.getTransferId()).isEqualTo(TRANSFER_ID);
+        InOrder inOrder = inOrder(transferFineractClient);
+        inOrder.verify(transferFineractClient).createAccountTransfer(any());
+        inOrder.verify(transferFineractClient).getAccountTransferId(TRANSFER_DETAIL_ID);
+    }
+
+    @Test
+    void confirmReportsUpstreamUnavailableWhenTheTransferIdCannotBeRead() {
+        stubConfirmUpToUpstreamWrite();
+        when(transferFineractClient.createAccountTransfer(any())).thenReturn(TRANSFER_DETAIL_ID);
+        when(transferFineractClient.getAccountTransferId(TRANSFER_DETAIL_ID)).thenThrow(feignException(503));
 
         assertThatThrownBy(() -> service.confirm(jwt(), confirmSavingsCommand()))
                 .isInstanceOf(TransferUpstreamUnavailableException.class)

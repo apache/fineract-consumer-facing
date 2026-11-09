@@ -30,6 +30,8 @@ import feign.jackson.JacksonDecoder;
 import feign.jackson.JacksonEncoder;
 import feign.okhttp.OkHttpClient;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -45,6 +47,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountTransactionsApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsProductApi;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.StandingInstructionsApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyConfigurationData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyUpdateRequest;
@@ -61,6 +64,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsAccountIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsProductsRequest;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.StandingInstructionCreationRequest;
 import org.springframework.cloud.openfeign.support.SpringMvcContract;
 
 public class FineractSeeder {
@@ -113,6 +117,20 @@ public class FineractSeeder {
             buildFeignClient(SavingsAccountTransactionsApi.class);
     private static final LoanProductsApi LOAN_PRODUCTS = buildFeignClient(LoanProductsApi.class);
     private static final LoansApi LOANS = buildFeignClient(LoansApi.class);
+    private static final StandingInstructionsApi STANDING_INSTRUCTIONS =
+            buildFeignClient(StandingInstructionsApi.class);
+    // Fineract codes: savings account type 2, account transfer 1, fixed amount 1, active 1, periodic 1, weeks 1, low 4.
+    private static final String SAVINGS_ACCOUNT_TYPE = "2";
+    private static final String ACCOUNT_TRANSFER = "1";
+    private static final String FIXED_AMOUNT = "1";
+    private static final String ACTIVE = "1";
+    private static final String PERIODIC = "1";
+    private static final String WEEKS = "1";
+    private static final String EVERY_PERIOD = "1";
+    private static final String LOW_PRIORITY = "4";
+    private static final String ISO_DATE_FORMAT = "yyyy-MM-dd";
+    private static final String SEED_INSTRUCTION_AMOUNT = "1";
+    private static final String SEED_INSTRUCTION_NAME_PREFIX = "Cucumber seed instruction ";
 
     private static volatile Long cachedPassportCodeValueId;
     private static volatile Long cachedClosureReasonCodeValueId;
@@ -174,6 +192,40 @@ public class FineractSeeder {
                 .getAccountNo();
         String officeName = CLIENTS.retrieveOneClient(clientId, null).getOfficeName();
         return new SeededTransferTarget(clientId, savingsAccountId, accountNumber, officeName);
+    }
+
+    /**
+     * Creates a weekly standing instruction between two savings accounts of a new client, starting a year from now so
+     * it never runs. Fineract stores it as transfer details with no transfer under them, so from then on the ids of
+     * transfers and of their details differ.
+     */
+    public void seedStandingInstruction() {
+        ensureUsdCurrency();
+        long clientId = createActiveClient(null);
+        long fromSavingsId = createActiveSavingsAccount(clientId);
+        long toSavingsId = createActiveSavingsAccount(clientId);
+        STANDING_INSTRUCTIONS.createStandingInstruction(new StandingInstructionCreationRequest()
+                .name(SEED_INSTRUCTION_NAME_PREFIX + UUID.randomUUID())
+                .fromOfficeId(String.valueOf(HEAD_OFFICE_ID))
+                .fromClientId(String.valueOf(clientId))
+                .fromAccountType(SAVINGS_ACCOUNT_TYPE)
+                .fromAccountId(String.valueOf(fromSavingsId))
+                .toOfficeId(String.valueOf(HEAD_OFFICE_ID))
+                .toClientId(String.valueOf(clientId))
+                .toAccountType(SAVINGS_ACCOUNT_TYPE)
+                .toAccountId(String.valueOf(toSavingsId))
+                .transferType(ACCOUNT_TRANSFER)
+                .instructionType(FIXED_AMOUNT)
+                .priority(LOW_PRIORITY)
+                .status(ACTIVE)
+                .amount(SEED_INSTRUCTION_AMOUNT)
+                .validFrom(LocalDate.now(ZoneId.systemDefault()).plusYears(1).toString())
+                .recurrenceType(PERIODIC)
+                .recurrenceFrequency(WEEKS)
+                .recurrenceInterval(EVERY_PERIOD)
+                .allowPartialTransfer(false)
+                .locale(LOCALE)
+                .dateFormat(ISO_DATE_FORMAT));
     }
 
     public void depositToSavings(long savingsId, BigDecimal amount) {
