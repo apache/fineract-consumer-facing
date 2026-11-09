@@ -32,7 +32,9 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
+import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
 import org.apache.fineract.consumer.client.api.ScheduledTransfersCommandControllerApi;
+import org.apache.fineract.consumer.client.api.ScheduledTransfersQueryControllerApi;
 import org.apache.fineract.consumer.client.model.BeneficiaryChallengeCommandData;
 import org.apache.fineract.consumer.client.model.ConfirmAddBeneficiaryCommandRequest;
 import org.apache.fineract.consumer.client.model.ConfirmScheduledTransferCommandRequest;
@@ -40,8 +42,11 @@ import org.apache.fineract.consumer.client.model.InitiateAddBeneficiaryCommandRe
 import org.apache.fineract.consumer.client.model.InitiateScheduledTransferCommandRequest;
 import org.apache.fineract.consumer.client.model.ScheduledTransferChallengeCommandData;
 import org.apache.fineract.consumer.client.model.ScheduledTransferCommandData;
+import org.apache.fineract.consumer.client.model.ScheduledTransferQueryData;
+import org.apache.fineract.consumer.client.model.ScheduledTransferRunQueryData;
 import org.apache.fineract.consumer.cucumber.clients.MailpitClient;
 import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
+import org.apache.fineract.consumer.cucumber.helpers.FineractJobRunner;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
 import org.apache.fineract.consumer.cucumber.helpers.RegistrationHelper;
@@ -51,6 +56,8 @@ import org.apache.fineract.consumer.scheduledtransfers.command.data.ScheduledTra
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferAccessDeniedException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferBeneficiaryLimitExceededException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferInvalidException;
+import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferRunStatus;
+import org.apache.fineract.consumer.scheduledtransfers.query.exception.ScheduledTransferQueryNotFoundException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -60,12 +67,17 @@ public class ScheduledTransfersSteps {
     private static final int BAD_REQUEST = 400;
     private static final int UNAUTHORIZED = 401;
     private static final int FORBIDDEN = 403;
+    private static final int NOT_FOUND = 404;
     private static final BigDecimal TRANSFER_AMOUNT = new BigDecimal("25.50");
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
     private static final BigDecimal ABOVE_LIMIT_AMOUNT = new BigDecimal("600.00");
+    private static final BigDecimal FUNDED_BALANCE = new BigDecimal("100.00");
+    private static final BigDecimal UNAFFORDABLE_AMOUNT = new BigDecimal("1000.00");
     private static final String BENEFICIARY_NAME = "Cuke Scheduled Beneficiary";
     // A week out, so a clock difference between this JVM and Fineract cannot make the start date "today".
     private static final int START_IN_DAYS = 7;
+    // Two days out, so a test clock up to a day behind Fineract's still yields a start date the BFF accepts.
+    private static final int RUN_START_IN_DAYS = 2;
     private static final int RUN_FOR_MONTHS = 3;
     private static final int LONGEST_MONTH_DAYS = 31;
     private static final ObjectMapper JSON = JsonMapper.builder().build();
@@ -74,9 +86,12 @@ public class ScheduledTransfersSteps {
     private final FineractSeeder fineractSeeder = new FineractSeeder();
     private final LoginHelper loginHelper = new LoginHelper();
     private final MailpitClient mailpit = new MailpitClient();
+    private final FineractJobRunner fineractJobRunner = new FineractJobRunner();
 
     private RegistrationHelper.BoundUserWithAccounts user;
     private ScheduledTransfersCommandControllerApi scheduledTransfersApi;
+    private ScheduledTransfersQueryControllerApi scheduledTransfersQueryApi;
+    private SavingsQueryControllerApi savingsApi;
     private BeneficiariesCommandControllerApi beneficiariesApi;
     private long secondSavingsId;
     private FineractSeeder.SeededTransferTarget beneficiaryTarget;
@@ -85,6 +100,9 @@ public class ScheduledTransfersSteps {
     private LocalDate endDate;
     private ScheduledTransferCommandData result;
     private ScheduledTransferCommandData secondResult;
+    private ScheduledTransferCommandData affordable;
+    private ScheduledTransferCommandData unaffordable;
+    private UUID otherCustomersTransferId;
     private FeignException lastError;
 
     @Given("a logged-in customer setting up scheduled transfers")
@@ -93,6 +111,10 @@ public class ScheduledTransfersSteps {
         String accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
         scheduledTransfersApi = ConsumerApiClientFactory.authenticated(
                 ScheduledTransfersCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
+        scheduledTransfersQueryApi = ConsumerApiClientFactory.authenticated(
+                ScheduledTransfersQueryControllerApi.class, accessToken, DEVICE_FINGERPRINT);
+        savingsApi = ConsumerApiClientFactory.authenticated(
+                SavingsQueryControllerApi.class, accessToken, DEVICE_FINGERPRINT);
         beneficiariesApi = ConsumerApiClientFactory.authenticated(
                 BeneficiariesCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
         startDate = LocalDate.now(ZoneId.systemDefault()).plusDays(START_IN_DAYS);
@@ -127,6 +149,27 @@ public class ScheduledTransfersSteps {
     @Given("another client owns a savings account that is not my scheduled transfer beneficiary")
     public void anotherClientsUnregisteredSavings() {
         unregisteredSavingsId = fineractSeeder.seedTransferTarget().savingsAccountId();
+    }
+
+    @Given("my savings account is funded for scheduled transfers")
+    public void fundSavingsAccount() {
+        fineractSeeder.depositToSavings(user.savingsAccountId(), FUNDED_BALANCE);
+    }
+
+    @Given("the bank set up a standing instruction between my savings accounts")
+    public void bankSetUpStandingInstruction() {
+        fineractSeeder.seedBankStandingInstruction(user.savingsAccountId(), secondSavingsId);
+    }
+
+    @Given("another customer has set up a scheduled transfer")
+    public void anotherCustomerSetUpAScheduledTransfer() {
+        RegistrationHelper.BoundUserWithAccounts other = registrationHelper.registerBoundUserWithAccounts();
+        String accessToken = loginHelper.login(other.email(), other.password(), DEVICE_FINGERPRINT);
+        ScheduledTransfersCommandControllerApi otherApi = ConsumerApiClientFactory.authenticated(
+                ScheduledTransfersCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
+        long otherSecondSavingsId = fineractSeeder.openAnotherSavingsAccount(other.savingsAccountId());
+        otherCustomersTransferId = scheduleAs(other, otherApi, otherSecondSavingsId, TRANSFER_AMOUNT,
+                ScheduledTransferFrequency.WEEKLY, null, UUID.randomUUID().toString()).getPublicId();
     }
 
     @When("I schedule a weekly transfer to my second savings account with an end date")
@@ -180,6 +223,33 @@ public class ScheduledTransfersSteps {
         startDate = month.atEndOfMonth();
         result = schedule(secondSavingsId, TRANSFER_AMOUNT, ScheduledTransferFrequency.MONTHLY, null,
                 UUID.randomUUID().toString());
+    }
+
+    @When("I schedule a weekly transfer I can afford and one I cannot, both to my second savings account soon")
+    public void scheduleAffordableAndUnaffordable() {
+        startDate = LocalDate.now(ZoneId.systemDefault()).plusDays(RUN_START_IN_DAYS);
+        affordable = schedule(secondSavingsId, TRANSFER_AMOUNT, ScheduledTransferFrequency.WEEKLY, null,
+                UUID.randomUUID().toString());
+        unaffordable = schedule(secondSavingsId, UNAFFORDABLE_AMOUNT, ScheduledTransferFrequency.WEEKLY, null,
+                UUID.randomUUID().toString());
+    }
+
+    @When("Fineract runs the standing instructions due on their start date")
+    public void fineractRunsTheInstructionsDueOnTheStartDate() {
+        fineractJobRunner.runStandingInstructionsDueOn(startDate);
+    }
+
+    @When("I request the run history of the other customer's scheduled transfer")
+    public void requestOtherCustomersRunHistory() {
+        lastError = captureError(
+                () -> scheduledTransfersQueryApi.listScheduledTransferRuns(otherCustomersTransferId, null, null));
+    }
+
+    @When("I list scheduled transfers without a session")
+    public void listWithoutSession() {
+        lastError = captureError(() -> ConsumerApiClientFactory
+                .unauthenticated(ScheduledTransfersQueryControllerApi.class)
+                .listScheduledTransfers());
     }
 
     @When("I confirm the same scheduled transfer twice with the same idempotency key")
@@ -240,6 +310,53 @@ public class ScheduledTransfersSteps {
                 .isEqualTo(ScheduledTransferConstants.INSTRUCTION_NAME_PREFIX + result.getPublicId());
     }
 
+    @Then("my scheduled transfers list shows the weekly transfer to my second savings account until my end date")
+    public void listShowsTheWeeklyTransfer() {
+        assertThat(scheduledTransfersQueryApi.listScheduledTransfers()).singleElement().satisfies(transfer -> {
+            assertThat(transfer.getPublicId()).isEqualTo(result.getPublicId());
+            assertThat(transfer.getFromAccountId()).isEqualTo(user.savingsAccountId());
+            assertThat(transfer.getToAccountId()).isEqualTo(secondSavingsId);
+            assertThat(transfer.getAmount()).isEqualByComparingTo(TRANSFER_AMOUNT);
+            assertThat(transfer.getFrequency()).isEqualTo(
+                    ScheduledTransferQueryData.FrequencyEnum.fromValue(ScheduledTransferFrequency.WEEKLY.name()));
+            assertThat(transfer.getStartDate()).isEqualTo(startDate);
+            assertThat(transfer.getEndDate()).isEqualTo(endDate);
+        });
+    }
+
+    @Then("my scheduled transfers list is empty")
+    public void listIsEmpty() {
+        assertThat(scheduledTransfersQueryApi.listScheduledTransfers()).isEmpty();
+    }
+
+    @Then("the run history of the transfer I can afford shows one successful run")
+    public void affordableTransferRanOnce() {
+        assertThat(runsOf(affordable)).singleElement().satisfies(run -> {
+            assertThat(run.getStatus()).isEqualTo(runStatus(ScheduledTransferRunStatus.SUCCEEDED));
+            assertRanToday(run);
+            assertThat(run.getAmount()).isEqualByComparingTo(TRANSFER_AMOUNT);
+        });
+    }
+
+    @Then("the run history of the transfer I cannot afford shows one failed run that moved nothing")
+    public void unaffordableTransferFailedOnce() {
+        assertThat(runsOf(unaffordable)).singleElement().satisfies(run -> {
+            assertThat(run.getStatus()).isEqualTo(runStatus(ScheduledTransferRunStatus.FAILED));
+            assertRanToday(run);
+            assertThat(run.getAmount()).isNull();
+        });
+    }
+
+    @Then("my second savings account received only the amount of the transfer I can afford")
+    public void secondAccountReceivedOnlyTheAffordableAmount() {
+        assertThat(savingsApi.getSavingsAccount(secondSavingsId).getBalance()).isEqualByComparingTo(TRANSFER_AMOUNT);
+    }
+
+    @Then("the scheduled transfer request is rejected as not found")
+    public void rejectedNotFound() {
+        assertError(NOT_FOUND, ScheduledTransferQueryNotFoundException.CODE);
+    }
+
     @Then("the scheduled transfer request is rejected because it exceeds the beneficiary limit")
     public void rejectedAboveLimit() {
         assertError(FORBIDDEN, ScheduledTransferBeneficiaryLimitExceededException.CODE);
@@ -263,16 +380,22 @@ public class ScheduledTransfersSteps {
 
     private ScheduledTransferCommandData schedule(long toAccountId, BigDecimal amount,
             ScheduledTransferFrequency frequency, LocalDate end, String idempotencyKey) {
-        mailpit.deleteMessages(user.email());
-        ScheduledTransferChallengeCommandData challenge = scheduledTransfersApi.initiateScheduledTransfer(
-                DEVICE_FINGERPRINT,
-                initiateRequest(user.savingsAccountId(), toAccountId, amount, frequency, startDate, end));
-        String otp = mailpit.waitForOtp(user.email());
-        return scheduledTransfersApi.confirmScheduledTransfer(DEVICE_FINGERPRINT, idempotencyKey,
+        return scheduleAs(user, scheduledTransfersApi, toAccountId, amount, frequency, end, idempotencyKey);
+    }
+
+    /** Sets up a transfer out of {@code customer}'s savings account, starting on {@link #startDate}. */
+    private ScheduledTransferCommandData scheduleAs(RegistrationHelper.BoundUserWithAccounts customer,
+            ScheduledTransfersCommandControllerApi api, long toAccountId, BigDecimal amount,
+            ScheduledTransferFrequency frequency, LocalDate end, String idempotencyKey) {
+        mailpit.deleteMessages(customer.email());
+        ScheduledTransferChallengeCommandData challenge = api.initiateScheduledTransfer(DEVICE_FINGERPRINT,
+                initiateRequest(customer.savingsAccountId(), toAccountId, amount, frequency, startDate, end));
+        String otp = mailpit.waitForOtp(customer.email());
+        return api.confirmScheduledTransfer(DEVICE_FINGERPRINT, idempotencyKey,
                 new ConfirmScheduledTransferCommandRequest()
                         .stepUpToken(challenge.getStepUpToken())
                         .otp(otp)
-                        .fromAccountId(user.savingsAccountId())
+                        .fromAccountId(customer.savingsAccountId())
                         .toAccountId(toAccountId)
                         .amount(amount)
                         .frequency(ConfirmScheduledTransferCommandRequest.FrequencyEnum.fromValue(frequency.name()))
@@ -289,6 +412,23 @@ public class ScheduledTransfersSteps {
                 .frequency(InitiateScheduledTransferCommandRequest.FrequencyEnum.fromValue(frequency.name()))
                 .startDate(start)
                 .endDate(end);
+    }
+
+    private List<ScheduledTransferRunQueryData> runsOf(ScheduledTransferCommandData transfer) {
+        return scheduledTransfersQueryApi.listScheduledTransferRuns(transfer.getPublicId(), null, null).getContent();
+    }
+
+    /**
+     * Fineract dates a run by its own clock when the job ran, not by the business date this scenario moved, so the run
+     * is dated today in Fineract's time zone: within a day of this JVM's today.
+     */
+    private static void assertRanToday(ScheduledTransferRunQueryData run) {
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        assertThat(run.getDate()).isBetween(today.minusDays(1), today.plusDays(1));
+    }
+
+    private static ScheduledTransferRunQueryData.StatusEnum runStatus(ScheduledTransferRunStatus status) {
+        return ScheduledTransferRunQueryData.StatusEnum.fromValue(status.name());
     }
 
     private GetPageItemsStandingInstructionSwagger onlyInstructionFromMySavings() {

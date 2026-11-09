@@ -172,7 +172,7 @@ point for consumer-facing rules.
 - **Savings** (read): account list, detail, charges, transactions (paginated, date-filterable), product template.
 - **Loans**: list, detail, transactions, charges, guarantors, product template, schedule preview, plus loan application submit, modify, and withdraw.
 - **Transfers**: initiate/confirm with an OTP step-up, plus transfer history.
-- **Scheduled transfers**: weekly or monthly savings transfers run by Fineract standing instructions, set up with an OTP step-up (initiate/confirm). Behind `consumer.scheduled-transfers.enabled`, off by default.
+- **Scheduled transfers**: weekly or monthly savings transfers run by Fineract standing instructions, set up with an OTP step-up (initiate/confirm), and listed with their run history. Behind `consumer.scheduled-transfers.enabled`, off by default.
 - **Beneficiaries**: list, add, edit, and delete, each write gated by an OTP step-up (initiate/confirm).
 - **Account summary**: aggregated savings + loans view for the logged-in client (`GET /api/v1/summary/accounts`).
 - **User**: profile, charges, profile image (read-only), obligees, and password change/forgot/reset flows.

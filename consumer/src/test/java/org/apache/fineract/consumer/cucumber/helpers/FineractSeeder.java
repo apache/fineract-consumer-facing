@@ -207,8 +207,19 @@ public class FineractSeeder {
     public void seedStandingInstruction() {
         ensureUsdCurrency();
         long clientId = createActiveClient(null);
-        long fromSavingsId = createActiveSavingsAccount(clientId);
-        long toSavingsId = createActiveSavingsAccount(clientId);
+        createDormantStandingInstruction(clientId, createActiveSavingsAccount(clientId),
+                createActiveSavingsAccount(clientId));
+    }
+
+    /**
+     * Creates a standing instruction between two savings accounts of the client that owns them, the way bank staff
+     * would in the back office. It starts a year from now, so it never runs.
+     */
+    public void seedBankStandingInstruction(long fromSavingsId, long toSavingsId) {
+        createDormantStandingInstruction(savingsAccountClientId(fromSavingsId), fromSavingsId, toSavingsId);
+    }
+
+    private static void createDormantStandingInstruction(long clientId, long fromSavingsId, long toSavingsId) {
         STANDING_INSTRUCTIONS.createStandingInstruction(new StandingInstructionCreationRequest()
                 .name(SEED_INSTRUCTION_NAME_PREFIX + UUID.randomUUID())
                 .fromOfficeId(String.valueOf(HEAD_OFFICE_ID))
@@ -480,7 +491,7 @@ public class FineractSeeder {
                 .orElseThrow(() -> new IllegalStateException("Fineract entry not found: " + target));
     }
 
-    private static <T> T buildFeignClient(Class<T> apiType) {
+    static <T> T buildFeignClient(Class<T> apiType) {
         return Feign.builder()
                 .contract(new SpringMvcContract())
                 .client(new OkHttpClient())

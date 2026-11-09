@@ -53,6 +53,7 @@ public final class ActionPolicies {
             unowned(ConsumerAction.BENEFICIARY_MODIFY, CONSUMER_ONLY),
             unowned(ConsumerAction.BENEFICIARY_DELETE, CONSUMER_ONLY),
             unowned(ConsumerAction.TRANSFER_LIST, CONSUMER_ONLY),
+            unowned(ConsumerAction.SCHEDULED_TRANSFER_LIST, CONSUMER_ONLY),
             unowned(ConsumerAction.AUDIT_EVENT_LIST, CONSUMER_ONLY),
             unowned(ConsumerAction.SUMMARY_VIEW, CONSUMER_ONLY),
             unowned(ConsumerAction.USER_CHARGES_LIST, CONSUMER_ONLY),
