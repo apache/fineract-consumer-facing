@@ -20,16 +20,6 @@ databaseChangeLog:
   - changeSet:
       id: 009-add-beneficiary-account-unique-index
       author: fineract-consumer-facing
-      preConditions:
-        - onFail: HALT
-        - onFailMessage: >-
-            beneficiaries holds more than one active row for the same (user_id, fineract_account_id);
-            deactivate the extras before uq_beneficiaries_user_account can be created
-        - sqlCheck:
-            expectedResult: 0
-            sql: >-
-              SELECT COUNT(*) FROM (SELECT 1 FROM beneficiaries WHERE is_active
-              GROUP BY user_id, fineract_account_id HAVING COUNT(*) > 1) duplicates
       changes:
         - sql:
             sql: "CREATE UNIQUE INDEX uq_beneficiaries_user_account ON beneficiaries (user_id, fineract_account_id) WHERE is_active"
