@@ -444,6 +444,7 @@
   "error.msg.consumer.rate.limit.exceeded": "बहुत अधिक अनुरोध। कृपया थोड़ी देर प्रतीक्षा करें और पुनः प्रयास करें।",
   "error.msg.consumer.beneficiaries.command.not.found": "हमें वह लाभार्थी नहीं मिला।",
   "error.msg.consumer.beneficiaries.command.name.duplicate": "इस नाम का लाभार्थी पहले से मौजूद है।",
+  "error.msg.consumer.beneficiaries.command.account.duplicate": "इस खाते के लिए लाभार्थी पहले से मौजूद है।",
   "error.msg.consumer.beneficiaries.command.account.invalid": "उस कार्यालय और खाता संख्या से मेल खाता कोई खाता नहीं मिला।",
   "error.msg.consumer.beneficiaries.command.upstream.unavailable": "लाभार्थी अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
   "error.msg.consumer.beneficiaries.command.account.self": "आप अपने ही किसी खाते को लाभार्थी के रूप में नहीं जोड़ सकते।",

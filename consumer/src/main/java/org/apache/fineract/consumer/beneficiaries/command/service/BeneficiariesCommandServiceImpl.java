@@ -34,6 +34,7 @@ import org.apache.fineract.consumer.beneficiaries.command.data.InitiateUpdateBen
 import org.apache.fineract.consumer.beneficiaries.command.data.ResolvedBeneficiaryAccountCommandData;
 import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiarySelfAccountException;
@@ -57,6 +58,7 @@ import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenSer
 import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -74,6 +76,9 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     // 304=TRANSFER_ON_HOLD
     private static final Set<Long> NON_CLOSED_STATUS_IDS = Set.of(100L, 200L, 300L, 303L, 304L);
 
+    static final String NAME_UNIQUE_CONSTRAINT = "uq_beneficiaries_user_name";
+    static final String ACCOUNT_UNIQUE_CONSTRAINT = "uq_beneficiaries_user_account";
+
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final UserQueryService userQueryService;
     private final OtpService otpService;
@@ -88,8 +93,10 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
         requireNameAvailable(user.getId(), command.getName());
-        requireNotOwnAccount(
-                resolveSavingsAccount(command.getAccountNumber(), command.getOfficeName()), user);
+        ResolvedBeneficiaryAccountCommandData resolved =
+                resolveSavingsAccount(command.getAccountNumber(), command.getOfficeName());
+        requireNotOwnAccount(resolved, user);
+        requireAccountAvailable(user.getId(), resolved.getAccountId());
 
         sendOtp(publicId, user);
         IssuedJwt issued = stepUpTokenService.issue(publicId, command.getDeviceFingerprint(),
@@ -118,6 +125,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         ResolvedBeneficiaryAccountCommandData resolved =
                 resolveSavingsAccount(command.getAccountNumber(), command.getOfficeName());
         requireNotOwnAccount(resolved, user);
+        requireAccountAvailable(user.getId(), resolved.getAccountId());
 
         Beneficiary beneficiary = Beneficiary.register(UUID.randomUUID(), user.getId(), command.getName(),
                 resolved.getOfficeId(), resolved.getClientId(), resolved.getAccountId(),
@@ -235,11 +243,25 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         }
     }
 
+    private void requireAccountAvailable(Long userId, Long fineractAccountId) {
+        if (beneficiaryCommandRepository.existsByUserIdAndFineractAccountIdAndActiveTrue(userId, fineractAccountId)) {
+            throw new BeneficiaryDuplicateAccountException();
+        }
+    }
+
     private void persist(Beneficiary beneficiary) {
         try {
             beneficiaryCommandRepository.saveAndFlush(beneficiary);
         } catch (DataIntegrityViolationException e) {
-            throw new BeneficiaryDuplicateNameException();
+            if (e.getCause() instanceof ConstraintViolationException cve) {
+                if (ACCOUNT_UNIQUE_CONSTRAINT.equals(cve.getConstraintName())) {
+                    throw new BeneficiaryDuplicateAccountException();
+                }
+                if (NAME_UNIQUE_CONSTRAINT.equals(cve.getConstraintName())) {
+                    throw new BeneficiaryDuplicateNameException();
+                }
+            }
+            throw e;
         }
     }
 
