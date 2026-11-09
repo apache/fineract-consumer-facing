@@ -19,6 +19,7 @@
 package org.apache.fineract.consumer.cucumber.helpers;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.BusinessDateManagementApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.GlobalConfigurationApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SchedulerJobApi;
@@ -31,7 +32,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 /**
  * Runs Fineract's standing instruction job as if it were a given day. Fineract runs an instruction only once the
  * tenant's business date reaches its start date, and the BFF only accepts start dates after today, so a scenario that
- * needs a run moves the business date forward, runs the job, and puts the business date setting back.
+ * needs a run moves the business date forward, runs the job, and puts both the business date and the setting back.
  */
 public class FineractJobRunner {
 
@@ -51,15 +52,17 @@ public class FineractJobRunner {
 
     public void runStandingInstructionsDueOn(LocalDate businessDate) {
         boolean wasEnabled = Boolean.TRUE.equals(CONFIGURATIONS.retrieveOneByName(BUSINESS_DATE_CONFIG).getEnabled());
-        LocalDate previousBusinessDate = wasEnabled ? currentBusinessDate() : null;
+        // Fineract keeps the stored business date while the setting is off, and a fresh tenant has none until one is
+        // set. Either way the date written below stays behind, so it is always put back, to today if there was none.
+        LocalDate previousBusinessDate = currentBusinessDate();
+        LocalDate restoreTo =
+                previousBusinessDate != null ? previousBusinessDate : LocalDate.now(ZoneId.systemDefault());
         setBusinessDateEnabled(true);
         try {
             setBusinessDate(businessDate);
             runJob();
         } finally {
-            if (previousBusinessDate != null) {
-                setBusinessDate(previousBusinessDate);
-            }
+            setBusinessDate(restoreTo);
             setBusinessDateEnabled(wasEnabled);
         }
     }
