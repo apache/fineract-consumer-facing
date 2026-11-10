@@ -237,7 +237,7 @@ export class LoanRepayComponent {
 
     effect(() => {
       const loan = this.loansStore.selected();
-      if (loan && loan.active !== true) {
+      if (loan && loan.active !== true && this.step() !== 'done') {
         this.bounce();
       }
     });
