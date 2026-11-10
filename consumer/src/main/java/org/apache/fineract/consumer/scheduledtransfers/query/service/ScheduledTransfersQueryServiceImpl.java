@@ -19,7 +19,6 @@
 package org.apache.fineract.consumer.scheduledtransfers.query.service;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -31,6 +30,7 @@ import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEv
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetPageItemsStandingInstructionSwagger;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetStandingInstructionHistoryPageItemsResponse;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.BusinessDateFineractClient;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClient;
 import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferFrequency;
@@ -62,16 +62,19 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final UserClientResolver userClientResolver;
     private final StandingInstructionFineractClient standingInstructionFineractClient;
+    private final BusinessDateFineractClient businessDateFineractClient;
     private final ScheduledTransferQueryRepository scheduledTransferQueryRepository;
     private final boolean enabled;
 
     public ScheduledTransfersQueryServiceImpl(AccessPolicyEvaluator accessPolicyEvaluator,
             UserClientResolver userClientResolver, StandingInstructionFineractClient standingInstructionFineractClient,
+            BusinessDateFineractClient businessDateFineractClient,
             ScheduledTransferQueryRepository scheduledTransferQueryRepository,
             @Value(ENABLED_PROPERTY) boolean enabled) {
         this.accessPolicyEvaluator = accessPolicyEvaluator;
         this.userClientResolver = userClientResolver;
         this.standingInstructionFineractClient = standingInstructionFineractClient;
+        this.businessDateFineractClient = businessDateFineractClient;
         this.scheduledTransferQueryRepository = scheduledTransferQueryRepository;
         this.enabled = enabled;
     }
@@ -93,7 +96,13 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
 
         List<GetPageItemsStandingInstructionSwagger> instructions =
                 clientInstructions(userClientResolver.resolveClientId(jwt));
-        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        // Fineract stops running an instruction once its own date reaches validTill, which can differ from this
+        // server's date.
+        LocalDate today = fetch(businessDateFineractClient::today);
+        if (today == null) {
+            throw new ScheduledTransferQueryUpstreamUnavailableException(
+                    new IllegalStateException("Fineract returned no current date"));
+        }
         List<ScheduledTransferQueryData> active = new ArrayList<>();
         for (ScheduledTransferQueryEntity transfer : transfers) {
             instructionOf(transfer, instructions)

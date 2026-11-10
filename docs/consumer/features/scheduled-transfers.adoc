@@ -143,7 +143,7 @@ The list:
 . Checks the flag and authorizes `ConsumerAction.SCHEDULED_TRANSFER_LIST`.
 . Reads the customer's rows, newest first. With none, it returns an empty list without calling Fineract.
 . Authorizes `SAVINGS_VIEW` on each distinct source account.
-. Reads the client's standing instructions from Fineract in one paged call (`listClientStandingInstructions`) and keeps each row whose instruction is active: Fineract status `1` (active), and a `validTill` after today. Fineract leaves an instruction active after its end date, so the date is checked too. The end date returned is `validTill` minus one day.
+. Reads the client's standing instructions from Fineract in one paged call (`listClientStandingInstructions`) and keeps each row whose instruction is active: Fineract status `1` (active), and a `validTill` after Fineract's current date (<<fineract-today>>), not the BFF server's. Fineract leaves an instruction active after its end date, so the date is checked too. The end date returned is `validTill` minus one day.
 
 The run history:
 

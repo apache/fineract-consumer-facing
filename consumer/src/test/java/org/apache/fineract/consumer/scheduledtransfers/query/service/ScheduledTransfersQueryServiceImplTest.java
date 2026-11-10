@@ -34,7 +34,6 @@ import feign.Request;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,6 +46,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetRecurrenceFrequencyStandingInstructionSwagger;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetStandingInstructionHistoryPageItemsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetStatusStandingInstructionSwagger;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.BusinessDateFineractClient;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClient;
 import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferFrequency;
 import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferQueryConstants;
@@ -89,7 +89,9 @@ class ScheduledTransfersQueryServiceImplTest {
     private static final int DELETED_STATUS_ID = 3;
     private static final int DISABLED_STATUS_ID = 2;
     private static final BigDecimal AMOUNT = new BigDecimal("25.50");
-    private static final LocalDate TODAY = LocalDate.now(ZoneId.systemDefault());
+    // Fineract's date, fixed and years away from this machine's clock, so a filter that read the server's date would
+    // show up.
+    private static final LocalDate TODAY = LocalDate.of(2030, 1, 15);
     private static final LocalDate START = TODAY.plusDays(10);
     private static final LocalDate END = START.plusMonths(3);
 
@@ -100,6 +102,8 @@ class ScheduledTransfersQueryServiceImplTest {
     @Mock
     private StandingInstructionFineractClient standingInstructionFineractClient;
     @Mock
+    private BusinessDateFineractClient businessDateFineractClient;
+    @Mock
     private ScheduledTransferQueryRepository repository;
 
     private ScheduledTransfersQueryServiceImpl service;
@@ -109,6 +113,7 @@ class ScheduledTransfersQueryServiceImplTest {
         service = service(true);
         when(userClientResolver.resolveUserId(any())).thenReturn(USER_ID);
         when(userClientResolver.resolveClientId(any())).thenReturn(CLIENT_ID);
+        when(businessDateFineractClient.today()).thenReturn(TODAY);
         when(repository.findByPublicIdAndUserId(PUBLIC_ID, USER_ID))
                 .thenReturn(Optional.of(row(PUBLIC_ID, FROM_SAVINGS_ID, INSTRUCTION_ID)));
     }
@@ -294,6 +299,30 @@ class ScheduledTransfersQueryServiceImplTest {
     }
 
     @Test
+    void listReportsUpstreamUnavailableWhenFineractReportsNoDate() {
+        when(repository.findAllByUserIdOrderByCreatedAtDescIdDesc(USER_ID))
+                .thenReturn(List.of(row(PUBLIC_ID, FROM_SAVINGS_ID, INSTRUCTION_ID)));
+        when(standingInstructionFineractClient.listClientStandingInstructions(CLIENT_ID))
+                .thenReturn(List.of(weekly(INSTRUCTION_ID, PUBLIC_ID)));
+        when(businessDateFineractClient.today()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.listScheduledTransfers(jwt()))
+                .isInstanceOf(ScheduledTransferQueryUpstreamUnavailableException.class);
+    }
+
+    @Test
+    void listReportsUpstreamUnavailableWhenFineractsDateCannotBeRead() {
+        when(repository.findAllByUserIdOrderByCreatedAtDescIdDesc(USER_ID))
+                .thenReturn(List.of(row(PUBLIC_ID, FROM_SAVINGS_ID, INSTRUCTION_ID)));
+        when(standingInstructionFineractClient.listClientStandingInstructions(CLIENT_ID))
+                .thenReturn(List.of(weekly(INSTRUCTION_ID, PUBLIC_ID)));
+        when(businessDateFineractClient.today()).thenThrow(feignStatus(503));
+
+        assertThatThrownBy(() -> service.listScheduledTransfers(jwt()))
+                .isInstanceOf(ScheduledTransferQueryUpstreamUnavailableException.class);
+    }
+
+    @Test
     void listReportsUpstreamUnavailableWhenFineractFails() {
         when(repository.findAllByUserIdOrderByCreatedAtDescIdDesc(USER_ID))
                 .thenReturn(List.of(row(PUBLIC_ID, FROM_SAVINGS_ID, INSTRUCTION_ID)));
@@ -420,7 +449,7 @@ class ScheduledTransfersQueryServiceImplTest {
 
     private ScheduledTransfersQueryServiceImpl service(boolean enabled) {
         return new ScheduledTransfersQueryServiceImpl(accessPolicyEvaluator, userClientResolver,
-                standingInstructionFineractClient, repository, enabled);
+                standingInstructionFineractClient, businessDateFineractClient, repository, enabled);
     }
 
     private static ScheduledTransferQueryEntity row(UUID publicId, Long fromSavingsId, Long instructionId) {
