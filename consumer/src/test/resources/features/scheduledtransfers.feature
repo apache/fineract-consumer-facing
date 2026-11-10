@@ -52,6 +52,11 @@ Feature: Consumer scheduled transfers
     When I initiate a scheduled transfer to my second savings account starting yesterday
     Then the scheduled transfer request is rejected as invalid
 
+  Scenario: Scheduling a monthly transfer that starts after the 28th is rejected
+    Given I own a second savings account for scheduled transfers
+    When I initiate a monthly transfer to my second savings account starting on the 30th
+    Then the scheduled transfer request is rejected as invalid
+
   Scenario: Retrying a scheduled transfer confirmation with the same idempotency key creates one standing instruction
     Given I own a second savings account for scheduled transfers
     When I confirm the same scheduled transfer twice with the same idempotency key

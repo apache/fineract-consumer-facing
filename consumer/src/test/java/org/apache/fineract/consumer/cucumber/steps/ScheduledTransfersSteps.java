@@ -27,6 +27,8 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Month;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
@@ -63,7 +65,7 @@ public class ScheduledTransfersSteps {
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
     private static final BigDecimal ABOVE_LIMIT_AMOUNT = new BigDecimal("600.00");
     private static final String BENEFICIARY_NAME = "Cuke Scheduled Beneficiary";
-    // A week out, so a clock difference between this JVM and the BFF cannot make the start date "today".
+    // A week out, so a clock difference between this JVM and Fineract cannot make the start date "today".
     private static final int START_IN_DAYS = 7;
     private static final int RUN_FOR_MONTHS = 3;
     private static final ObjectMapper JSON = JsonMapper.builder().build();
@@ -93,7 +95,7 @@ public class ScheduledTransfersSteps {
                 ScheduledTransfersCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
         beneficiariesApi = ConsumerApiClientFactory.authenticated(
                 BeneficiariesCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
-        startDate = LocalDate.now(ZoneId.systemDefault()).plusDays(START_IN_DAYS);
+        startDate = startDateValidForEveryFrequency();
     }
 
     @Given("I own a second savings account for scheduled transfers")
@@ -163,10 +165,20 @@ public class ScheduledTransfersSteps {
 
     @When("I initiate a scheduled transfer to my second savings account starting yesterday")
     public void initiateStartingYesterday() {
-        // Yesterday here is before the BFF's tomorrow even if the two clocks sit on different dates.
+        // Yesterday here is before Fineract's today even if this JVM and the tenant sit on different dates.
         lastError = captureError(() -> scheduledTransfersApi.initiateScheduledTransfer(DEVICE_FINGERPRINT,
                 initiateRequest(user.savingsAccountId(), secondSavingsId, TRANSFER_AMOUNT,
                         ScheduledTransferFrequency.WEEKLY, LocalDate.now(ZoneId.systemDefault()).minusDays(1), null)));
+    }
+
+    @When("I initiate a monthly transfer to my second savings account starting on the 30th")
+    public void initiateMonthlyStartingOnThe30th() {
+        YearMonth nextMonth = YearMonth.now(ZoneId.systemDefault()).plusMonths(1);
+        LocalDate onThe30th =
+                (nextMonth.getMonth() == Month.FEBRUARY ? nextMonth.plusMonths(1) : nextMonth).atDay(30);
+        lastError = captureError(() -> scheduledTransfersApi.initiateScheduledTransfer(DEVICE_FINGERPRINT,
+                initiateRequest(user.savingsAccountId(), secondSavingsId, TRANSFER_AMOUNT,
+                        ScheduledTransferFrequency.MONTHLY, onThe30th, null)));
     }
 
     @When("I confirm the same scheduled transfer twice with the same idempotency key")
@@ -258,6 +270,14 @@ public class ScheduledTransfersSteps {
                         .frequency(ConfirmScheduledTransferCommandRequest.FrequencyEnum.fromValue(frequency.name()))
                         .startDate(startDate)
                         .endDate(end));
+    }
+
+    /** A week out, moved to the 1st of the next month when it falls after the last day a monthly transfer may start. */
+    private static LocalDate startDateValidForEveryFrequency() {
+        LocalDate weekOut = LocalDate.now(ZoneId.systemDefault()).plusDays(START_IN_DAYS);
+        return weekOut.getDayOfMonth() > ScheduledTransferConstants.LAST_MONTHLY_START_DAY
+                ? weekOut.plusMonths(1).withDayOfMonth(1)
+                : weekOut;
     }
 
     private static InitiateScheduledTransferCommandRequest initiateRequest(long fromAccountId, long toAccountId,

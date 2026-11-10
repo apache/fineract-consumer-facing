@@ -45,8 +45,8 @@ Both request bodies carry `fromAccountId`, `toAccountId`, `amount`, `frequency` 
 
 == Schedule rules
 
-* *Frequency.* `WEEKLY` or `MONTHLY`, every period. A weekly transfer runs on the start date's weekday. A monthly transfer runs on the start date's day of the month; in a month without that day (the 31st in April, say) it runs on the month's last day.
-* *Start date.* Must be after the BFF server's current date, so the first run is never on the day the customer sets it up.
+* *Frequency.* `WEEKLY` or `MONTHLY`, every period. A weekly transfer runs on the start date's weekday. A monthly transfer runs on the start date's day of the month, so its start date must be on or before the 28th. Fineract runs an instruction only on a date that matches its schedule exactly: in a month without the start day it does not move the run to the month's last day but skips the month, and records no failure. A monthly transfer starting on the 31st would run only seven times a year.
+* *Start date.* Must be after Fineract's current date, so the first run is never on the day the customer sets it up. That date is the business date when business dates are enabled, otherwise today in the tenant's time zone, and the BFF reads it from Fineract (see <<fineract-today>>) rather than using its own clock. Fineract's job runs once a day on that date and never catches up a date it has passed, so a start date the BFF thought was tomorrow but Fineract had already reached would silently lose its first run.
 * *End date.* Optional and inclusive: the last day a run may happen. It must not be before the start date. Fineract's `validTill` is exclusive, so the BFF sends the day after.
 * *Destination.* Must differ from the source. A registered savings beneficiary is accepted if the amount is within its `transferLimit`; otherwise the customer must own the destination savings account.
 * *Currency.* Both accounts must hold the same currency. Fineract does not check this when it accepts an instruction (every run would fail instead), so the BFF does.
@@ -54,13 +54,18 @@ Both request bodies carry `fromAccountId`, `toAccountId`, `amount`, `frequency` 
 
 A start or end date that breaks these rules, or a destination equal to the source, fails with HTTP 400 (`ScheduledTransferInvalidException`). An amount above the beneficiary limit fails with HTTP 403 (`ScheduledTransferBeneficiaryLimitExceededException`), a destination that is neither owned nor a beneficiary with HTTP 403 (`ScheduledTransferAccessDeniedException`), and a currency mismatch with HTTP 422 (`ScheduledTransferCurrencyMismatchException`).
 
+[[fineract-today]]
+=== Fineract's current date
+
+`BusinessDateFineractClient.today()` reads `transferDate` from `GET /v1/accounttransfers/template`, called with no parameters. Fineract fills it from the same date its jobs use, whether or not business dates are enabled. `GET /v1/businessdate/BUSINESS_DATE` is not used: it returns the stored row only, so it is 404 on a tenant that never set a business date and stale once business dates are disabled again. The value is cached in memory for 30 seconds. If Fineract cannot be reached or reports no date, `initiate` and `confirm` fail with HTTP 502 (`ScheduledTransferUpstreamUnavailableException`).
+
 == Creation flow
 
 `initiate` runs these steps in `ScheduledTransfersCommandServiceImpl`:
 
 . Check the feature flag.
 . Authorize `ConsumerAction.SCHEDULED_TRANSFER_CREATE` against the source account.
-. Check the schedule rules and the destination.
+. Check the schedule rules, reading Fineract's current date for the start date, and the destination.
 . Read both accounts from Fineract and compare currencies.
 . Send an OTP for `OtpPurpose.SCHEDULED_TRANSFER`.
 . Issue a step-up token bound to the action `scheduled-transfers:create` and every parameter: source, destination, frequency, amount, start date, and end date.

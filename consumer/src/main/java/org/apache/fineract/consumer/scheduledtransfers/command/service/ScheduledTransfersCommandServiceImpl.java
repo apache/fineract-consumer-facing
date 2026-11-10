@@ -21,7 +21,6 @@ package org.apache.fineract.consumer.scheduledtransfers.command.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Map;
@@ -37,6 +36,7 @@ import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
 import org.apache.fineract.consumer.infrastructure.audit.data.TransactionalAuditEvent;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.StandingInstructionCreationRequest;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.BusinessDateFineractClient;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.SavingsFineractClient;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClient;
@@ -96,6 +96,7 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
     private final StandingInstructionFineractClient standingInstructionFineractClient;
     private final SavingsFineractClient savingsFineractClient;
     private final TransferFineractClient transferFineractClient;
+    private final BusinessDateFineractClient businessDateFineractClient;
     private final IdempotencyKeyHolder idempotencyKeyHolder;
     private final ScheduledTransferCommandRepository scheduledTransferCommandRepository;
     private final TransactionTemplate transactionTemplate;
@@ -106,7 +107,8 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
             UserQueryService userQueryService, BeneficiariesQueryService beneficiariesQueryService, OtpService otpService,
             StepUpTokenService stepUpTokenService, StandingInstructionFineractClient standingInstructionFineractClient,
             SavingsFineractClient savingsFineractClient, TransferFineractClient transferFineractClient,
-            IdempotencyKeyHolder idempotencyKeyHolder, ScheduledTransferCommandRepository scheduledTransferCommandRepository,
+            BusinessDateFineractClient businessDateFineractClient, IdempotencyKeyHolder idempotencyKeyHolder,
+            ScheduledTransferCommandRepository scheduledTransferCommandRepository,
             TransactionTemplate transactionTemplate, ApplicationEventPublisher eventPublisher,
             @Value(ENABLED_PROPERTY) boolean enabled) {
         this.accessPolicyEvaluator = accessPolicyEvaluator;
@@ -117,6 +119,7 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
         this.standingInstructionFineractClient = standingInstructionFineractClient;
         this.savingsFineractClient = savingsFineractClient;
         this.transferFineractClient = transferFineractClient;
+        this.businessDateFineractClient = businessDateFineractClient;
         this.idempotencyKeyHolder = idempotencyKeyHolder;
         this.scheduledTransferCommandRepository = scheduledTransferCommandRepository;
         this.transactionTemplate = transactionTemplate;
@@ -129,8 +132,8 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
         requireEnabled();
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SCHEDULED_TRANSFER_CREATE, command.getFromAccountId(),
                 ScheduledTransferAccessDeniedException::new);
-        requireValidSchedule(command.getFromAccountId(), command.getToAccountId(), command.getStartDate(),
-                command.getEndDate());
+        requireValidSchedule(command.getFromAccountId(), command.getToAccountId(), command.getFrequency(),
+                command.getStartDate(), command.getEndDate());
 
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
@@ -167,8 +170,8 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
                 ScheduledTransferStepUpInvalidException::new);
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SCHEDULED_TRANSFER_CREATE, command.getFromAccountId(),
                 ScheduledTransferAccessDeniedException::new);
-        requireValidSchedule(command.getFromAccountId(), command.getToAccountId(), command.getStartDate(),
-                command.getEndDate());
+        requireValidSchedule(command.getFromAccountId(), command.getToAccountId(), command.getFrequency(),
+                command.getStartDate(), command.getEndDate());
 
         UserQueryData user = userQueryService.findByPublicId(publicId);
         DerivedIdempotencyKey key = IdempotencyKeyDeriver.derive(publicId, command.getIdempotencyKey());
@@ -203,11 +206,26 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
         }
     }
 
-    private static void requireValidSchedule(Long fromAccountId, Long toAccountId, LocalDate startDate,
-            LocalDate endDate) {
-        LocalDate tomorrow = LocalDate.now(ZoneId.systemDefault()).plusDays(1);
-        if (fromAccountId.equals(toAccountId) || startDate.isBefore(tomorrow)
-                || (endDate != null && endDate.isBefore(startDate))) {
+    /**
+     * Fineract accepts any start date, but its job runs an instruction only on a date that matches the schedule
+     * exactly and never catches up a missed one. So the start date is checked against Fineract's own today rather
+     * than this server's, and a monthly start date must fall on a day every month has: Fineract skips a month without
+     * that day instead of running on its last day.
+     */
+    private void requireValidSchedule(Long fromAccountId, Long toAccountId, ScheduledTransferFrequency frequency,
+            LocalDate startDate, LocalDate endDate) {
+        if (fromAccountId.equals(toAccountId)
+                || (endDate != null && endDate.isBefore(startDate))
+                || (frequency == ScheduledTransferFrequency.MONTHLY
+                        && startDate.getDayOfMonth() > ScheduledTransferConstants.LAST_MONTHLY_START_DAY)) {
+            throw new ScheduledTransferInvalidException();
+        }
+        LocalDate fineractToday = call(businessDateFineractClient::today);
+        if (fineractToday == null) {
+            throw new ScheduledTransferUpstreamUnavailableException(
+                    new IllegalStateException("Fineract returned no current date"));
+        }
+        if (!startDate.isAfter(fineractToday)) {
             throw new ScheduledTransferInvalidException();
         }
     }

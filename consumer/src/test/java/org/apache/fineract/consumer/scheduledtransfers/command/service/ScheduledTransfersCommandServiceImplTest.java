@@ -53,6 +53,7 @@ import org.apache.fineract.consumer.infrastructure.exception.AbstractConsumerExc
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.StandingInstructionCreationRequest;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.BusinessDateFineractClient;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.SavingsFineractClient;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClient;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.TransferFineractClient;
@@ -117,7 +118,9 @@ class ScheduledTransfersCommandServiceImplTest {
     private static final String IDEMPOTENCY_KEY = "sched-key-1";
     private static final String USD = "USD";
     private static final BigDecimal AMOUNT = new BigDecimal("25.50");
-    private static final LocalDate START = LocalDate.now(ZoneId.systemDefault()).plusDays(10);
+    // Fixed and years away from this machine's clock, so a check that read the server's date would show up.
+    private static final LocalDate FINERACT_TODAY = LocalDate.of(2030, 1, 15);
+    private static final LocalDate START = FINERACT_TODAY.plusDays(10);
     private static final LocalDate END = START.plusMonths(3);
 
     @Mock
@@ -136,6 +139,8 @@ class ScheduledTransfersCommandServiceImplTest {
     private SavingsFineractClient savingsFineractClient;
     @Mock
     private TransferFineractClient transferFineractClient;
+    @Mock
+    private BusinessDateFineractClient businessDateFineractClient;
     @Mock
     private ScheduledTransferCommandRepository repository;
     @Mock
@@ -157,6 +162,7 @@ class ScheduledTransfersCommandServiceImplTest {
         when(savingsFineractClient.getAccount(TO_SAVINGS_ID)).thenReturn(account(DEST_CLIENT_ID, USD));
         when(transferFineractClient.getClientOfficeId(CLIENT_ID)).thenReturn(CALLER_OFFICE_ID);
         when(transferFineractClient.getClientOfficeId(DEST_CLIENT_ID)).thenReturn(DEST_OFFICE_ID);
+        when(businessDateFineractClient.today()).thenReturn(FINERACT_TODAY);
         when(stepUpTokenService.actionFingerprint(anyString(), any(Object[].class))).thenReturn(ACTION_FINGERPRINT);
         when(stepUpTokenService.issue(any(), any(), any(), any()))
                 .thenReturn(IssuedJwt.builder().tokenValue(STEP_UP_TOKEN).expiresAt(Instant.EPOCH).build());
@@ -213,13 +219,99 @@ class ScheduledTransfersCommandServiceImplTest {
     }
 
     @Test
-    void initiateRejectsAStartDateBeforeTomorrow() {
-        InitiateScheduledTransferCommand today = initiateBuilder()
-                .startDate(LocalDate.now(ZoneId.systemDefault()))
+    void initiateRejectsAStartDateOnFineractsToday() {
+        InitiateScheduledTransferCommand today = initiateBuilder().startDate(FINERACT_TODAY).endDate(null).build();
+
+        assertThatThrownBy(() -> service.initiate(jwt(), today)).isInstanceOf(ScheduledTransferInvalidException.class);
+        verifyNoInteractions(otpService);
+    }
+
+    @Test
+    void initiateAcceptsAStartDateTheDayAfterFineractsToday() {
+        InitiateScheduledTransferCommand tomorrow =
+                initiateBuilder().startDate(FINERACT_TODAY.plusDays(1)).endDate(null).build();
+
+        service.initiate(jwt(), tomorrow);
+
+        verify(otpService).createOtp(eq(PUBLIC_ID), eq(OtpPurpose.SCHEDULED_TRANSFER), any());
+    }
+
+    @Test
+    void initiateRejectsTheBffsTomorrowOnceFineractHasPassedMidnight() {
+        // Tenant on Asia/Kolkata, BFF on UTC, 20:00 UTC: Fineract is already on the BFF's tomorrow and today's job ran.
+        LocalDate bffTomorrow = LocalDate.now(ZoneId.systemDefault()).plusDays(1);
+        when(businessDateFineractClient.today()).thenReturn(bffTomorrow);
+        InitiateScheduledTransferCommand command = initiateBuilder()
+                .frequency(ScheduledTransferFrequency.WEEKLY)
+                .startDate(bffTomorrow)
                 .endDate(null)
                 .build();
 
-        assertThatThrownBy(() -> service.initiate(jwt(), today)).isInstanceOf(ScheduledTransferInvalidException.class);
+        assertThatThrownBy(() -> service.initiate(jwt(), command)).isInstanceOf(ScheduledTransferInvalidException.class);
+    }
+
+    @Test
+    void initiateRejectsAMonthlyStartDateAfterThe28th() {
+        InitiateScheduledTransferCommand onThe29th =
+                initiateBuilder().startDate(LocalDate.of(2030, 1, 29)).endDate(null).build();
+        InitiateScheduledTransferCommand onThe31st =
+                initiateBuilder().startDate(LocalDate.of(2030, 1, 31)).endDate(null).build();
+
+        assertThatThrownBy(() -> service.initiate(jwt(), onThe29th)).isInstanceOf(ScheduledTransferInvalidException.class);
+        assertThatThrownBy(() -> service.initiate(jwt(), onThe31st)).isInstanceOf(ScheduledTransferInvalidException.class);
+        verifyNoInteractions(otpService);
+    }
+
+    @Test
+    void initiateAcceptsAMonthlyStartDateOnThe28th() {
+        InitiateScheduledTransferCommand onThe28th =
+                initiateBuilder().startDate(LocalDate.of(2030, 1, 28)).endDate(null).build();
+
+        service.initiate(jwt(), onThe28th);
+
+        verify(otpService).createOtp(eq(PUBLIC_ID), eq(OtpPurpose.SCHEDULED_TRANSFER), any());
+    }
+
+    @Test
+    void initiateAcceptsAWeeklyStartDateAfterThe28th() {
+        InitiateScheduledTransferCommand weekly = initiateBuilder()
+                .frequency(ScheduledTransferFrequency.WEEKLY)
+                .startDate(LocalDate.of(2030, 1, 31))
+                .endDate(null)
+                .build();
+
+        service.initiate(jwt(), weekly);
+
+        verify(otpService).createOtp(eq(PUBLIC_ID), eq(OtpPurpose.SCHEDULED_TRANSFER), any());
+    }
+
+    @Test
+    void initiateFailsAsUpstreamUnavailableWhenFineractReportsNoDate() {
+        when(businessDateFineractClient.today()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.initiate(jwt(), initiate(ScheduledTransferFrequency.MONTHLY)))
+                .isInstanceOf(ScheduledTransferUpstreamUnavailableException.class);
+        verifyNoInteractions(otpService);
+    }
+
+    @Test
+    void initiateFailsAsUpstreamUnavailableWhenFineractsDateCannotBeRead() {
+        when(businessDateFineractClient.today()).thenThrow(feignStatus(503));
+
+        assertThatThrownBy(() -> service.initiate(jwt(), initiate(ScheduledTransferFrequency.MONTHLY)))
+                .isInstanceOf(ScheduledTransferUpstreamUnavailableException.class);
+        verifyNoInteractions(otpService);
+    }
+
+    @Test
+    void confirmRechecksTheStartDateAgainstFineractsTodayBeforeReserving() {
+        // Fineract's date moved past the start date between initiate and confirm.
+        when(businessDateFineractClient.today()).thenReturn(START);
+
+        assertThatThrownBy(() -> service.confirm(jwt(), confirm(ScheduledTransferFrequency.MONTHLY)))
+                .isInstanceOf(ScheduledTransferInvalidException.class);
+        verify(repository, never()).saveAndFlush(any());
+        verifyNoInteractions(standingInstructionFineractClient);
     }
 
     @Test
@@ -407,8 +499,8 @@ class ScheduledTransfersCommandServiceImplTest {
     private ScheduledTransfersCommandServiceImpl service(boolean enabled) {
         return new ScheduledTransfersCommandServiceImpl(accessPolicyEvaluator, userQueryService,
                 beneficiariesQueryService, otpService, stepUpTokenService, standingInstructionFineractClient,
-                savingsFineractClient, transferFineractClient, idempotencyKeyHolder, repository, transactionTemplate,
-                eventPublisher, enabled);
+                savingsFineractClient, transferFineractClient, businessDateFineractClient, idempotencyKeyHolder,
+                repository, transactionTemplate, eventPublisher, enabled);
     }
 
     private StandingInstructionCreationRequest sentRequest() {
