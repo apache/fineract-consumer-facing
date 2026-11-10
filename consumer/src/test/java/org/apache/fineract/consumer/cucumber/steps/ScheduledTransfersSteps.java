@@ -26,6 +26,10 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -57,6 +61,7 @@ import org.apache.fineract.consumer.scheduledtransfers.command.exception.Schedul
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferBeneficiaryLimitExceededException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferInvalidException;
 import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferRunStatus;
+import org.apache.fineract.consumer.scheduledtransfers.query.exception.ScheduledTransferQueryAccessDeniedException;
 import org.apache.fineract.consumer.scheduledtransfers.query.exception.ScheduledTransferQueryNotFoundException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -81,6 +86,16 @@ public class ScheduledTransfersSteps {
     private static final int RUN_FOR_MONTHS = 3;
     private static final int LONGEST_MONTH_DAYS = 31;
     private static final ObjectMapper JSON = JsonMapper.builder().build();
+    private static final String JDBC_URL = System.getenv()
+            .getOrDefault("BFF_DB_URL", "jdbc:postgresql://localhost:5432/consumerapp");
+    private static final String JDBC_USER = System.getenv().getOrDefault("BFF_DB_USER", "consumerapp");
+    private static final String JDBC_PASSWORD = System.getenv().getOrDefault("BFF_DB_PASSWORD", "password");
+    private static final String INSERT_SCHEDULED_TRANSFER_SQL = """
+            INSERT INTO scheduled_transfers (
+                public_id, user_id, idempotency_key, fineract_from_account_id, fineract_to_account_id,
+                created_at, updated_at)
+            SELECT ?, id, ?, ?, ?, now(), now() FROM users WHERE email = ?
+            """;
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final FineractSeeder fineractSeeder = new FineractSeeder();
@@ -103,6 +118,7 @@ public class ScheduledTransfersSteps {
     private ScheduledTransferCommandData affordable;
     private ScheduledTransferCommandData unaffordable;
     private UUID otherCustomersTransferId;
+    private UUID unownedSourceTransferId;
     private FeignException lastError;
 
     @Given("a logged-in customer setting up scheduled transfers")
@@ -149,6 +165,27 @@ public class ScheduledTransfersSteps {
     @Given("another client owns a savings account that is not my scheduled transfer beneficiary")
     public void anotherClientsUnregisteredSavings() {
         unregisteredSavingsId = fineractSeeder.seedTransferTarget().savingsAccountId();
+    }
+
+    /**
+     * Fineract cannot move a savings account to another client, so the row is written directly: to the list it looks
+     * exactly like a transfer set up from an account the customer has since stopped owning.
+     */
+    @Given("I have a scheduled transfer on record from that account")
+    public void scheduledTransferOnRecordFromUnownedAccount() {
+        unownedSourceTransferId = UUID.randomUUID();
+        try (Connection connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASSWORD);
+             PreparedStatement statement = connection.prepareStatement(INSERT_SCHEDULED_TRANSFER_SQL)) {
+            statement.setObject(1, unownedSourceTransferId);
+            statement.setString(2, "cuke-unowned-" + unownedSourceTransferId);
+            statement.setLong(3, unregisteredSavingsId);
+            statement.setLong(4, user.savingsAccountId());
+            statement.setString(5, user.email());
+            assertThat(statement.executeUpdate()).isEqualTo(1);
+        } catch (SQLException e) {
+            throw new IllegalStateException(
+                    "Failed to insert a scheduled_transfers row at " + JDBC_URL + "; is the Docker Compose stack up?", e);
+        }
     }
 
     @Given("my savings account is funded for scheduled transfers")
@@ -243,6 +280,12 @@ public class ScheduledTransfersSteps {
     public void requestOtherCustomersRunHistory() {
         lastError = captureError(
                 () -> scheduledTransfersQueryApi.listScheduledTransferRuns(otherCustomersTransferId, null, null));
+    }
+
+    @When("I request the run history of the transfer from that account")
+    public void requestUnownedSourceRunHistory() {
+        lastError = captureError(
+                () -> scheduledTransfersQueryApi.listScheduledTransferRuns(unownedSourceTransferId, null, null));
     }
 
     @When("I list scheduled transfers without a session")
@@ -365,6 +408,11 @@ public class ScheduledTransfersSteps {
     @Then("the scheduled transfer request is denied as forbidden")
     public void deniedForbidden() {
         assertError(FORBIDDEN, ScheduledTransferAccessDeniedException.CODE);
+    }
+
+    @Then("the scheduled transfer history request is denied as forbidden")
+    public void historyDeniedForbidden() {
+        assertError(FORBIDDEN, ScheduledTransferQueryAccessDeniedException.CODE);
     }
 
     @Then("the scheduled transfer request is rejected as invalid")

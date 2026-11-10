@@ -24,8 +24,11 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetPageItemsStandingInstructionSwagger;
@@ -89,10 +92,19 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
         if (transfers.isEmpty()) {
             return List.of();
         }
-        transfers.stream()
+        // A source account the customer no longer owns leaves its transfers out of the list instead of failing it, so
+        // the others stay visible. Their run history still answers 403.
+        Set<Long> ownedSourceAccounts = transfers.stream()
                 .map(ScheduledTransferQueryEntity::getFineractFromAccountId)
                 .distinct()
-                .forEach(accountId -> authorizeSourceAccount(jwt, accountId));
+                .filter(accountId -> accessPolicyEvaluator.ownsResource(jwt, ResourceType.SAVINGS, accountId))
+                .collect(Collectors.toSet());
+        List<ScheduledTransferQueryEntity> visible = transfers.stream()
+                .filter(transfer -> ownedSourceAccounts.contains(transfer.getFineractFromAccountId()))
+                .toList();
+        if (visible.isEmpty()) {
+            return List.of();
+        }
 
         List<GetPageItemsStandingInstructionSwagger> instructions =
                 clientInstructions(userClientResolver.resolveClientId(jwt));
@@ -104,7 +116,7 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
                     new IllegalStateException("Fineract returned no current date"));
         }
         List<ScheduledTransferQueryData> active = new ArrayList<>();
-        for (ScheduledTransferQueryEntity transfer : transfers) {
+        for (ScheduledTransferQueryEntity transfer : visible) {
             instructionOf(transfer, instructions)
                     .filter(instruction -> isActive(instruction, today))
                     .flatMap(instruction -> toQueryData(transfer, instruction))

@@ -76,7 +76,17 @@ Feature: Consumer scheduled transfers
   Scenario: My scheduled transfers list leaves out standing instructions the bank set up
     Given I own a second savings account for scheduled transfers
     And the bank set up a standing instruction between my savings accounts
-    Then my scheduled transfers list is empty
+    When I schedule a weekly transfer to my second savings account with an end date
+    Then my scheduled transfers list shows the weekly transfer to my second savings account until my end date
+
+  Scenario: A transfer from a savings account I no longer own is left out of my list
+    Given I own a second savings account for scheduled transfers
+    And another client owns a savings account that is not my scheduled transfer beneficiary
+    And I have a scheduled transfer on record from that account
+    When I schedule a weekly transfer to my second savings account with an end date
+    Then my scheduled transfers list shows the weekly transfer to my second savings account until my end date
+    When I request the run history of the transfer from that account
+    Then the scheduled transfer history request is denied as forbidden
 
   Scenario: Run history shows a completed run, and a failed run that moved nothing
     Given I own a second savings account for scheduled transfers

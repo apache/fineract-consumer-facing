@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
+import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetFromAccountStandingInstructionSwagger;
@@ -114,6 +115,7 @@ class ScheduledTransfersQueryServiceImplTest {
         when(userClientResolver.resolveUserId(any())).thenReturn(USER_ID);
         when(userClientResolver.resolveClientId(any())).thenReturn(CLIENT_ID);
         when(businessDateFineractClient.today()).thenReturn(TODAY);
+        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), any())).thenReturn(true);
         when(repository.findByPublicIdAndUserId(PUBLIC_ID, USER_ID))
                 .thenReturn(Optional.of(row(PUBLIC_ID, FROM_SAVINGS_ID, INSTRUCTION_ID)));
     }
@@ -156,7 +158,7 @@ class ScheduledTransfersQueryServiceImplTest {
     }
 
     @Test
-    void listAuthorizesSavingsViewOnEverySourceAccountOnce() {
+    void listChecksOwnershipOfEverySourceAccountOnce() {
         UUID third = UUID.randomUUID();
         when(repository.findAllByUserIdOrderByCreatedAtDescIdDesc(USER_ID)).thenReturn(List.of(
                 row(PUBLIC_ID, FROM_SAVINGS_ID, INSTRUCTION_ID),
@@ -166,23 +168,37 @@ class ScheduledTransfersQueryServiceImplTest {
 
         service.listScheduledTransfers(jwt());
 
-        verify(accessPolicyEvaluator, times(1))
-                .authorize(any(), eq(ConsumerAction.SAVINGS_VIEW), eq(FROM_SAVINGS_ID), any());
-        verify(accessPolicyEvaluator, times(1))
-                .authorize(any(), eq(ConsumerAction.SAVINGS_VIEW), eq(OTHER_SAVINGS_ID), any());
+        verify(accessPolicyEvaluator, times(1)).ownsResource(any(), eq(ResourceType.SAVINGS), eq(FROM_SAVINGS_ID));
+        verify(accessPolicyEvaluator, times(1)).ownsResource(any(), eq(ResourceType.SAVINGS), eq(OTHER_SAVINGS_ID));
+        verify(accessPolicyEvaluator, never()).authorize(any(), eq(ConsumerAction.SAVINGS_VIEW), any(), any());
     }
 
     @Test
-    void listIsDeniedWhenASourceAccountIsNotTheCallers() {
+    void listLeavesOutTransfersFromASourceAccountTheCallerNoLongerOwns() {
+        when(repository.findAllByUserIdOrderByCreatedAtDescIdDesc(USER_ID)).thenReturn(List.of(
+                row(PUBLIC_ID, FROM_SAVINGS_ID, INSTRUCTION_ID),
+                row(OTHER_PUBLIC_ID, OTHER_SAVINGS_ID, OTHER_INSTRUCTION_ID)));
+        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(OTHER_SAVINGS_ID)))
+                .thenReturn(false);
+        when(standingInstructionFineractClient.listClientStandingInstructions(CLIENT_ID)).thenReturn(List.of(
+                weekly(INSTRUCTION_ID, PUBLIC_ID),
+                instruction(OTHER_INSTRUCTION_ID, OTHER_PUBLIC_ID, OTHER_SAVINGS_ID,
+                        ScheduledTransferQueryConstants.WEEKS_FREQUENCY_ID)));
+
+        assertThat(service.listScheduledTransfers(jwt()))
+                .extracting(ScheduledTransferQueryData::getPublicId)
+                .containsExactly(PUBLIC_ID);
+    }
+
+    @Test
+    void listWithNoOwnedSourceAccountIsEmptyAndAsksFineractNothing() {
         when(repository.findAllByUserIdOrderByCreatedAtDescIdDesc(USER_ID))
                 .thenReturn(List.of(row(PUBLIC_ID, FROM_SAVINGS_ID, INSTRUCTION_ID)));
-        doThrow(new ScheduledTransferQueryAccessDeniedException()).when(accessPolicyEvaluator)
-                .authorize(any(), eq(ConsumerAction.SAVINGS_VIEW), eq(FROM_SAVINGS_ID), any());
+        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(FROM_SAVINGS_ID)))
+                .thenReturn(false);
 
-        assertThatThrownBy(() -> service.listScheduledTransfers(jwt()))
-                .isInstanceOf(ScheduledTransferQueryAccessDeniedException.class)
-                .hasFieldOrPropertyWithValue("code", ScheduledTransferQueryAccessDeniedException.CODE);
-        verifyNoInteractions(standingInstructionFineractClient);
+        assertThat(service.listScheduledTransfers(jwt())).isEmpty();
+        verifyNoInteractions(standingInstructionFineractClient, businessDateFineractClient);
     }
 
     @Test

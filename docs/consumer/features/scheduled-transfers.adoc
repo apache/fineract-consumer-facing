@@ -43,7 +43,7 @@ All endpoints live under `/api/v1/scheduled-transfers`, registered as `authentic
 |GET
 |`/api/v1/scheduled-transfers`
 |List the customer's active scheduled transfers, newest first.
-|Consumer JWT with the `SCHEDULED_TRANSFER_LIST` policy satisfied, plus `SAVINGS_VIEW` on every source account.
+|Consumer JWT with the `SCHEDULED_TRANSFER_LIST` policy satisfied. Transfers from a source account the caller no longer owns are left out.
 
 |GET
 |`/api/v1/scheduled-transfers/{publicId}/runs`
@@ -142,7 +142,7 @@ The list:
 
 . Checks the flag and authorizes `ConsumerAction.SCHEDULED_TRANSFER_LIST`.
 . Reads the customer's rows, newest first. With none, it returns an empty list without calling Fineract.
-. Authorizes `SAVINGS_VIEW` on each distinct source account.
+. Checks that the caller still owns each distinct source account (`AccessPolicyEvaluator.ownsResource`) and leaves out the transfers from any it no longer owns, so one such account does not fail the whole list. With none left, it returns an empty list without calling Fineract.
 . Reads the client's standing instructions from Fineract in one paged call (`listClientStandingInstructions`) and keeps each row whose instruction is active: Fineract status `1` (active), and a `validTill` after Fineract's current date (<<fineract-today>>), not the BFF server's. Fineract leaves an instruction active after its end date, so the date is checked too. The end date returned is `validTill` minus one day.
 
 The run history:
@@ -172,7 +172,7 @@ Mechanisms are documented centrally; see xref:abac[Attribute-Based Access Contro
 
 |ABAC on reads
 |`GET` endpoints
-|`AccessPolicyEvaluator.authorize(jwt, SCHEDULED_TRANSFER_LIST)`, an unowned policy requiring the `consumer:full` scope and a true `kyc_verified` claim, then `SAVINGS_VIEW` on every source account read (HTTP 403, `ScheduledTransferQueryAccessDeniedException`). The run history also requires the scheduled transfer to be the caller's (HTTP 404 otherwise).
+|`AccessPolicyEvaluator.authorize(jwt, SCHEDULED_TRANSFER_LIST)`, an unowned policy requiring the `consumer:full` scope and a true `kyc_verified` claim, then, for the run history, `SAVINGS_VIEW` on the source account (HTTP 403, `ScheduledTransferQueryAccessDeniedException`). The list checks ownership of each source account instead and leaves out the transfers from any the caller no longer owns. The run history also requires the scheduled transfer to be the caller's (HTTP 404 otherwise).
 
 |Destination policy
 |`/initiate`, `/confirm`
@@ -212,8 +212,8 @@ The schedule itself (amount, frequency, dates) is not copied into the BFF: Finer
 == Testing coverage
 
 * Unit: `ScheduledTransfersCommandServiceImplTest` covers the flag rejecting both commands before any check, source authorization, OTP purpose and step-up binding, every schedule rule, beneficiary limit (above and equal), unowned destinations, mismatched currencies, a step-up mismatch reserving nothing, monthly and weekly request mapping including the inclusive end date, reservation before the Fineract call and key forwarding, linking with its audit event, retries returning the linked row without calling Fineract, the reservation released on a rejection or a lost destination but kept on an unknown outcome with its claim given up, a new row claimed until it is linked, HTTP 425 while another confirm with the same key holds the row (also when it reserved first), and a retry after an unknown outcome claiming the kept row and linking it. `ScheduledTransfersCommandControllerTest` covers header threading and a malformed idempotency key.
-* Unit: `ScheduledTransfersQueryServiceImplTest` covers the flag rejecting both reads before any check, the list action authorized first, no Fineract call without rows, `SAVINGS_VIEW` once per source account and its denial, weekly and monthly mapping including the inclusive end date, leaving out deleted, disabled, ended, and bank-created instructions, the newest-first order, an unlinked row matched by name but not on another source account, invalid page parameters, another customer's transfer not found, only the transfer's own runs newest first with no amount on a failed run, statuses the BFF never creates left out, paging, and upstream failures. `ScheduledTransfersQueryControllerTest` covers parameter threading.
-* Cucumber: `scheduledtransfers.feature` (glue in `cucumber.steps.ScheduledTransfersSteps`) creates a weekly instruction between the customer's own accounts, a monthly one to a beneficiary, and a monthly one starting on the 31st, checking each through Fineract's standing instruction list; rejects an amount above the beneficiary limit, an unregistered destination, another client's source account, and a start date in the past; checks that a retried confirm with the same key creates one instruction; and asserts the unauthenticated denial. For reads, it lists a transfer the customer set up, leaves out an instruction bank staff created on the customer's account, hides another customer's transfer from the list and its run history, and asserts the unauthenticated denial. One scenario sets up an affordable and an unaffordable transfer, has Fineract run them (see xref:build-and-test-cucumber-runs[Scenarios that need a standing instruction run]), and checks a successful run, a failed run with no amount, and that only the affordable amount arrived. The runs are dated today, not on the moved business date, because Fineract dates a run by its own clock.
+* Unit: `ScheduledTransfersQueryServiceImplTest` covers the flag rejecting both reads before any check, the list action authorized first, no Fineract call without rows, ownership checked once per source account and an unowned one leaving out only its transfers, weekly and monthly mapping including the inclusive end date, leaving out deleted, disabled, ended, and bank-created instructions, the newest-first order, an unlinked row matched by name but not on another source account, invalid page parameters, another customer's transfer not found, only the transfer's own runs newest first with no amount on a failed run, statuses the BFF never creates left out, paging, and upstream failures. `ScheduledTransfersQueryControllerTest` covers parameter threading.
+* Cucumber: `scheduledtransfers.feature` (glue in `cucumber.steps.ScheduledTransfersSteps`) creates a weekly instruction between the customer's own accounts, a monthly one to a beneficiary, and a monthly one starting on the 31st, checking each through Fineract's standing instruction list; rejects an amount above the beneficiary limit, an unregistered destination, another client's source account, and a start date in the past; checks that a retried confirm with the same key creates one instruction; and asserts the unauthenticated denial. For reads, it lists a transfer the customer set up, leaves out an instruction bank staff created on the customer's account next to one the customer set up, leaves out a transfer whose source account the customer no longer owns while its run history answers 403, hides another customer's transfer from the list and its run history, and asserts the unauthenticated denial. One scenario sets up an affordable and an unaffordable transfer, has Fineract run them (see xref:build-and-test-cucumber-runs[Scenarios that need a standing instruction run]), and checks a successful run, a failed run with no amount, and that only the affordable amount arrived. The runs are dated today, not on the moved business date, because Fineract dates a run by its own clock.
 
 == Design rationale
 
