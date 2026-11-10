@@ -68,6 +68,9 @@ databaseChangeLog:
                     unique: true
                     uniqueConstraintName: uq_scheduled_transfers_fineract_instruction
               - column:
+                  name: claimed_until
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
                   constraints:

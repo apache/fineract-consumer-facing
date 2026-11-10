@@ -72,12 +72,12 @@ A start or end date that breaks these rules, or a destination equal to the sourc
 
 `confirm` checks the flag, verifies the step-up token against the submitted parameters, validates the OTP, and re-runs the authorization and schedule checks. It then:
 
-. *Reserves a row.* It inserts a `scheduled_transfers` row keyed by the derived idempotency key, before anything is sent to Fineract. If a row with that key already exists and is linked to an instruction, confirm returns its `publicId` without calling Fineract.
+. *Reserves a row.* It inserts a `scheduled_transfers` row keyed by the derived idempotency key, before anything is sent to Fineract, and claims it for this confirm (`claimed_until`, five minutes ahead). If a row with that key already exists and is linked to an instruction, confirm returns its `publicId` without calling Fineract. If it exists unlinked, confirm claims it in one conditional update; when another confirm with the same key still holds the claim, it fails with HTTP 425 (`ScheduledTransferInProgressException`) and the caller retries. Without the claim, that other confirm could delete the row after a failed re-check while this one created the instruction, leaving an instruction with no row.
 . *Re-checks the destination and currency.* This happens after the reservation, so a beneficiary removed meanwhile is caught here.
 . *Creates the instruction* through `StandingInstructionFineractClient`, forwarding the derived idempotency key.
 . *Links the row* to the returned instruction id and publishes a `SCHEDULED_TRANSFER_CREATED` audit event, in one transaction.
 
-If Fineract rejects the request, or the destination is no longer allowed, the reservation is deleted and the error is returned. If the outcome is unknown (HTTP 425 or 502), the reservation is kept: Fineract may have created the instruction, and a retry with the same `Idempotency-Key` sends the same derived key, so Fineract replays the original id and the row is linked.
+If Fineract rejects the request, or the destination is no longer allowed, the reservation is deleted and the error is returned. If the outcome is unknown (HTTP 425 or 502), the reservation is kept and its claim given up: Fineract may have created the instruction, and a retry with the same `Idempotency-Key` sends the same derived key, so Fineract replays the original id and the row is linked.
 
 === The Fineract request
 
@@ -163,6 +163,7 @@ The `scheduled_transfers` table (changeset `scheduledtransfers/010-create-schedu
 * `idempotency_key`, the derived key, unique.
 * `fineract_from_account_id` and `fineract_to_account_id`, indexed with `user_id` for the beneficiary guard to come.
 * `fineract_standing_instruction_id`, unique, null until the row is linked.
+* `claimed_until`, set while a confirm is working on the unlinked row and cleared when it is linked or the outcome is unknown. A claim left by a confirm that died lapses after five minutes.
 * `created_at` and `updated_at`.
 
 The schedule itself (amount, frequency, dates) is not copied into the BFF: Fineract is the system of record and holds it on the instruction.
@@ -173,7 +174,7 @@ The schedule itself (amount, frequency, dates) is not copied into the BFF: Finer
 
 == Testing coverage
 
-* Unit: `ScheduledTransfersCommandServiceImplTest` covers the flag rejecting both commands before any check, source authorization, OTP purpose and step-up binding, every schedule rule, beneficiary limit (above and equal), unowned destinations, mismatched currencies, a step-up mismatch reserving nothing, monthly and weekly request mapping including the inclusive end date, reservation before the Fineract call and key forwarding, linking with its audit event, retries returning the linked row without calling Fineract, and the reservation released on a rejection or a lost destination but kept on an unknown outcome. `ScheduledTransfersCommandControllerTest` covers header threading and a malformed idempotency key.
+* Unit: `ScheduledTransfersCommandServiceImplTest` covers the flag rejecting both commands before any check, source authorization, OTP purpose and step-up binding, every schedule rule, beneficiary limit (above and equal), unowned destinations, mismatched currencies, a step-up mismatch reserving nothing, monthly and weekly request mapping including the inclusive end date, reservation before the Fineract call and key forwarding, linking with its audit event, retries returning the linked row without calling Fineract, the reservation released on a rejection or a lost destination but kept on an unknown outcome with its claim given up, a new row claimed until it is linked, HTTP 425 while another confirm with the same key holds the row (also when it reserved first), and a retry after an unknown outcome claiming the kept row and linking it. `ScheduledTransfersCommandControllerTest` covers header threading and a malformed idempotency key.
 * Cucumber: `scheduledtransfers.feature` (glue in `cucumber.steps.ScheduledTransfersSteps`) creates a weekly instruction between the customer's own accounts and a monthly one to a beneficiary, checking each through Fineract's standing instruction list; rejects an amount above the beneficiary limit, an unregistered destination, another client's source account, and a start date in the past; checks that a retried confirm with the same key creates one instruction; and asserts the unauthenticated denial.
 
 == Design rationale

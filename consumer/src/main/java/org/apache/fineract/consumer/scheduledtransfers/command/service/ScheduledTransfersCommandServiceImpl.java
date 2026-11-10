@@ -20,6 +20,8 @@
 package org.apache.fineract.consumer.scheduledtransfers.command.service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -87,6 +89,11 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
     private static final DateTimeFormatter MONTH_DAY =
             DateTimeFormatter.ofPattern(ScheduledTransferConstants.MONTH_DAY_FORMAT, Locale.ENGLISH);
     static final String AUDIT_DETAIL_PUBLIC_ID = "scheduledTransferPublicId";
+    /**
+     * How long a confirm holds an unlinked row. Well over one confirm's Fineract calls at Feign's default timeouts, so
+     * a claim only lapses when the confirm holding it died.
+     */
+    static final Duration CLAIM_TTL = Duration.ofMinutes(5);
 
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final UserQueryService userQueryService;
@@ -190,7 +197,9 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
             standingInstructionId =
                     createStandingInstruction(reserved.getPublicId(), user, destinationClientId, command, key);
         } catch (ScheduledTransferUpstreamUnavailableException | ScheduledTransferInProgressException e) {
-            // Fineract may have created the instruction: keep the reservation so a retry with the same key links it.
+            // Fineract may have created the instruction: keep the reservation so a retry with the same key links it,
+            // and give up the claim so that retry need not wait for it to lapse.
+            releaseClaim(reserved.getId());
             throw e;
         } catch (RuntimeException e) {
             release(reserved.getId());
@@ -308,23 +317,50 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
         }
     }
 
+    /**
+     * Returns the row for this key, either already linked or claimed by this confirm. A row another confirm with the
+     * same key is still working on is not shared: that confirm may yet release it, and an instruction created here
+     * would then have no row. The caller gets HTTP 425 and retries.
+     */
     private ScheduledTransfer reserve(Long userId, DerivedIdempotencyKey key, Long fromAccountId, Long toAccountId) {
         Optional<ScheduledTransfer> existing = transactionTemplate.execute(
                 status -> scheduledTransferCommandRepository.findByIdempotencyKey(key.getValue()));
         if (existing != null && existing.isPresent()) {
-            return existing.get();
+            return claimExisting(existing.get());
         }
         try {
             return transactionTemplate.execute(status -> scheduledTransferCommandRepository.saveAndFlush(
-                    ScheduledTransfer.reserve(UUID.randomUUID(), userId, key.getValue(), fromAccountId, toAccountId)));
+                    ScheduledTransfer.reserve(UUID.randomUUID(), userId, key.getValue(), fromAccountId, toAccountId,
+                            Instant.now().plus(CLAIM_TTL))));
         } catch (DataIntegrityViolationException e) {
             // A concurrent confirm with the same key reserved first.
-            return transactionTemplate.execute(status -> scheduledTransferCommandRepository
+            ScheduledTransfer reservedFirst = transactionTemplate.execute(status -> scheduledTransferCommandRepository
                     .findByIdempotencyKey(key.getValue())
                     .orElseThrow(() -> e));
+            return claimExisting(reservedFirst);
         }
     }
 
+    private ScheduledTransfer claimExisting(ScheduledTransfer transfer) {
+        if (transfer.isLinked()) {
+            return transfer;
+        }
+        Instant now = Instant.now();
+        Integer claimed = transactionTemplate.execute(
+                status -> scheduledTransferCommandRepository.claim(transfer.getId(), now.plus(CLAIM_TTL), now));
+        if (claimed == null || claimed == 0) {
+            throw new ScheduledTransferInProgressException(
+                    new IllegalStateException("another confirm with the same key is in progress"));
+        }
+        return transfer;
+    }
+
+    private void releaseClaim(Long scheduledTransferId) {
+        transactionTemplate.executeWithoutResult(
+                status -> scheduledTransferCommandRepository.releaseClaim(scheduledTransferId));
+    }
+
+    /** Deletes the row after a definite failure. Only the confirm holding the claim gets here, so no other uses it. */
     private void release(Long scheduledTransferId) {
         transactionTemplate.executeWithoutResult(status -> scheduledTransferCommandRepository
                 .findById(scheduledTransferId)

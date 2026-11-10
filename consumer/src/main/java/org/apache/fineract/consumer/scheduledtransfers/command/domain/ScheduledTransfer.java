@@ -67,6 +67,10 @@ public class ScheduledTransfer {
     @Column(name = "fineract_standing_instruction_id", unique = true)
     private Long fineractStandingInstructionId;
 
+    /** Set while a confirm is working on an unlinked row, so a concurrent confirm with the same key waits. */
+    @Column(name = "claimed_until")
+    private Instant claimedUntil;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -74,7 +78,7 @@ public class ScheduledTransfer {
     private Instant updatedAt;
 
     public static ScheduledTransfer reserve(UUID publicId, Long userId, String idempotencyKey, Long fineractFromAccountId,
-            Long fineractToAccountId) {
+            Long fineractToAccountId, Instant claimedUntil) {
         Instant now = Instant.now();
         ScheduledTransfer transfer = new ScheduledTransfer();
         transfer.publicId = publicId;
@@ -82,6 +86,7 @@ public class ScheduledTransfer {
         transfer.idempotencyKey = idempotencyKey;
         transfer.fineractFromAccountId = fineractFromAccountId;
         transfer.fineractToAccountId = fineractToAccountId;
+        transfer.claimedUntil = claimedUntil;
         transfer.createdAt = now;
         transfer.updatedAt = now;
         return transfer;
@@ -99,6 +104,7 @@ public class ScheduledTransfer {
             throw new IllegalStateException("scheduled transfer is already linked to another standing instruction");
         }
         this.fineractStandingInstructionId = standingInstructionId;
+        this.claimedUntil = null;
         this.updatedAt = Instant.now();
     }
 }

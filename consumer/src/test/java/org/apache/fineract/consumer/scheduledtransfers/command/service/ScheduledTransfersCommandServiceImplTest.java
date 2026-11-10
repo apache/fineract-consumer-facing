@@ -42,6 +42,7 @@ import java.time.ZoneId;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
@@ -76,6 +77,7 @@ import org.apache.fineract.consumer.scheduledtransfers.command.exception.Schedul
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferBeneficiaryLimitExceededException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferCurrencyMismatchException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferDisabledException;
+import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferInProgressException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferInvalidException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferStepUpInvalidException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferUpstreamUnavailableException;
@@ -93,6 +95,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -168,6 +171,7 @@ class ScheduledTransfersCommandServiceImplTest {
                 .thenReturn(IssuedJwt.builder().tokenValue(STEP_UP_TOKEN).expiresAt(Instant.EPOCH).build());
         when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT)).thenReturn(true);
         when(repository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+        when(repository.claim(any(), any(), any())).thenReturn(1);
         when(repository.saveAndFlush(any(ScheduledTransfer.class))).thenAnswer(invocation -> {
             lastSaved = invocation.getArgument(0);
             return lastSaved;
@@ -493,7 +497,67 @@ class ScheduledTransfersCommandServiceImplTest {
                 .isInstanceOf(ScheduledTransferUpstreamUnavailableException.class)
                 .isInstanceOf(AbstractConsumerException.class);
         verify(repository, never()).delete(any());
+        verify(repository).releaseClaim(reserved.getId());
         assertThat(idempotencyKeyHolder.get()).isNull();
+    }
+
+    @Test
+    void confirmClaimsTheNewReservationUntilItIsLinked() {
+        AtomicReference<Instant> claimedAtReservation = new AtomicReference<>();
+        when(repository.saveAndFlush(any(ScheduledTransfer.class))).thenAnswer(invocation -> {
+            lastSaved = invocation.getArgument(0);
+            claimedAtReservation.set(lastSaved.getClaimedUntil());
+            return lastSaved;
+        });
+
+        service.confirm(jwt(), confirm(ScheduledTransferFrequency.MONTHLY));
+
+        assertThat(claimedAtReservation.get()).isAfter(Instant.now());
+        assertThat(lastSaved.getFineractStandingInstructionId()).isEqualTo(STANDING_INSTRUCTION_ID);
+        assertThat(lastSaved.getClaimedUntil()).isNull();
+    }
+
+    @Test
+    void confirmAnswersInProgressWhileAnotherConfirmWithTheSameKeyHoldsTheReservation() {
+        ScheduledTransfer heldElsewhere = reserved();
+        when(repository.findByIdempotencyKey(IdempotencyKeyDeriver.derive(PUBLIC_ID, IDEMPOTENCY_KEY).getValue()))
+                .thenReturn(Optional.of(heldElsewhere));
+        when(repository.claim(any(), any(), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.confirm(jwt(), confirm(ScheduledTransferFrequency.MONTHLY)))
+                .isInstanceOf(ScheduledTransferInProgressException.class)
+                .hasFieldOrPropertyWithValue("code", ScheduledTransferInProgressException.CODE);
+        verifyNoInteractions(standingInstructionFineractClient);
+        verify(repository, never()).delete(any());
+        verify(repository, never()).releaseClaim(any());
+    }
+
+    @Test
+    void confirmAnswersInProgressWhenAConcurrentConfirmReservedTheSameKeyFirst() {
+        String key = IdempotencyKeyDeriver.derive(PUBLIC_ID, IDEMPOTENCY_KEY).getValue();
+        when(repository.findByIdempotencyKey(key)).thenReturn(Optional.empty(), Optional.of(reserved()));
+        when(repository.saveAndFlush(any(ScheduledTransfer.class)))
+                .thenThrow(new DataIntegrityViolationException("uq_scheduled_transfers_idempotency_key"));
+        when(repository.claim(any(), any(), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.confirm(jwt(), confirm(ScheduledTransferFrequency.MONTHLY)))
+                .isInstanceOf(ScheduledTransferInProgressException.class);
+        verifyNoInteractions(standingInstructionFineractClient);
+    }
+
+    @Test
+    void confirmRetriedAfterAnUnknownOutcomeClaimsTheReservationAndLinksIt() {
+        ScheduledTransfer keptAfterUnknownOutcome = reserved();
+        when(repository.findByIdempotencyKey(IdempotencyKeyDeriver.derive(PUBLIC_ID, IDEMPOTENCY_KEY).getValue()))
+                .thenReturn(Optional.of(keptAfterUnknownOutcome));
+        when(repository.findById(keptAfterUnknownOutcome.getId())).thenReturn(Optional.of(keptAfterUnknownOutcome));
+
+        ScheduledTransferCommandData result = service.confirm(jwt(), confirm(ScheduledTransferFrequency.MONTHLY));
+
+        assertThat(result.getPublicId()).isEqualTo(keptAfterUnknownOutcome.getPublicId());
+        assertThat(keptAfterUnknownOutcome.getFineractStandingInstructionId()).isEqualTo(STANDING_INSTRUCTION_ID);
+        verify(repository).claim(eq(keptAfterUnknownOutcome.getId()), any(), any());
+        verify(repository, never()).saveAndFlush(any());
     }
 
     private ScheduledTransfersCommandServiceImpl service(boolean enabled) {
@@ -512,7 +576,8 @@ class ScheduledTransfersCommandServiceImplTest {
 
     private static ScheduledTransfer reserved() {
         return ScheduledTransfer.reserve(UUID.fromString("3f2c8a1e-0000-4000-8000-0000000000aa"), USER_ID,
-                IdempotencyKeyDeriver.derive(PUBLIC_ID, IDEMPOTENCY_KEY).getValue(), FROM_SAVINGS_ID, TO_SAVINGS_ID);
+                IdempotencyKeyDeriver.derive(PUBLIC_ID, IDEMPOTENCY_KEY).getValue(), FROM_SAVINGS_ID, TO_SAVINGS_ID,
+                Instant.now().plus(ScheduledTransfersCommandServiceImpl.CLAIM_TTL));
     }
 
     private static FeignException feignStatus(int status) {
