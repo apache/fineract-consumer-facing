@@ -271,9 +271,26 @@ public class ScheduledTransfersSteps {
                 UUID.randomUUID().toString());
     }
 
+    @When("I schedule a monthly transfer I can afford on the 31st of a month before a shorter one")
+    public void scheduleMonthlyOnThe31stBeforeAShorterMonth() {
+        YearMonth month = YearMonth.now(ZoneId.systemDefault()).plusMonths(1);
+        while (month.lengthOfMonth() < LONGEST_MONTH_DAYS
+                || month.plusMonths(1).lengthOfMonth() == LONGEST_MONTH_DAYS) {
+            month = month.plusMonths(1);
+        }
+        startDate = month.atEndOfMonth();
+        affordable = schedule(secondSavingsId, TRANSFER_AMOUNT, ScheduledTransferFrequency.MONTHLY, null,
+                UUID.randomUUID().toString());
+    }
+
     @When("Fineract runs the standing instructions due on their start date")
     public void fineractRunsTheInstructionsDueOnTheStartDate() {
         fineractJobRunner.runStandingInstructionsDueOn(startDate);
+    }
+
+    @When("Fineract runs the standing instructions due on the last day of the next month")
+    public void fineractRunsTheInstructionsDueAtTheEndOfTheNextMonth() {
+        fineractJobRunner.runStandingInstructionsDueOn(YearMonth.from(startDate).plusMonths(1).atEndOfMonth());
     }
 
     @When("I request the run history of the other customer's scheduled transfer")

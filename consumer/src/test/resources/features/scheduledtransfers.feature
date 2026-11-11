@@ -97,6 +97,14 @@ Feature: Consumer scheduled transfers
     And the run history of the transfer I cannot afford shows one failed run that moved nothing
     And my second savings account received only the amount of the transfer I can afford
 
+  Scenario: A monthly transfer from the 31st runs on the last day of a shorter month
+    Given I own a second savings account for scheduled transfers
+    And my savings account is funded for scheduled transfers
+    When I schedule a monthly transfer I can afford on the 31st of a month before a shorter one
+    And Fineract runs the standing instructions due on the last day of the next month
+    Then the run history of the transfer I can afford shows one successful run
+    And my second savings account received only the amount of the transfer I can afford
+
   Scenario: Another customer's scheduled transfer is neither listed nor readable
     Given another customer has set up a scheduled transfer
     When I request the run history of the other customer's scheduled transfer
