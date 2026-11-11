@@ -111,7 +111,7 @@ The project uses Spring Modulith (a library that enforces module boundaries at b
 
 |`scheduledtransfers`
 |`createOtp` on initiate, `validateOtp` with `ScheduledTransferStepUpInvalidException` on confirm
-|Step-up confirmation for setting up a recurring transfer, paired with an action-bound step-up token.
+|Step-up confirmation for setting up or cancelling a recurring transfer, paired with an action-bound step-up token.
 
 |`beneficiaries`
 |`createOtp`, `validateOtp` with `BeneficiaryStepUpInvalidException`

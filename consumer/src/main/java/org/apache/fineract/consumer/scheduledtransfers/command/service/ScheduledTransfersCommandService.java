@@ -19,7 +19,9 @@
 
 package org.apache.fineract.consumer.scheduledtransfers.command.service;
 
+import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmCancelScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmScheduledTransferCommand;
+import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateCancelScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ScheduledTransferChallengeCommandData;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ScheduledTransferCommandData;
@@ -30,4 +32,8 @@ public interface ScheduledTransfersCommandService {
     ScheduledTransferChallengeCommandData initiate(Jwt jwt, InitiateScheduledTransferCommand command);
 
     ScheduledTransferCommandData confirm(Jwt jwt, ConfirmScheduledTransferCommand command);
+
+    ScheduledTransferChallengeCommandData initiateCancel(Jwt jwt, InitiateCancelScheduledTransferCommand command);
+
+    void confirmCancel(Jwt jwt, ConfirmCancelScheduledTransferCommand command);
 }

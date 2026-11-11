@@ -114,3 +114,27 @@ Feature: Consumer scheduled transfers
   Scenario: Listing scheduled transfers without a session is rejected
     When I list scheduled transfers without a session
     Then the scheduled transfer request is rejected as unauthorized
+
+  Scenario: Cancelling a scheduled transfer deletes its standing instruction and leaves it out of my list
+    Given I own a second savings account for scheduled transfers
+    When I schedule a weekly transfer to my second savings account with an end date
+    And I cancel the scheduled transfer
+    Then Fineract holds the scheduled transfer's standing instruction as deleted
+    And my scheduled transfers list is empty
+    And the run history of the cancelled transfer is still readable
+
+  Scenario: Cancelling a scheduled transfer that is already cancelled succeeds without deleting it again
+    Given I own a second savings account for scheduled transfers
+    When I schedule a weekly transfer to my second savings account with an end date
+    And I cancel the scheduled transfer
+    And I cancel the scheduled transfer
+    Then Fineract holds the scheduled transfer's standing instruction as deleted
+
+  Scenario: Another customer's scheduled transfer cannot be cancelled
+    Given another customer has set up a scheduled transfer
+    When I initiate cancelling the other customer's scheduled transfer
+    Then the scheduled transfer cancellation is rejected as not found
+
+  Scenario: Cancelling a scheduled transfer without a session is rejected
+    When I initiate cancelling a scheduled transfer without a session
+    Then the scheduled transfer request is rejected as unauthorized

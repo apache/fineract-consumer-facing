@@ -41,6 +41,7 @@ import org.apache.fineract.consumer.client.api.ScheduledTransfersCommandControll
 import org.apache.fineract.consumer.client.api.ScheduledTransfersQueryControllerApi;
 import org.apache.fineract.consumer.client.model.BeneficiaryChallengeCommandData;
 import org.apache.fineract.consumer.client.model.ConfirmAddBeneficiaryCommandRequest;
+import org.apache.fineract.consumer.client.model.ConfirmCancelScheduledTransferCommandRequest;
 import org.apache.fineract.consumer.client.model.ConfirmScheduledTransferCommandRequest;
 import org.apache.fineract.consumer.client.model.InitiateAddBeneficiaryCommandRequest;
 import org.apache.fineract.consumer.client.model.InitiateScheduledTransferCommandRequest;
@@ -60,6 +61,7 @@ import org.apache.fineract.consumer.scheduledtransfers.command.data.ScheduledTra
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferAccessDeniedException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferBeneficiaryLimitExceededException;
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferInvalidException;
+import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferNotFoundException;
 import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferRunStatus;
 import org.apache.fineract.consumer.scheduledtransfers.query.exception.ScheduledTransferQueryAccessDeniedException;
 import org.apache.fineract.consumer.scheduledtransfers.query.exception.ScheduledTransferQueryNotFoundException;
@@ -85,6 +87,7 @@ public class ScheduledTransfersSteps {
     private static final int RUN_START_IN_DAYS = 2;
     private static final int RUN_FOR_MONTHS = 3;
     private static final int LONGEST_MONTH_DAYS = 31;
+    private static final String DELETED_NAME_SUFFIX = "_deleted_";
     private static final ObjectMapper JSON = JsonMapper.builder().build();
     private static final String JDBC_URL = System.getenv()
             .getOrDefault("BFF_DB_URL", "jdbc:postgresql://localhost:5432/consumerapp");
@@ -320,6 +323,31 @@ public class ScheduledTransfersSteps {
                 schedule(secondSavingsId, TRANSFER_AMOUNT, ScheduledTransferFrequency.WEEKLY, null, idempotencyKey);
     }
 
+    @When("I cancel the scheduled transfer")
+    public void cancelTheScheduledTransfer() {
+        mailpit.deleteMessages(user.email());
+        ScheduledTransferChallengeCommandData challenge =
+                scheduledTransfersApi.initiateCancelScheduledTransfer(DEVICE_FINGERPRINT, result.getPublicId());
+        String otp = mailpit.waitForOtp(user.email());
+        scheduledTransfersApi.confirmCancelScheduledTransfer(DEVICE_FINGERPRINT, UUID.randomUUID().toString(),
+                result.getPublicId(), new ConfirmCancelScheduledTransferCommandRequest()
+                        .stepUpToken(challenge.getStepUpToken())
+                        .otp(otp));
+    }
+
+    @When("I initiate cancelling the other customer's scheduled transfer")
+    public void initiateCancellingOtherCustomersTransfer() {
+        lastError = captureError(() -> scheduledTransfersApi.initiateCancelScheduledTransfer(
+                DEVICE_FINGERPRINT, otherCustomersTransferId));
+    }
+
+    @When("I initiate cancelling a scheduled transfer without a session")
+    public void initiateCancelWithoutSession() {
+        lastError = captureError(() -> ConsumerApiClientFactory
+                .unauthenticated(ScheduledTransfersCommandControllerApi.class)
+                .initiateCancelScheduledTransfer(DEVICE_FINGERPRINT, UUID.randomUUID()));
+    }
+
     @When("I initiate a scheduled transfer without a session")
     public void initiateWithoutSession() {
         lastError = captureError(() -> ConsumerApiClientFactory
@@ -382,6 +410,28 @@ public class ScheduledTransfersSteps {
             assertThat(transfer.getStartDate()).isEqualTo(startDate);
             assertThat(transfer.getEndDate()).isEqualTo(endDate);
         });
+    }
+
+    /**
+     * Fineract marks a deleted instruction and appends {@code _deleted_<id>} to its name on every delete, so the name
+     * also shows that a second cancel did not delete it again.
+     */
+    @Then("Fineract holds the scheduled transfer's standing instruction as deleted")
+    public void fineractHoldsTheInstructionAsDeleted() {
+        GetPageItemsStandingInstructionSwagger instruction = onlyInstructionFromMySavings();
+        assertThat(instruction.getStatus().getId()).isEqualTo(ScheduledTransferConstants.DELETED_STATUS_ID);
+        assertThat(instruction.getName()).isEqualTo(ScheduledTransferConstants.INSTRUCTION_NAME_PREFIX
+                + result.getPublicId() + DELETED_NAME_SUFFIX + instruction.getId());
+    }
+
+    @Then("the run history of the cancelled transfer is still readable")
+    public void cancelledTransfersRunHistoryIsReadable() {
+        assertThat(runsOf(result)).isEmpty();
+    }
+
+    @Then("the scheduled transfer cancellation is rejected as not found")
+    public void cancellationRejectedNotFound() {
+        assertError(NOT_FOUND, ScheduledTransferNotFoundException.CODE);
     }
 
     @Then("my scheduled transfers list is empty")
