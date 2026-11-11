@@ -76,6 +76,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/savings/**").authenticated()
                         .requestMatchers("/api/v1/loans/**").authenticated()
                         .requestMatchers("/api/v1/transfers/**").authenticated()
+                        .requestMatchers("/api/v1/scheduled-transfers/**").authenticated()
                         .requestMatchers("/api/v1/beneficiaries/**").authenticated()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2

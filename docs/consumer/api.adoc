@@ -142,6 +142,17 @@ One row per endpoint, grouped by feature module. All paths sit under the `/api/v
 |GET |`/api/v1/transfers` |List the user's transfer history (paginated)
 |===
 
+=== Scheduled transfers
+
+Both endpoints answer HTTP 404 unless `consumer.scheduled-transfers.enabled` is set (off by default).
+
+[cols="1,4,6",options="header"]
+|===
+|Method |Path |Purpose
+|POST |`/api/v1/scheduled-transfers/initiate` |Start setting up a weekly or monthly transfer; issues a step-up OTP challenge
+|POST |`/api/v1/scheduled-transfers/confirm` |Confirm with the OTP and create the Fineract standing instruction
+|===
+
 === Beneficiaries
 
 [cols="1,4,6",options="header"]

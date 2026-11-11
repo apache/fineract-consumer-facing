@@ -44,7 +44,8 @@ public enum AuditEventType {
     CONSENT_CREATED(AuditSeverity.INFO, false),
     CONSENT_GRANTED(AuditSeverity.INFO, false),
     CONSENT_DENIED(AuditSeverity.WARN, false),
-    CONSENT_REVOKED(AuditSeverity.INFO, false);
+    CONSENT_REVOKED(AuditSeverity.INFO, false),
+    SCHEDULED_TRANSFER_CREATED(AuditSeverity.INFO, false);
 
     private final AuditSeverity severity;
     private final boolean clientSubmittable;

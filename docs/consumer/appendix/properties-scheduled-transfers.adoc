@@ -1,0 +1,14 @@
+[[properties-scheduled-transfers]]
+= Scheduled Transfer Properties
+
+Settings for scheduled and recurring transfers (`consumer.scheduled-transfers.*`).
+
+.Scheduled Transfer Properties
+|===
+|Name |Env Variable |Default Value |Description
+
+|consumer.scheduled-transfers.enabled
+|-
+|false
+|Enables the scheduled transfer endpoints, which answer HTTP 404 while it is off. Checked on each request rather than as a bean condition, so a native image honours the deployment's value after a restart, with no rebuild. Turning it off does not stop instructions already created: Fineract keeps running them (see the runbook in xref:scheduled-transfers[Scheduled Transfers]). The local compose stack turns it on via `CONSUMER_SCHEDULED_TRANSFERS_ENABLED`.
+|===

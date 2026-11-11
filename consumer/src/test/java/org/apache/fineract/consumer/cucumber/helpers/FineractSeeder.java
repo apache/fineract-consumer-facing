@@ -53,6 +53,8 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyUpdateRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetCodeValuesDataResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetCodesResponse;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetPageItemsStandingInstructionSwagger;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetStandingInstructionsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostClientsClientIdIdentifiersRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostClientsClientIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostClientsRequest;
@@ -131,6 +133,9 @@ public class FineractSeeder {
     private static final String ISO_DATE_FORMAT = "yyyy-MM-dd";
     private static final String SEED_INSTRUCTION_AMOUNT = "1";
     private static final String SEED_INSTRUCTION_NAME_PREFIX = "Cucumber seed instruction ";
+    // Fineract answers 500 for any other orderBy column.
+    private static final String STANDING_INSTRUCTION_ORDER = "atsi.id";
+    private static final int STANDING_INSTRUCTION_PAGE_SIZE = 200;
 
     private static volatile Long cachedPassportCodeValueId;
     private static volatile Long cachedClosureReasonCodeValueId;
@@ -226,6 +231,29 @@ public class FineractSeeder {
                 .allowPartialTransfer(false)
                 .locale(LOCALE)
                 .dateFormat(ISO_DATE_FORMAT));
+    }
+
+    /** Opens another active savings account for the client that owns {@code existingSavingsId}. */
+    public long openAnotherSavingsAccount(long existingSavingsId) {
+        return createActiveSavingsAccount(savingsAccountClientId(existingSavingsId));
+    }
+
+    /** Reads the standing instructions Fineract holds for transfers out of {@code savingsId}. */
+    public List<GetPageItemsStandingInstructionSwagger> standingInstructionsFrom(long savingsId) {
+        GetStandingInstructionsResponse page = STANDING_INSTRUCTIONS.retrieveAllStandingInstructions(
+                null, 0, STANDING_INSTRUCTION_PAGE_SIZE, STANDING_INSTRUCTION_ORDER, null, null, null,
+                savingsAccountClientId(savingsId), null, null);
+        List<GetPageItemsStandingInstructionSwagger> items = page == null || page.getPageItems() == null
+                ? List.of()
+                : List.copyOf(page.getPageItems());
+        return items.stream()
+                .filter(item -> item.getFromAccount() != null
+                        && Long.valueOf(savingsId).equals(item.getFromAccount().getId()))
+                .toList();
+    }
+
+    private long savingsAccountClientId(long savingsId) {
+        return SAVINGS_ACCOUNTS.retrieveSavingsAccount(savingsId, null, null, null).getClientId();
     }
 
     public void depositToSavings(long savingsId, BigDecimal amount) {

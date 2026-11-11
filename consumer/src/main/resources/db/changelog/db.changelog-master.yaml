@@ -34,3 +34,5 @@ databaseChangeLog:
       file: db/changelog/infrastructure/008-create-registered-tpps.yaml
   - include:
       file: db/changelog/beneficiaries/009-add-beneficiary-account-unique-index.yaml
+  - include:
+      file: db/changelog/scheduledtransfers/010-create-scheduled-transfers.yaml

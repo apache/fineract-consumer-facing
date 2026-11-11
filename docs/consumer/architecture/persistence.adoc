@@ -2,7 +2,7 @@
 
 == Two systems of record
 
-The BFF runs against its own PostgreSQL database (the `bff-db` service in `consumer/compose.yaml`). This database holds only the state the BFF itself is responsible for: consumer identity, authentication artifacts, transfer beneficiaries, audit events, open banking consents, registered third-party (TPP) clients, and infrastructure bookkeeping.
+The BFF runs against its own PostgreSQL database (the `bff-db` service in `consumer/compose.yaml`). This database holds only the state the BFF itself is responsible for: consumer identity, authentication artifacts, transfer beneficiaries, references to the standing instructions it created for scheduled transfers, audit events, open banking consents, registered third-party (TPP) clients, and infrastructure bookkeeping.
 
 Financial data never lives in the BFF database. Savings accounts, loans, transactions, products, and client records are owned by Fineract Core and reached over Feign (a declarative HTTP client: you write a Java interface, the library generates the HTTP calls). The BFF stores at most a numeric reference to a Fineract resource, for example `users.client_id` (the bound Fineract client) or `beneficiaries.fineract_account_id`.
 
@@ -25,6 +25,10 @@ Each table is created by one Liquibase changeset and mapped by JPA entities unde
 |`beneficiaries`
 |`beneficiaries`
 |Saved transfer destinations per user, with account type, optional transfer limit, and Fineract office/client/account references. Entity: `beneficiaries.command.domain.Beneficiary`.
+
+|`scheduledtransfers`
+|`scheduled_transfers`
+|One row per scheduled transfer a customer set up: owning user, the derived idempotency key (unique), source and destination Fineract account ids, and the Fineract standing instruction id once linked. The schedule itself stays in Fineract. Entity: `scheduledtransfers.command.domain.ScheduledTransfer`.
 
 |`audit`
 |`audit_events`
@@ -63,7 +67,9 @@ db/changelog/
 ├── infrastructure/005-create-event-publication.yaml
 ├── openbanking/006-create-open-banking-consents.yaml
 ├── infrastructure/007-create-oauth2-authorization.yaml
-└── infrastructure/008-create-registered-tpps.yaml
+├── infrastructure/008-create-registered-tpps.yaml
+├── beneficiaries/009-add-beneficiary-account-unique-index.yaml
+└── scheduledtransfers/010-create-scheduled-transfers.yaml
 ----
 
 Every changeset carries a `rollback` block. Changesets use PostgreSQL-native features where they earn their keep: native enum types (`user_status`, `beneficiary_account_type`, `open_banking_consent_status`, `registered_tpp_status`), JSONB, and partial unique indexes (`uq_beneficiaries_user_name` applies only to active rows).
@@ -78,7 +84,7 @@ Two rules follow from this setup:
 Externally visible identifiers are UUIDs; internal primary keys are numeric where a table is never addressed from outside by its key.
 
 * `users` has a `BIGINT` identity primary key for internal foreign keys, plus a unique `public_id UUID`. The UUID is what leaves the service: it is the JWT `sub` claim and the value idempotency keys are derived from. The numeric id never appears in an API response.
-* `beneficiaries` follows the same pattern (`id BIGINT` plus `public_id UUID`).
+* `beneficiaries` and `scheduled_transfers` follow the same pattern (`id BIGINT` plus `public_id UUID`).
 * `audit_events` has a numeric primary key plus a unique `event_uuid` used for client-side deduplication.
 * `refresh_tokens` has a numeric primary key only; the token is addressed by its hash, never by id, so no public UUID is needed.
 * `open_banking_consents` uses a UUID as its primary key directly, since the consent id is itself the externally shared handle in the consent flow.

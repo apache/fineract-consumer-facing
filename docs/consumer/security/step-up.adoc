@@ -17,6 +17,11 @@ Each protected action is a two-step endpoint pair: an initiate call that issues 
 |`POST /api/v1/transfers/confirm`
 |`TransferStepUpInvalidException`, code `error.msg.consumer.transfers.command.stepup.invalid`
 
+|Set up a scheduled transfer
+|`POST /api/v1/scheduled-transfers/initiate`
+|`POST /api/v1/scheduled-transfers/confirm`
+|`ScheduledTransferStepUpInvalidException`, code `error.msg.consumer.scheduledtransfers.command.stepup.invalid`
+
 |Add beneficiary
 |`POST /api/v1/beneficiaries/initiate`
 |`POST /api/v1/beneficiaries/confirm`
@@ -43,7 +48,7 @@ The initiate endpoint, running under a normal authenticated session, does three 
 . Creates an OTP through the shared `OtpService` (in `org.apache.fineract.consumer.infrastructure.otp`). This is the same OTP capability used by login 2FA and registration: a random code emailed to the user, stored only as a SHA-256 hash in Valkey with a 300-second TTL (`OtpConstants.OTP_TTL_SECONDS`) and a limit of 5 validation attempts (`OtpConstants.MAX_OTP_VALIDATION_ATTEMPTS`). One pending OTP exists per user at a time; issuing a new one replaces the previous one.
 . Computes an action fingerprint and mints a step-up token bound to it.
 
-The action fingerprint is a SHA-256 hex hash of a canonical string describing exactly what was approved. `StepUpTokenService.actionFingerprint` joins an action identifier and its parameters with `|`, for example endpoint, source account, destination account, destination type, and the amount normalized with `stripTrailingZeros`. Action identifiers in use: `/api/v1/transfers`, `beneficiaries:add`, `beneficiaries:update`, and `/api/v1/user/password/change`.
+The action fingerprint is a SHA-256 hex hash of a canonical string describing exactly what was approved. `StepUpTokenService.actionFingerprint` joins an action identifier and its parameters with `|`, for example endpoint, source account, destination account, destination type, and the amount normalized with `stripTrailingZeros`. Action identifiers in use: `/api/v1/transfers`, `scheduled-transfers:create`, `beneficiaries:add`, `beneficiaries:update`, and `/api/v1/user/password/change`.
 
 `StepUpTokenService.issue` then mints a JWT through the shared `JwtIssuer` with:
 

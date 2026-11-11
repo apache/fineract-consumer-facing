@@ -172,6 +172,7 @@ point for consumer-facing rules.
 - **Savings** (read): account list, detail, charges, transactions (paginated, date-filterable), product template.
 - **Loans**: list, detail, transactions, charges, guarantors, product template, schedule preview, plus loan application submit, modify, and withdraw.
 - **Transfers**: initiate/confirm with an OTP step-up, plus transfer history.
+- **Scheduled transfers**: weekly or monthly savings transfers run by Fineract standing instructions, set up with an OTP step-up (initiate/confirm). Behind `consumer.scheduled-transfers.enabled`, off by default.
 - **Beneficiaries**: list, add, edit, and delete, each write gated by an OTP step-up (initiate/confirm).
 - **Account summary**: aggregated savings + loans view for the logged-in client (`GET /api/v1/summary/accounts`).
 - **User**: profile, charges, profile image (read-only), obligees, and password change/forgot/reset flows.
@@ -190,7 +191,7 @@ point for consumer-facing rules.
 ## Cross-Cutting Engineering Standards
 
 ### Architecture
-- Package by **feature/bounded context** (`consumer.registration`, `consumer.identity`, `consumer.authentication`, `consumer.savings`, `consumer.loans`, `consumer.transfers`, `consumer.beneficiaries`, `consumer.summary`, `consumer.user`, `consumer.audit`, `consumer.openbanking`), not by layer. Within a feature, reads and writes split into `command/` and `query/` sub-trees (CQRS) with **full per-side separation, including JPA entities and enums**: each side owns its controllers, services, repositories, DTOs, entities, and enum copies end-to-end. Cross-side imports are a violation. Spring Modulith enforces the module boundaries.
+- Package by **feature/bounded context** (`consumer.registration`, `consumer.identity`, `consumer.authentication`, `consumer.savings`, `consumer.loans`, `consumer.transfers`, `consumer.scheduledtransfers`, `consumer.beneficiaries`, `consumer.summary`, `consumer.user`, `consumer.audit`, `consumer.openbanking`), not by layer. Within a feature, reads and writes split into `command/` and `query/` sub-trees (CQRS) with **full per-side separation, including JPA entities and enums**: each side owns its controllers, services, repositories, DTOs, entities, and enum copies end-to-end. Cross-side imports are a violation. Spring Modulith enforces the module boundaries.
 - Feign clients to Fineract live in the shared `consumer.infrastructure` package; feature services depend on narrow service interfaces, not on Feign clients directly. This keeps Fineract swappable in tests and contained as a dependency.
 - DTOs at the boundary, domain objects internally. Never leak Fineract response shapes to the Angular client; translate.
 

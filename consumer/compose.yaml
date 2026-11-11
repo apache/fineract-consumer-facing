@@ -118,6 +118,7 @@ services:
       SPRING_MAIL_HOST: mailpit
       SPRING_DATA_REDIS_HOST: valkey
       CONSUMER_AUDIT_QUERY_ENABLED: "true"
+      CONSUMER_SCHEDULED_TRANSFERS_ENABLED: "true"
       SERVER_FORWARD_HEADERS_STRATEGY: framework
       JWT_KEY_LOCATION: file:/etc/bff/jwt-key.pem
       # Heap sizing lives in the image (percentage of the container limit); this only adds the optional JaCoCo agent.
