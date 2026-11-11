@@ -52,10 +52,11 @@ Feature: Consumer scheduled transfers
     When I initiate a scheduled transfer to my second savings account starting yesterday
     Then the scheduled transfer request is rejected as invalid
 
-  Scenario: Scheduling a monthly transfer that starts after the 28th is rejected
+  Scenario: A monthly transfer can start on the 31st
     Given I own a second savings account for scheduled transfers
-    When I initiate a monthly transfer to my second savings account starting on the 30th
-    Then the scheduled transfer request is rejected as invalid
+    When I schedule a monthly transfer to my second savings account starting on the 31st
+    Then the scheduled transfer is accepted with a public id
+    And Fineract holds one monthly standing instruction to my second savings account from the 31st
 
   Scenario: Retrying a scheduled transfer confirmation with the same idempotency key creates one standing instruction
     Given I own a second savings account for scheduled transfers

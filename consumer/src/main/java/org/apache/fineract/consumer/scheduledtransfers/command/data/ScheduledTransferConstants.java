@@ -29,8 +29,6 @@ public final class ScheduledTransferConstants {
     public static final String LOCALE = "en";
     public static final String DATE_FORMAT = "yyyy-MM-dd";
     public static final String MONTH_DAY_FORMAT = "dd MMMM";
-    /** Every month has this day, so a monthly transfer starting on or before it never skips a month. */
-    public static final int LAST_MONTHLY_START_DAY = 28;
 
     /** The Fineract instruction name; Fineract requires it to be unique and prefixes it to each run's description. */
     public static final String INSTRUCTION_NAME_PREFIX = "Consumer recurring transfer ";

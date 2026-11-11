@@ -255,38 +255,26 @@ class ScheduledTransfersCommandServiceImplTest {
     }
 
     @Test
-    void initiateRejectsAMonthlyStartDateAfterThe28th() {
-        InitiateScheduledTransferCommand onThe29th =
-                initiateBuilder().startDate(LocalDate.of(2030, 1, 29)).endDate(null).build();
+    void initiateAcceptsAMonthlyStartDateOnADayShorterMonthsDoNotHave() {
         InitiateScheduledTransferCommand onThe31st =
                 initiateBuilder().startDate(LocalDate.of(2030, 1, 31)).endDate(null).build();
 
-        assertThatThrownBy(() -> service.initiate(jwt(), onThe29th)).isInstanceOf(ScheduledTransferInvalidException.class);
-        assertThatThrownBy(() -> service.initiate(jwt(), onThe31st)).isInstanceOf(ScheduledTransferInvalidException.class);
-        verifyNoInteractions(otpService);
-    }
-
-    @Test
-    void initiateAcceptsAMonthlyStartDateOnThe28th() {
-        InitiateScheduledTransferCommand onThe28th =
-                initiateBuilder().startDate(LocalDate.of(2030, 1, 28)).endDate(null).build();
-
-        service.initiate(jwt(), onThe28th);
+        service.initiate(jwt(), onThe31st);
 
         verify(otpService).createOtp(eq(PUBLIC_ID), eq(OtpPurpose.SCHEDULED_TRANSFER), any());
     }
 
     @Test
-    void initiateAcceptsAWeeklyStartDateAfterThe28th() {
-        InitiateScheduledTransferCommand weekly = initiateBuilder()
-                .frequency(ScheduledTransferFrequency.WEEKLY)
+    void confirmSendsTheStartDayOfAMonthlyTransferOnThe31st() {
+        ConfirmScheduledTransferCommand onThe31st = confirmBuilder(ScheduledTransferFrequency.MONTHLY)
                 .startDate(LocalDate.of(2030, 1, 31))
                 .endDate(null)
                 .build();
 
-        service.initiate(jwt(), weekly);
+        service.confirm(jwt(), onThe31st);
 
-        verify(otpService).createOtp(eq(PUBLIC_ID), eq(OtpPurpose.SCHEDULED_TRANSFER), any());
+        // Fineract runs it on the 31st, and on the last day of a month without one (FINERACT-2914).
+        assertThat(sentRequest().getRecurrenceOnMonthDay()).isEqualTo("31 January");
     }
 
     @Test

@@ -139,8 +139,8 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
         requireEnabled();
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SCHEDULED_TRANSFER_CREATE, command.getFromAccountId(),
                 ScheduledTransferAccessDeniedException::new);
-        requireValidSchedule(command.getFromAccountId(), command.getToAccountId(), command.getFrequency(),
-                command.getStartDate(), command.getEndDate());
+        requireValidSchedule(
+                command.getFromAccountId(), command.getToAccountId(), command.getStartDate(), command.getEndDate());
 
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
@@ -177,8 +177,8 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
                 ScheduledTransferStepUpInvalidException::new);
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SCHEDULED_TRANSFER_CREATE, command.getFromAccountId(),
                 ScheduledTransferAccessDeniedException::new);
-        requireValidSchedule(command.getFromAccountId(), command.getToAccountId(), command.getFrequency(),
-                command.getStartDate(), command.getEndDate());
+        requireValidSchedule(
+                command.getFromAccountId(), command.getToAccountId(), command.getStartDate(), command.getEndDate());
 
         UserQueryData user = userQueryService.findByPublicId(publicId);
         DerivedIdempotencyKey key = IdempotencyKeyDeriver.derive(publicId, command.getIdempotencyKey());
@@ -216,17 +216,12 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
     }
 
     /**
-     * Fineract accepts any start date, but its job runs an instruction only on a date that matches the schedule
-     * exactly and never catches up a missed one. So the start date is checked against Fineract's own today rather
-     * than this server's, and a monthly start date must fall on a day every month has: Fineract skips a month without
-     * that day instead of running on its last day.
+     * Fineract accepts any start date, but its job runs an instruction only on a date that is on the schedule and
+     * never catches up a missed one. So the start date is checked against Fineract's own today rather than this
+     * server's.
      */
-    private void requireValidSchedule(Long fromAccountId, Long toAccountId, ScheduledTransferFrequency frequency,
-            LocalDate startDate, LocalDate endDate) {
-        if (fromAccountId.equals(toAccountId)
-                || (endDate != null && endDate.isBefore(startDate))
-                || (frequency == ScheduledTransferFrequency.MONTHLY
-                        && startDate.getDayOfMonth() > ScheduledTransferConstants.LAST_MONTHLY_START_DAY)) {
+    private void requireValidSchedule(Long fromAccountId, Long toAccountId, LocalDate startDate, LocalDate endDate) {
+        if (fromAccountId.equals(toAccountId) || (endDate != null && endDate.isBefore(startDate))) {
             throw new ScheduledTransferInvalidException();
         }
         LocalDate fineractToday = call(businessDateFineractClient::today);

@@ -27,7 +27,6 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.Month;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
@@ -68,6 +67,7 @@ public class ScheduledTransfersSteps {
     // A week out, so a clock difference between this JVM and Fineract cannot make the start date "today".
     private static final int START_IN_DAYS = 7;
     private static final int RUN_FOR_MONTHS = 3;
+    private static final int LONGEST_MONTH_DAYS = 31;
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
@@ -95,7 +95,7 @@ public class ScheduledTransfersSteps {
                 ScheduledTransfersCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
         beneficiariesApi = ConsumerApiClientFactory.authenticated(
                 BeneficiariesCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
-        startDate = startDateValidForEveryFrequency();
+        startDate = LocalDate.now(ZoneId.systemDefault()).plusDays(START_IN_DAYS);
     }
 
     @Given("I own a second savings account for scheduled transfers")
@@ -171,14 +171,15 @@ public class ScheduledTransfersSteps {
                         ScheduledTransferFrequency.WEEKLY, LocalDate.now(ZoneId.systemDefault()).minusDays(1), null)));
     }
 
-    @When("I initiate a monthly transfer to my second savings account starting on the 30th")
-    public void initiateMonthlyStartingOnThe30th() {
-        YearMonth nextMonth = YearMonth.now(ZoneId.systemDefault()).plusMonths(1);
-        LocalDate onThe30th =
-                (nextMonth.getMonth() == Month.FEBRUARY ? nextMonth.plusMonths(1) : nextMonth).atDay(30);
-        lastError = captureError(() -> scheduledTransfersApi.initiateScheduledTransfer(DEVICE_FINGERPRINT,
-                initiateRequest(user.savingsAccountId(), secondSavingsId, TRANSFER_AMOUNT,
-                        ScheduledTransferFrequency.MONTHLY, onThe30th, null)));
+    @When("I schedule a monthly transfer to my second savings account starting on the 31st")
+    public void scheduleMonthlyStartingOnThe31st() {
+        YearMonth month = YearMonth.now(ZoneId.systemDefault()).plusMonths(1);
+        while (month.lengthOfMonth() < LONGEST_MONTH_DAYS) {
+            month = month.plusMonths(1);
+        }
+        startDate = month.atEndOfMonth();
+        result = schedule(secondSavingsId, TRANSFER_AMOUNT, ScheduledTransferFrequency.MONTHLY, null,
+                UUID.randomUUID().toString());
     }
 
     @When("I confirm the same scheduled transfer twice with the same idempotency key")
@@ -218,6 +219,13 @@ public class ScheduledTransfersSteps {
         assertInstructionMatches(instruction, beneficiaryTarget.savingsAccountId(),
                 ScheduledTransferConstants.MONTHS_FREQUENCY);
         assertThat(instruction.getValidTill()).isNull();
+    }
+
+    @Then("Fineract holds one monthly standing instruction to my second savings account from the 31st")
+    public void fineractHoldsMonthlyInstructionFromThe31st() {
+        GetPageItemsStandingInstructionSwagger instruction = onlyInstructionFromMySavings();
+        assertInstructionMatches(instruction, secondSavingsId, ScheduledTransferConstants.MONTHS_FREQUENCY);
+        assertThat(instruction.getValidFrom().getDayOfMonth()).isEqualTo(LONGEST_MONTH_DAYS);
     }
 
     @Then("both scheduled transfer confirmations return the same public id")
@@ -270,14 +278,6 @@ public class ScheduledTransfersSteps {
                         .frequency(ConfirmScheduledTransferCommandRequest.FrequencyEnum.fromValue(frequency.name()))
                         .startDate(startDate)
                         .endDate(end));
-    }
-
-    /** A week out, moved to the 1st of the next month when it falls after the last day a monthly transfer may start. */
-    private static LocalDate startDateValidForEveryFrequency() {
-        LocalDate weekOut = LocalDate.now(ZoneId.systemDefault()).plusDays(START_IN_DAYS);
-        return weekOut.getDayOfMonth() > ScheduledTransferConstants.LAST_MONTHLY_START_DAY
-                ? weekOut.plusMonths(1).withDayOfMonth(1)
-                : weekOut;
     }
 
     private static InitiateScheduledTransferCommandRequest initiateRequest(long fromAccountId, long toAccountId,
