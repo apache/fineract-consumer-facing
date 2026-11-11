@@ -21,6 +21,7 @@ package org.apache.fineract.consumer.savings.query.service;
 import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractDepositTypes;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.SavingsFineractClient;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
@@ -64,9 +65,11 @@ public class SavingsQueryServiceImpl implements SavingsQueryService {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_LIST);
         Long clientId = userClientResolver.resolveClientId(jwt);
         List<GetClientsSavingsAccounts> accounts = fetch(() -> savingsFineractClient.listClientSavingsAccounts(clientId));
-        return accounts.stream().map(this::toListItem).toList();
+        return accounts.stream().filter(FineractDepositTypes::isPlainSavings).map(this::toListItem).toList();
     }
 
+    // getAccount, getCharges, searchTransactions and getTransaction need no deposit-type filter: the ownership
+    // set behind SAVINGS_VIEW excludes fixed and recurring deposits, so authorize() already denies them.
     @Override
     public SavingsAccountQueryData getAccount(Jwt jwt, Long savingsId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, savingsId,
