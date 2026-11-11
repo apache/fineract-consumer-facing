@@ -73,8 +73,8 @@ The codebase has thirteen top-level modules. Twelve are feature modules; `infras
 |Savings accounts: list, detail, charges, transactions, transaction detail, application template. Read only.
 
 |`scheduledtransfers`
-|command
-|Weekly or monthly savings transfers run by Fineract standing instructions: set up through an initiate/confirm step-up ceremony. Behind `consumer.scheduled-transfers.enabled`, off by default.
+|command, query
+|Weekly or monthly savings transfers run by Fineract standing instructions: set up through an initiate/confirm step-up ceremony (command); active transfers and their run history (query). Behind `consumer.scheduled-transfers.enabled`, off by default.
 
 |`summary`
 |query

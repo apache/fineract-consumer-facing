@@ -55,7 +55,12 @@ cd consumer
 docker compose up -d --build --wait && ./gradlew cucumber; docker compose down -v
 ----
 
-Feature files cover registration, login, savings, loans, transfers, beneficiaries, summary, profile, password, audit, open banking, rate limiting, and ABAC denial paths.
+Feature files cover registration, login, savings, loans, transfers, scheduled transfers, beneficiaries, summary, profile, password, audit, open banking, rate limiting, and ABAC denial paths.
+
+[[build-and-test-cucumber-runs]]
+=== Scenarios that need a standing instruction run
+
+Fineract runs a standing instruction only once the tenant's business date reaches its start date, and the BFF accepts only start dates after today. A scenario that needs a run calls `FineractJobRunner.runStandingInstructionsDueOn(date)` (in `cucumber.helpers`). It turns on Fineract's `enable-business-date` setting, sets the business date, runs the *Execute Standing Instruction* job (`STI_EXEC`) and waits for it to finish, then puts the setting back as it was. The job runs every instruction in the tenant that is due on that date, so such a scenario picks a date no other scenario's instructions start on.
 
 == Static analysis
 

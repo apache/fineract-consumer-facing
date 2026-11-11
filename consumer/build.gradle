@@ -443,7 +443,7 @@ def fineractApiTags = [
 	'Savings Account', 'Savings Account Transactions', 'Savings Charges', 'Savings Product', 'Search API',
 	'Standing Instructions', 'Standing Instructions History',
 	// Cucumber seeder only
-	'Code Values', 'Codes', 'Currency'
+	'Business Date Management', 'Code Values', 'Codes', 'Currency', 'Global Configuration', 'SCHEDULER JOB'
 ] as Set
 // Untagged operations are generated into DefaultApi; keep only the ones called.
 def fineractUntaggedOperationIds = ['retrieveImage'] as Set

@@ -28,7 +28,7 @@ Each table is created by one Liquibase changeset and mapped by JPA entities unde
 
 |`scheduledtransfers`
 |`scheduled_transfers`
-|One row per scheduled transfer a customer set up: owning user, the derived idempotency key (unique), source and destination Fineract account ids, and the Fineract standing instruction id once linked. The schedule itself stays in Fineract. Entity: `scheduledtransfers.command.domain.ScheduledTransfer`.
+|One row per scheduled transfer a customer set up: owning user, the derived idempotency key (unique), source and destination Fineract account ids, and the Fineract standing instruction id once linked. The schedule itself stays in Fineract. Entities: `scheduledtransfers.command.domain.ScheduledTransfer` and its read-only twin `scheduledtransfers.query.domain.ScheduledTransferQueryEntity`.
 
 |`audit`
 |`audit_events`

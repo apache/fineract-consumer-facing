@@ -67,3 +67,50 @@ Feature: Consumer scheduled transfers
   Scenario: Initiating a scheduled transfer without a session is rejected
     When I initiate a scheduled transfer without a session
     Then the scheduled transfer request is rejected as unauthorized
+
+  Scenario: My scheduled transfers list shows a transfer I set up
+    Given I own a second savings account for scheduled transfers
+    When I schedule a weekly transfer to my second savings account with an end date
+    Then my scheduled transfers list shows the weekly transfer to my second savings account until my end date
+
+  Scenario: My scheduled transfers list leaves out standing instructions the bank set up
+    Given I own a second savings account for scheduled transfers
+    And the bank set up a standing instruction between my savings accounts
+    When I schedule a weekly transfer to my second savings account with an end date
+    Then my scheduled transfers list shows the weekly transfer to my second savings account until my end date
+
+  Scenario: A transfer from a savings account I no longer own is left out of my list
+    Given I own a second savings account for scheduled transfers
+    And another client owns a savings account that is not my scheduled transfer beneficiary
+    And I have a scheduled transfer on record from that account
+    When I schedule a weekly transfer to my second savings account with an end date
+    Then my scheduled transfers list shows the weekly transfer to my second savings account until my end date
+    When I request the run history of the transfer from that account
+    Then the scheduled transfer history request is denied as forbidden
+
+  Scenario: Run history shows a completed run, and a failed run that moved nothing
+    Given I own a second savings account for scheduled transfers
+    And my savings account is funded for scheduled transfers
+    When I schedule a weekly transfer I can afford and one I cannot, both to my second savings account soon
+    And Fineract runs the standing instructions due on their start date
+    Then the run history of the transfer I can afford shows one successful run
+    And the run history of the transfer I cannot afford shows one failed run that moved nothing
+    And my second savings account received only the amount of the transfer I can afford
+
+  Scenario: A monthly transfer from the 31st runs on the last day of a shorter month
+    Given I own a second savings account for scheduled transfers
+    And my savings account is funded for scheduled transfers
+    When I schedule a monthly transfer I can afford on the 31st of a month before a shorter one
+    And Fineract runs the standing instructions due on the last day of the next month
+    Then the run history of the transfer I can afford shows one successful run
+    And my second savings account received only the amount of the transfer I can afford
+
+  Scenario: Another customer's scheduled transfer is neither listed nor readable
+    Given another customer has set up a scheduled transfer
+    When I request the run history of the other customer's scheduled transfer
+    Then the scheduled transfer request is rejected as not found
+    And my scheduled transfers list is empty
+
+  Scenario: Listing scheduled transfers without a session is rejected
+    When I list scheduled transfers without a session
+    Then the scheduled transfer request is rejected as unauthorized

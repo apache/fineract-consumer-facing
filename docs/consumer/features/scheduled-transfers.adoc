@@ -3,13 +3,13 @@
 
 The scheduled transfers module lets a customer set up a recurring transfer out of one of their own savings accounts: weekly or monthly, from a start date, with an optional end date. The destination is another savings account the customer owns or a registered savings beneficiary. The BFF validates, authorizes, and challenges the request, then creates a Fineract *standing instruction*; Fineract Core runs every transfer itself, in its *Execute Standing Instruction* job. The BFF has no scheduler of its own.
 
-Code lives in `org.apache.fineract.consumer.scheduledtransfers`. Only the command side exists so far: customers can set up a scheduled transfer, but cannot yet list or cancel one through the BFF (see <<scheduled-transfers-limitations>>).
+Code lives in `org.apache.fineract.consumer.scheduledtransfers`. Customers can set up a scheduled transfer, list their active ones, and see each one's run history; they cannot yet cancel one through the BFF (see <<scheduled-transfers-limitations>>).
 
 == Feature flag
 
-The module is behind `consumer.scheduled-transfers.enabled`, which is `false` by default. While it is off, every scheduled-transfer endpoint answers HTTP 404 with code `error.msg.consumer.scheduledtransfers.disabled` (`ScheduledTransferDisabledException`) before any other check runs. The local compose stack turns it on through `CONSUMER_SCHEDULED_TRANSFERS_ENABLED`.
+The module is behind `consumer.scheduled-transfers.enabled`, which is `false` by default. While it is off, every scheduled-transfer endpoint answers HTTP 404 with code `error.msg.consumer.scheduledtransfers.disabled` before any other check runs (`ScheduledTransferDisabledException` on the command side, `ScheduledTransferQueryDisabledException` on the query side; both carry the same code). The local compose stack turns it on through `CONSUMER_SCHEDULED_TRANSFERS_ENABLED`.
 
-The flag is read per call by `ScheduledTransfersCommandServiceImpl`, not through `@ConditionalOnProperty`: AOT processing evaluates bean conditions at build time, so a native image would ignore a runtime setting (see xref:native-image[Native Image]).
+The flag is read per call by `ScheduledTransfersCommandServiceImpl` and `ScheduledTransfersQueryServiceImpl`, not through `@ConditionalOnProperty`: AOT processing evaluates bean conditions at build time, so a native image would ignore a runtime setting (see xref:native-image[Native Image]).
 
 === Runbook: turning the feature off
 
@@ -24,7 +24,7 @@ Fineract only runs instructions while its *Execute Standing Instruction* job (`S
 
 == Endpoints
 
-Both endpoints live under `/api/v1/scheduled-transfers`, registered as `authenticated()` in `SecurityConfig` (`/api/v1/scheduled-transfers/**`). They require a consumer access token and the `X-Device-Fingerprint` header.
+All endpoints live under `/api/v1/scheduled-transfers`, registered as `authenticated()` in `SecurityConfig` (`/api/v1/scheduled-transfers/**`), and require a consumer access token. The two writes also require the `X-Device-Fingerprint` header.
 
 [cols="1,3,4,4"]
 |===
@@ -39,9 +39,21 @@ Both endpoints live under `/api/v1/scheduled-transfers`, registered as `authenti
 |`/api/v1/scheduled-transfers/confirm`
 |Verify the step-up token and OTP, re-run every check, and create the standing instruction in Fineract.
 |Consumer JWT with the `SCHEDULED_TRANSFER_CREATE` policy satisfied on the source account; `X-Device-Fingerprint` and `Idempotency-Key` headers required.
+
+|GET
+|`/api/v1/scheduled-transfers`
+|List the customer's active scheduled transfers, newest first.
+|Consumer JWT with the `SCHEDULED_TRANSFER_LIST` policy satisfied. Transfers from a source account the caller no longer owns are left out.
+
+|GET
+|`/api/v1/scheduled-transfers/{publicId}/runs`
+|List one scheduled transfer's runs, newest first. Paged by `page` (default 0) and `size` (default 20, at most 100).
+|Consumer JWT with the `SCHEDULED_TRANSFER_LIST` policy satisfied, plus `SAVINGS_VIEW` on the source account. The scheduled transfer must be the caller's.
 |===
 
 Both request bodies carry `fromAccountId`, `toAccountId`, `amount`, `frequency` (`WEEKLY` or `MONTHLY`), `startDate`, and an optional `endDate` (ISO dates). The confirm body adds `stepUpToken` and `otp`. The initiate response (`ScheduledTransferChallengeCommandData`) returns the step-up token, its expiry, and the masked email the OTP was sent to. The confirm response (`ScheduledTransferCommandData`) returns only the scheduled transfer's `publicId`.
+
+The list returns `ScheduledTransferQueryData` items: `publicId`, `fromAccountId`, `toAccountId`, `amount`, `frequency`, `startDate`, and `endDate` (inclusive, absent when there is none). The run history returns a `ScheduledTransferRunQueryResponse` page (`content`, `page`, `size`, `totalElements`, `totalPages`) of `ScheduledTransferRunQueryData` items: `date`, `status` (`SUCCEEDED` or `FAILED`), and `amount`, which is absent on a failed run because nothing moved.
 
 == Schedule rules
 
@@ -121,6 +133,27 @@ If Fineract rejects the request, or the destination is no longer allowed, the re
 
 See xref:fineract-integration[Fineract Integration] for how the adapter pages, deletes, and reads run history, and the permissions the Fineract service account needs.
 
+[[scheduled-transfers-reads]]
+== Listing and run history
+
+Both reads live in `ScheduledTransfersQueryServiceImpl`. They start from the customer's `scheduled_transfers` rows, so only transfers set up through the BFF are ever shown: a standing instruction bank staff created on the same account, such as a loan repayment, is not. A row is matched to its Fineract instruction by `fineract_standing_instruction_id`. A row is left unlinked when confirm's outcome was unknown and nobody retried; such a row is matched by the instruction name its `publicId` determines, so an instruction Fineract did create is still shown. Either way the instruction's source account must be the row's. The query side never writes the link; only a retried confirm does.
+
+The list:
+
+. Checks the flag and authorizes `ConsumerAction.SCHEDULED_TRANSFER_LIST`.
+. Reads the customer's rows, newest first. With none, it returns an empty list without calling Fineract.
+. Checks that the caller still owns each distinct source account (`AccessPolicyEvaluator.ownsResource`) and leaves out the transfers from any it no longer owns, so one such account does not fail the whole list. With none left, it returns an empty list without calling Fineract.
+. Reads the client's standing instructions from Fineract in one paged call (`listClientStandingInstructions`) and keeps each row whose instruction is active: Fineract status `1` (active), and a `validTill` after Fineract's current date (<<fineract-today>>), not the BFF server's. Fineract leaves an instruction active after its end date, so the date is checked too. The end date returned is `validTill` minus one day.
+
+The run history:
+
+. Checks the flag and the page parameters (HTTP 400, `ScheduledTransferQueryInvalidException`, for a negative `page` or a `size` outside 1 to 100), and authorizes `SCHEDULED_TRANSFER_LIST`.
+. Looks the row up by `publicId` and the caller. Another customer's transfer answers HTTP 404 (`ScheduledTransferQueryNotFoundException`), the same as one that does not exist.
+. Authorizes `SAVINGS_VIEW` on the source account.
+. Reads the source account's run history from Fineract (`listSavingsAccountRunHistory`). Fineract cannot filter it by instruction, so the BFF keeps the runs of this transfer's instruction, newest first, and pages them.
+
+Each run is mapped to its date, its outcome, and, for a successful run, the amount moved. The date is Fineract's `executionTime`: the day the job ran, by the tenant's clock rather than its business date. The two are the same day unless a deployment runs Fineract on a business date that differs from the calendar. Fineract records `success`, `failed`, or `partial`; a partial run only happens when `allowPartialTransfer` is true, which the BFF never sets, so any other status is left out. Fineract's `errorLog` is never passed on.
+
 == Security controls
 
 Mechanisms are documented centrally; see xref:abac[Attribute-Based Access Control (ABAC)], xref:step-up[Step-Up Authentication], and xref:idempotency[Idempotency].
@@ -130,15 +163,19 @@ Mechanisms are documented centrally; see xref:abac[Attribute-Based Access Contro
 |Control |Applies to |As implemented
 
 |Authentication
-|Both endpoints
-|`/api/v1/scheduled-transfers/**` requires an authenticated JWT. Cucumber asserts the unauthenticated denial.
+|All endpoints
+|`/api/v1/scheduled-transfers/**` requires an authenticated JWT. Cucumber asserts the unauthenticated denial for the create and list endpoints.
 
 |ABAC ownership
-|Both endpoints
+|`/initiate`, `/confirm`
 |`AccessPolicyEvaluator.authorize(jwt, SCHEDULED_TRANSFER_CREATE, fromAccountId, ...)`. The policy requires the `consumer:full` scope (open banking tokens are denied), a true `kyc_verified` claim, and ownership of the source savings account. A denial returns HTTP 403 (`ScheduledTransferAccessDeniedException`) and publishes an `ACCESS_DENIED` audit event.
 
+|ABAC on reads
+|`GET` endpoints
+|`AccessPolicyEvaluator.authorize(jwt, SCHEDULED_TRANSFER_LIST)`, an unowned policy requiring the `consumer:full` scope and a true `kyc_verified` claim, then, for the run history, `SAVINGS_VIEW` on the source account (HTTP 403, `ScheduledTransferQueryAccessDeniedException`). The list checks ownership of each source account instead and leaves out the transfers from any the caller no longer owns. The run history also requires the scheduled transfer to be the caller's (HTTP 404 otherwise).
+
 |Destination policy
-|Both endpoints
+|`/initiate`, `/confirm`
 |A registered savings beneficiary's `transferLimit` is enforced (HTTP 403 above it). With no beneficiary match, the customer must own the destination (HTTP 403 otherwise). Checked at initiate, at confirm, and again after the reservation.
 
 |Step-up authentication
@@ -150,7 +187,7 @@ Mechanisms are documented centrally; see xref:abac[Attribute-Based Access Contro
 |`Idempotency-Key` header mandatory and validated by `IdempotencyKeyPolicyEvaluator`. The derived key is unique in `scheduled_transfers`, so a retry returns the same `publicId` and Fineract is asked to create the instruction at most once per key.
 
 |Secret hygiene
-|Both endpoints
+|`/initiate`, `/confirm`
 |Request bodies and `ScheduledTransferChallengeCommandData` use `@ToString(onlyExplicitlyIncluded = true)`, so the OTP and step-up token never reach a log. The initiate response masks the email address.
 |===
 
@@ -166,7 +203,7 @@ The `scheduled_transfers` table (changeset `scheduledtransfers/010-create-schedu
 * `claimed_until`, set while a confirm is working on the unlinked row and cleared when it is linked or the outcome is unknown. A claim left by a confirm that died lapses after five minutes.
 * `created_at` and `updated_at`.
 
-The schedule itself (amount, frequency, dates) is not copied into the BFF: Fineract is the system of record and holds it on the instruction.
+The schedule itself (amount, frequency, dates) is not copied into the BFF: Fineract is the system of record and holds it on the instruction. The query side maps the same table read-only as `scheduledtransfers.query.domain.ScheduledTransferQueryEntity`.
 
 == Audit
 
@@ -175,7 +212,8 @@ The schedule itself (amount, frequency, dates) is not copied into the BFF: Finer
 == Testing coverage
 
 * Unit: `ScheduledTransfersCommandServiceImplTest` covers the flag rejecting both commands before any check, source authorization, OTP purpose and step-up binding, every schedule rule, beneficiary limit (above and equal), unowned destinations, mismatched currencies, a step-up mismatch reserving nothing, monthly and weekly request mapping including the inclusive end date, reservation before the Fineract call and key forwarding, linking with its audit event, retries returning the linked row without calling Fineract, the reservation released on a rejection or a lost destination but kept on an unknown outcome with its claim given up, a new row claimed until it is linked, HTTP 425 while another confirm with the same key holds the row (also when it reserved first), and a retry after an unknown outcome claiming the kept row and linking it. `ScheduledTransfersCommandControllerTest` covers header threading and a malformed idempotency key.
-* Cucumber: `scheduledtransfers.feature` (glue in `cucumber.steps.ScheduledTransfersSteps`) creates a weekly instruction between the customer's own accounts, a monthly one to a beneficiary, and a monthly one starting on the 31st, checking each through Fineract's standing instruction list; rejects an amount above the beneficiary limit, an unregistered destination, another client's source account, and a start date in the past; checks that a retried confirm with the same key creates one instruction; and asserts the unauthenticated denial.
+* Unit: `ScheduledTransfersQueryServiceImplTest` covers the flag rejecting both reads before any check, the list action authorized first, no Fineract call without rows, ownership checked once per source account and an unowned one leaving out only its transfers, weekly and monthly mapping including the inclusive end date, leaving out deleted, disabled, ended, and bank-created instructions, the newest-first order, an unlinked row matched by name but not on another source account, invalid page parameters, another customer's transfer not found, only the transfer's own runs newest first with no amount on a failed run, statuses the BFF never creates left out, paging, and upstream failures. `ScheduledTransfersQueryControllerTest` covers parameter threading.
+* Cucumber: `scheduledtransfers.feature` (glue in `cucumber.steps.ScheduledTransfersSteps`) creates a weekly instruction between the customer's own accounts, a monthly one to a beneficiary, and a monthly one starting on the 31st, checking each through Fineract's standing instruction list; rejects an amount above the beneficiary limit, an unregistered destination, another client's source account, and a start date in the past; checks that a retried confirm with the same key creates one instruction; and asserts the unauthenticated denial. For reads, it lists a transfer the customer set up, leaves out an instruction bank staff created on the customer's account next to one the customer set up, leaves out a transfer whose source account the customer no longer owns while its run history answers 403, hides another customer's transfer from the list and its run history, and asserts the unauthenticated denial. One scenario sets up an affordable and an unaffordable transfer, has Fineract run them (see xref:build-and-test-cucumber-runs[Scenarios that need a standing instruction run]), and checks a successful run, a failed run with no amount, and that only the affordable amount arrived. Another schedules a monthly transfer on the 31st of a month followed by a shorter one, has Fineract run the instructions due on the last day of that shorter month, and checks that it ran there once. The runs are dated today, not on the moved business date, because Fineract dates a run by its own clock.
 
 == Design rationale
 
@@ -188,8 +226,10 @@ Weekly and monthly every period cover the common recurring payments (rent, savin
 [[scheduled-transfers-limitations]]
 == Limitations and future work
 
-* *Create only.* Customers cannot yet list their scheduled transfers, see run history, or cancel one through the BFF; staff manage them in the Fineract back office.
+* *No cancel yet.* Customers cannot cancel a scheduled transfer through the BFF; staff do so in the Fineract back office.
+* *Active transfers only.* The list leaves out cancelled, disabled, and ended transfers. Their run history stays readable by `publicId`.
+* *Run history is read whole.* Fineract cannot filter run history by instruction, so each request reads every run from the source account and pages in the BFF. The cost grows with the account's run count, including runs of other instructions on it.
 * *A beneficiary can be removed, or its limit lowered, while a scheduled transfer to it is active.* The instruction keeps running in Fineract.
-* *An unknown outcome nobody retries leaves an unlinked row.* If confirm fails with HTTP 425 or 502 and the customer never retries with the same key, the row stays unlinked even if Fineract created the instruction, which then runs. Its name carries the row's `publicId`, so the two can be matched.
+* *An unknown outcome nobody retries leaves an unlinked row.* If confirm fails with HTTP 425 or 502 and the customer never retries with the same key, the row stays unlinked even if Fineract created the instruction, which then runs. The list and run history still find it by the name its `publicId` determines (see <<scheduled-transfers-reads>>), but only a retried confirm writes the link.
 * *Savings to savings only.* No loan repayments, no one-off future-dated transfers, and no partial transfers.
 * *The OTP channel is email.*
