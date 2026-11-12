@@ -30,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractDepositTypes;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.AccountTransferData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetAccountTransfersPageItems;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetAccountTransfersPageItemsToAccountType;
@@ -96,7 +97,12 @@ public class TransfersQueryServiceImpl implements TransfersQueryService {
         if (accounts == null || accounts.getSavingsAccounts() == null) {
             return legsByTransferId;
         }
-        for (GetClientsSavingsAccounts account : accounts.getSavingsAccounts()) {
+        // Skip fixed and recurring deposits before authorizing: they are outside the ownership set (#253),
+        // so a SAVINGS_VIEW check on one would deny the whole history.
+        List<GetClientsSavingsAccounts> savingsAccounts = accounts.getSavingsAccounts().stream()
+                .filter(FineractDepositTypes::isPlainSavings)
+                .toList();
+        for (GetClientsSavingsAccounts account : savingsAccounts) {
             Long accountId = account.getId();
             accessPolicyEvaluator.authorize(jwt, ConsumerAction.SAVINGS_VIEW, accountId,
                     TransferQueryAccessDeniedException::new);

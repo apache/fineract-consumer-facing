@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.consumer.infrastructure.access.data.OwnedAccounts;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractDepositTypes;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccounts;
@@ -109,7 +110,9 @@ public class OwnedAccountsCache {
         if (accounts == null || accounts.getSavingsAccounts() == null) {
             return Set.of();
         }
+        // Fixed and recurring deposits are excluded, so savings-scoped ABAC checks deny them.
         return accounts.getSavingsAccounts().stream()
+                .filter(FineractDepositTypes::isPlainSavings)
                 .map(GetClientsSavingsAccounts::getId)
                 .collect(Collectors.toSet());
     }

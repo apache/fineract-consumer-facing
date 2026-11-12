@@ -33,10 +33,12 @@ import java.util.List;
 import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractDepositTypes;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetChargesCurrencyResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsCurrency;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsDepositType;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsStatus;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSavingsAccountTransactionsPageItem;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSavingsAccountsSavingsAccountIdChargesResponse;
@@ -77,6 +79,8 @@ class SavingsQueryServiceImplTest {
     private static final String SORT_BY_AMOUNT = "amount";
     private static final String SORT_ORDER_DESC = "desc";
     private static final Long TOTAL_ELEMENTS = 45L;
+    private static final long FIXED_DEPOSIT_TYPE_ID = 200L;
+    private static final long RECURRING_DEPOSIT_TYPE_ID = 300L;
 
     @Mock
     private SavingsFineractClient savingsFineractClient;
@@ -89,6 +93,10 @@ class SavingsQueryServiceImplTest {
 
     @InjectMocks
     private SavingsQueryServiceImpl service;
+
+    private static GetClientsSavingsAccountsDepositType depositType(long id) {
+        return new GetClientsSavingsAccountsDepositType().id(id);
+    }
 
     private static Jwt jwt() {
         return Jwt.withTokenValue("token")
@@ -106,6 +114,7 @@ class SavingsQueryServiceImplTest {
                 .id(42L)
                 .accountNo(ACCOUNT_NO)
                 .productName(PRODUCT_NAME)
+                .depositType(depositType(FineractDepositTypes.SAVINGS_DEPOSIT_TYPE_ID))
                 .status(new GetClientsSavingsAccountsStatus().code(STATUS_ACTIVE).active(true))
                 .currency(new GetClientsSavingsAccountsCurrency().code(CURRENCY_CODE));
         when(savingsFineractClient.listClientSavingsAccounts(CLIENT_ID))
@@ -122,6 +131,22 @@ class SavingsQueryServiceImplTest {
         assertThat(item.isActive()).isTrue();
         assertThat(item.getCurrency()).isEqualTo(CURRENCY_CODE);
         verify(accessPolicyEvaluator).authorize(jwt, ConsumerAction.SAVINGS_LIST);
+    }
+
+    @Test
+    void listAccountsExcludesFixedRecurringAndUntypedDeposits() {
+        Jwt jwt = jwt();
+        when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
+        when(savingsFineractClient.listClientSavingsAccounts(CLIENT_ID)).thenReturn(List.of(
+                new GetClientsSavingsAccounts().id(1L).depositType(depositType(FineractDepositTypes.SAVINGS_DEPOSIT_TYPE_ID)),
+                new GetClientsSavingsAccounts().id(2L).depositType(depositType(FIXED_DEPOSIT_TYPE_ID)),
+                new GetClientsSavingsAccounts().id(3L).depositType(depositType(RECURRING_DEPOSIT_TYPE_ID)),
+                new GetClientsSavingsAccounts().id(4L),
+                new GetClientsSavingsAccounts().id(5L).depositType(new GetClientsSavingsAccountsDepositType())));
+
+        List<SavingsAccountListItemQueryData> result = service.listAccounts(jwt);
+
+        assertThat(result).extracting(SavingsAccountListItemQueryData::getId).containsExactly(1L);
     }
 
     @Test
