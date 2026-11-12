@@ -21,11 +21,15 @@ package org.apache.fineract.consumer.scheduledtransfers.command.api;
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.idempotency.service.IdempotencyKeyPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.web.data.ConsumerHeaders;
+import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmCancelScheduledTransferCommand;
+import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmCancelScheduledTransferCommandRequest;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmScheduledTransferCommandRequest;
+import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateCancelScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateScheduledTransferCommandRequest;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ScheduledTransferChallengeCommandData;
@@ -35,6 +39,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -87,5 +92,38 @@ public class ScheduledTransfersCommandController {
                 .idempotencyKey(idempotencyKey)
                 .build();
         return ResponseEntity.ok(scheduledTransfersCommandService.confirm(jwt, command));
+    }
+
+    @Operation(operationId = "initiateCancelScheduledTransfer")
+    @PostMapping("/{publicId}/cancel/initiate")
+    public ResponseEntity<ScheduledTransferChallengeCommandData> initiateCancel(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(ConsumerHeaders.DEVICE_FINGERPRINT) String deviceFingerprint,
+            @PathVariable UUID publicId) {
+        InitiateCancelScheduledTransferCommand command = InitiateCancelScheduledTransferCommand.builder()
+                .publicId(publicId)
+                .deviceFingerprint(deviceFingerprint)
+                .build();
+        return ResponseEntity.ok(scheduledTransfersCommandService.initiateCancel(jwt, command));
+    }
+
+    @Operation(operationId = "confirmCancelScheduledTransfer")
+    @PostMapping("/{publicId}/cancel/confirm")
+    public ResponseEntity<Void> confirmCancel(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(ConsumerHeaders.DEVICE_FINGERPRINT) String deviceFingerprint,
+            @RequestHeader(ConsumerHeaders.IDEMPOTENCY_KEY) String idempotencyKey,
+            @PathVariable UUID publicId,
+            @Valid @RequestBody ConfirmCancelScheduledTransferCommandRequest request) {
+        IdempotencyKeyPolicyEvaluator.validate(idempotencyKey);
+        ConfirmCancelScheduledTransferCommand command = ConfirmCancelScheduledTransferCommand.builder()
+                .publicId(publicId)
+                .stepUpToken(request.getStepUpToken())
+                .otp(request.getOtp())
+                .deviceFingerprint(deviceFingerprint)
+                .idempotencyKey(idempotencyKey)
+                .build();
+        scheduledTransfersCommandService.confirmCancel(jwt, command);
+        return ResponseEntity.noContent().build();
     }
 }

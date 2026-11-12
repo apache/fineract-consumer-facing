@@ -24,11 +24,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryQueryData;
 import org.apache.fineract.consumer.beneficiaries.query.service.BeneficiariesQueryService;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
@@ -36,6 +39,10 @@ import org.apache.fineract.consumer.infrastructure.access.data.ResourceType;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.audit.data.AuditEventType;
 import org.apache.fineract.consumer.infrastructure.audit.data.TransactionalAuditEvent;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetFromAccountStandingInstructionSwagger;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetPageItemsStandingInstructionSwagger;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetStandingInstructionsStandingInstructionIdResponse;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetStatusStandingInstructionSwagger;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.StandingInstructionCreationRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.BusinessDateFineractClient;
@@ -54,7 +61,9 @@ import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
 import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
 import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
 import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
+import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmCancelScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmScheduledTransferCommand;
+import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateCancelScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ScheduledTransferChallengeCommandData;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ScheduledTransferCommandData;
@@ -147,20 +156,9 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
         requireDestinationAllowed(jwt, user.getId(), command.getToAccountId(), command.getAmount());
         resolveDestinationClientId(command.getFromAccountId(), command.getToAccountId());
 
-        otpService.createOtp(publicId, OtpPurpose.SCHEDULED_TRANSFER, OtpDestination.builder()
-                .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
-                .target(user.getEmail())
-                .build());
         String actionFingerprint = createActionFingerprint(command.getFromAccountId(), command.getToAccountId(),
                 command.getFrequency(), command.getAmount(), command.getStartDate(), command.getEndDate());
-        IssuedJwt issued = stepUpTokenService.issue(
-                publicId, command.getDeviceFingerprint(), actionFingerprint, StepUpConstants.STEPUP_TTL);
-
-        return ScheduledTransferChallengeCommandData.builder()
-                .stepUpToken(issued.getTokenValue())
-                .expiresAt(issued.getExpiresAt())
-                .sentTo(EmailMaskingService.mask(user.getEmail()))
-                .build();
+        return challenge(publicId, user, command.getDeviceFingerprint(), actionFingerprint);
     }
 
     @Override
@@ -209,9 +207,137 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
         return toCommandData(linked);
     }
 
+    @Override
+    public ScheduledTransferChallengeCommandData initiateCancel(Jwt jwt,
+            InitiateCancelScheduledTransferCommand command) {
+        requireEnabled();
+        UUID publicId = publicId(jwt);
+        UserQueryData user = userQueryService.findByPublicId(publicId);
+        ScheduledTransfer transfer = ownedTransfer(jwt, user.getId(), command.getPublicId());
+        instructionToCancel(transfer, user.getFineractClientId());
+        return challenge(publicId, user, command.getDeviceFingerprint(),
+                cancelActionFingerprint(command.getPublicId()));
+    }
+
+    /**
+     * Cancelling is idempotent: a transfer whose instruction is already deleted, by an earlier cancel whose response
+     * was lost or by bank staff, is not deleted again, since Fineract would rename it a second time.
+     */
+    @Override
+    public void confirmCancel(Jwt jwt, ConfirmCancelScheduledTransferCommand command) {
+        requireEnabled();
+        UUID publicId = publicId(jwt);
+        if (!stepUpTokenService.verify(command.getStepUpToken(), publicId, command.getDeviceFingerprint(),
+                cancelActionFingerprint(command.getPublicId()))) {
+            throw new ScheduledTransferStepUpInvalidException();
+        }
+        otpService.validateOtp(publicId, OtpPurpose.SCHEDULED_TRANSFER, command.getOtp(),
+                ScheduledTransferStepUpInvalidException::new);
+
+        UserQueryData user = userQueryService.findByPublicId(publicId);
+        ScheduledTransfer transfer = ownedTransfer(jwt, user.getId(), command.getPublicId());
+        Instruction instruction = instructionToCancel(transfer, user.getFineractClientId());
+        if (!transfer.isLinked()) {
+            linkFound(transfer.getId(), instruction.getId());
+        }
+        if (!instruction.isDeleted()) {
+            deleteInstruction(instruction.getId(), IdempotencyKeyDeriver.derive(publicId, command.getIdempotencyKey()));
+        }
+        transactionTemplate.executeWithoutResult(status -> eventPublisher.publishEvent(TransactionalAuditEvent.of(
+                AuditEventType.SCHEDULED_TRANSFER_CANCELLED, transfer.getUserId(), false,
+                command.getDeviceFingerprint(), Map.of(AUDIT_DETAIL_PUBLIC_ID, transfer.getPublicId().toString()))));
+    }
+
     private void requireEnabled() {
         if (!enabled) {
             throw new ScheduledTransferDisabledException();
+        }
+    }
+
+    private ScheduledTransferChallengeCommandData challenge(UUID publicId, UserQueryData user,
+            String deviceFingerprint, String actionFingerprint) {
+        otpService.createOtp(publicId, OtpPurpose.SCHEDULED_TRANSFER, OtpDestination.builder()
+                .deliveryMethod(OtpConstants.EMAIL_DELIVERY_METHOD_NAME)
+                .target(user.getEmail())
+                .build());
+        IssuedJwt issued =
+                stepUpTokenService.issue(publicId, deviceFingerprint, actionFingerprint, StepUpConstants.STEPUP_TTL);
+        return ScheduledTransferChallengeCommandData.builder()
+                .stepUpToken(issued.getTokenValue())
+                .expiresAt(issued.getExpiresAt())
+                .sentTo(EmailMaskingService.mask(user.getEmail()))
+                .build();
+    }
+
+    /**
+     * The caller's scheduled transfer. Another customer's is reported as missing, so its existence is not revealed.
+     * Cancelling needs the source account still to be the caller's, as setting one up does.
+     */
+    private ScheduledTransfer ownedTransfer(Jwt jwt, Long userId, UUID scheduledTransferPublicId) {
+        Optional<ScheduledTransfer> found = transactionTemplate.execute(status ->
+                scheduledTransferCommandRepository.findByPublicIdAndUserId(scheduledTransferPublicId, userId));
+        if (found == null || found.isEmpty()) {
+            throw new ScheduledTransferNotFoundException();
+        }
+        ScheduledTransfer transfer = found.get();
+        accessPolicyEvaluator.authorize(jwt, ConsumerAction.SCHEDULED_TRANSFER_CANCEL,
+                transfer.getFineractFromAccountId(), ScheduledTransferAccessDeniedException::new);
+        return transfer;
+    }
+
+    /**
+     * The Fineract instruction a row stands for. A linked row names it by id. A row stays unlinked when confirm's
+     * outcome was unknown and nobody retried; Fineract may still have created the instruction, under the name derived
+     * from the row's publicId, so it is matched by name, as the list does. Either way the instruction must debit the
+     * row's source account. A row a confirm is still working on cannot be cancelled yet.
+     */
+    private Instruction instructionToCancel(ScheduledTransfer transfer, Long clientId) {
+        if (transfer.isLinked()) {
+            Long linkedId = transfer.getFineractStandingInstructionId();
+            GetStandingInstructionsStandingInstructionIdResponse instruction =
+                    call(() -> standingInstructionFineractClient.getStandingInstruction(linkedId));
+            if (instruction == null || !debitsSourceAccount(transfer, instruction.getFromAccount())) {
+                throw new ScheduledTransferNotFoundException();
+            }
+            return new Instruction(linkedId, isDeleted(instruction.getStatus()));
+        }
+        if (transfer.getClaimedUntil() != null && transfer.getClaimedUntil().isAfter(Instant.now())) {
+            throw new ScheduledTransferInProgressException(
+                    new IllegalStateException("a confirm setting up this transfer is in progress"));
+        }
+        String name = ScheduledTransferConstants.INSTRUCTION_NAME_PREFIX + transfer.getPublicId();
+        List<GetPageItemsStandingInstructionSwagger> instructions =
+                call(() -> standingInstructionFineractClient.listClientStandingInstructions(clientId));
+        GetPageItemsStandingInstructionSwagger instruction = instructions.stream()
+                .filter(candidate -> name.equals(candidate.getName())
+                        && debitsSourceAccount(transfer, candidate.getFromAccount()))
+                .findFirst()
+                .orElseThrow(ScheduledTransferNotFoundException::new);
+        return new Instruction(instruction.getId(), isDeleted(instruction.getStatus()));
+    }
+
+    /**
+     * Links a row found unlinked before its instruction is deleted: Fineract renames an instruction it deletes, so the
+     * name would no longer find it, and its run history would be lost. A confirm that claimed the row meanwhile wins.
+     */
+    private void linkFound(Long scheduledTransferId, Long standingInstructionId) {
+        Integer linked = transactionTemplate.execute(status -> scheduledTransferCommandRepository
+                .linkUnclaimed(scheduledTransferId, standingInstructionId, Instant.now()));
+        if (linked == null || linked == 0) {
+            throw new ScheduledTransferInProgressException(
+                    new IllegalStateException("a confirm setting up this transfer is in progress"));
+        }
+    }
+
+    private void deleteInstruction(Long standingInstructionId, DerivedIdempotencyKey key) {
+        idempotencyKeyHolder.set(key);
+        try {
+            callWrite(() -> {
+                standingInstructionFineractClient.deleteStandingInstruction(standingInstructionId);
+                return null;
+            });
+        } finally {
+            idempotencyKeyHolder.clear();
         }
     }
 
@@ -383,6 +509,21 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
                 endDate == null ? "" : endDate.toString());
     }
 
+    private String cancelActionFingerprint(UUID scheduledTransferPublicId) {
+        return stepUpTokenService.actionFingerprint(
+                ScheduledTransferConstants.CANCEL_ACTION_ID, scheduledTransferPublicId.toString());
+    }
+
+    private static boolean debitsSourceAccount(ScheduledTransfer transfer,
+            GetFromAccountStandingInstructionSwagger fromAccount) {
+        return fromAccount != null && transfer.getFineractFromAccountId().equals(fromAccount.getId());
+    }
+
+    private static boolean isDeleted(GetStatusStandingInstructionSwagger status) {
+        return status != null && status.getId() != null
+                && status.getId() == ScheduledTransferConstants.DELETED_STATUS_ID;
+    }
+
     private static ScheduledTransferCommandData toCommandData(ScheduledTransfer transfer) {
         return ScheduledTransferCommandData.builder().publicId(transfer.getPublicId()).build();
     }
@@ -408,5 +549,14 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
                 ScheduledTransferInvalidException::new,
                 ScheduledTransferInProgressException::new,
                 ScheduledTransferUpstreamUnavailableException::new);
+    }
+
+    /** What cancelling needs of an instruction: its id and whether Fineract has deleted it. */
+    @Getter
+    @RequiredArgsConstructor
+    private static final class Instruction {
+
+        private final Long id;
+        private final boolean deleted;
     }
 }

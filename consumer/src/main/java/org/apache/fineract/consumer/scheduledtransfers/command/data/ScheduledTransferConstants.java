@@ -25,6 +25,7 @@ public final class ScheduledTransferConstants {
     }
 
     public static final String CREATE_ACTION_ID = "scheduled-transfers:create";
+    public static final String CANCEL_ACTION_ID = "scheduled-transfers:cancel";
 
     public static final String LOCALE = "en";
     public static final String DATE_FORMAT = "yyyy-MM-dd";
@@ -37,6 +38,7 @@ public final class ScheduledTransferConstants {
     public static final String SAVINGS_ACCOUNT_TYPE = "2";
     public static final String ACCOUNT_TRANSFER_TYPE = "1";
     public static final String ACTIVE_STATUS = "1";
+    public static final int DELETED_STATUS_ID = 3;
     public static final String FIXED_INSTRUCTION_TYPE = "1";
     public static final String PERIODIC_RECURRENCE_TYPE = "1";
     public static final String WEEKS_FREQUENCY = "1";

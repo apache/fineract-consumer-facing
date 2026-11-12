@@ -118,6 +118,7 @@ The choice between the two payloads is about transactions:
 |`CONSENT_DENIED` |WARN |no |`OAuth2ConsentDecisionCustomizer`
 |`CONSENT_REVOKED` |INFO |no |`OpenBankingConsentCommandServiceImpl`
 |`SCHEDULED_TRANSFER_CREATED` |INFO |no |`ScheduledTransfersCommandServiceImpl` (scheduled transfer `publicId` in details)
+|`SCHEDULED_TRANSFER_CANCELLED` |INFO |no |`ScheduledTransfersCommandServiceImpl` (scheduled transfer `publicId` in details)
 |===
 
 === Separation from application logs

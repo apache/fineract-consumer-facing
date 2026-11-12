@@ -30,8 +30,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.idempotency.exception.IdempotencyKeyMalformedException;
+import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmCancelScheduledTransferCommand;
+import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmCancelScheduledTransferCommandRequest;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ConfirmScheduledTransferCommandRequest;
+import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateCancelScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateScheduledTransferCommand;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.InitiateScheduledTransferCommandRequest;
 import org.apache.fineract.consumer.scheduledtransfers.command.data.ScheduledTransferChallengeCommandData;
@@ -44,6 +47,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,6 +64,7 @@ class ScheduledTransfersCommandControllerTest {
     private static final BigDecimal AMOUNT = new BigDecimal("25.50");
     private static final LocalDate START = LocalDate.of(2027, 1, 31);
     private static final LocalDate END = LocalDate.of(2027, 5, 31);
+    private static final UUID TRANSFER_PUBLIC_ID = UUID.fromString("3f2c8a1e-0000-4000-8000-0000000000aa");
 
     @Mock
     private ScheduledTransfersCommandService service;
@@ -116,6 +122,49 @@ class ScheduledTransfersCommandControllerTest {
                 .isInstanceOf(IdempotencyKeyMalformedException.class)
                 .hasFieldOrPropertyWithValue("code", IdempotencyKeyMalformedException.CODE);
         verifyNoInteractions(service);
+    }
+
+    @Test
+    void initiateCancelThreadsTheTransferAndDeviceIntoTheCommand() {
+        when(service.initiateCancel(any(), any())).thenReturn(ScheduledTransferChallengeCommandData.builder().build());
+
+        controller.initiateCancel(jwt(), DEVICE_FINGERPRINT, TRANSFER_PUBLIC_ID);
+
+        ArgumentCaptor<InitiateCancelScheduledTransferCommand> command =
+                ArgumentCaptor.forClass(InitiateCancelScheduledTransferCommand.class);
+        verify(service).initiateCancel(any(), command.capture());
+        assertThat(command.getValue().getPublicId()).isEqualTo(TRANSFER_PUBLIC_ID);
+        assertThat(command.getValue().getDeviceFingerprint()).isEqualTo(DEVICE_FINGERPRINT);
+    }
+
+    @Test
+    void confirmCancelThreadsHeadersIntoTheCommandAndAnswersNoContent() {
+        ResponseEntity<Void> response =
+                controller.confirmCancel(jwt(), DEVICE_FINGERPRINT, IDEMPOTENCY_KEY, TRANSFER_PUBLIC_ID,
+                        confirmCancelRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        ArgumentCaptor<ConfirmCancelScheduledTransferCommand> command =
+                ArgumentCaptor.forClass(ConfirmCancelScheduledTransferCommand.class);
+        verify(service).confirmCancel(any(), command.capture());
+        ConfirmCancelScheduledTransferCommand sent = command.getValue();
+        assertThat(sent.getPublicId()).isEqualTo(TRANSFER_PUBLIC_ID);
+        assertThat(sent.getIdempotencyKey()).isEqualTo(IDEMPOTENCY_KEY);
+        assertThat(sent.getDeviceFingerprint()).isEqualTo(DEVICE_FINGERPRINT);
+        assertThat(sent.getStepUpToken()).isEqualTo(STEP_UP_TOKEN);
+        assertThat(sent.getOtp()).isEqualTo(OTP);
+    }
+
+    @Test
+    void confirmCancelRejectsAMalformedIdempotencyKey() {
+        assertThatThrownBy(() -> controller.confirmCancel(jwt(), DEVICE_FINGERPRINT, "not visible ascii",
+                TRANSFER_PUBLIC_ID, confirmCancelRequest()))
+                .isInstanceOf(IdempotencyKeyMalformedException.class);
+        verifyNoInteractions(service);
+    }
+
+    private static ConfirmCancelScheduledTransferCommandRequest confirmCancelRequest() {
+        return ConfirmCancelScheduledTransferCommandRequest.builder().stepUpToken(STEP_UP_TOKEN).otp(OTP).build();
     }
 
     private static ConfirmScheduledTransferCommandRequest confirmRequest() {

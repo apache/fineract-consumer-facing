@@ -153,6 +153,8 @@ Every endpoint answers HTTP 404 unless `consumer.scheduled-transfers.enabled` is
 |POST |`/api/v1/scheduled-transfers/confirm` |Confirm with the OTP and create the Fineract standing instruction
 |GET |`/api/v1/scheduled-transfers` |List the user's active scheduled transfers
 |GET |`/api/v1/scheduled-transfers/{publicId}/runs` |List one scheduled transfer's runs (paginated)
+|POST |`/api/v1/scheduled-transfers/{publicId}/cancel/initiate` |Start cancelling a scheduled transfer; issues a step-up OTP challenge
+|POST |`/api/v1/scheduled-transfers/{publicId}/cancel/confirm` |Confirm with the OTP and delete the Fineract standing instruction
 |===
 
 === Beneficiaries

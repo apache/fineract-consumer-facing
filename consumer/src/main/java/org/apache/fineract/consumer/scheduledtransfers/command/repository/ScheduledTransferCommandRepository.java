@@ -21,6 +21,7 @@ package org.apache.fineract.consumer.scheduledtransfers.command.repository;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import org.apache.fineract.consumer.scheduledtransfers.command.domain.ScheduledTransfer;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -30,6 +31,8 @@ import org.springframework.data.repository.query.Param;
 public interface ScheduledTransferCommandRepository extends JpaRepository<ScheduledTransfer, Long> {
 
     Optional<ScheduledTransfer> findByIdempotencyKey(String idempotencyKey);
+
+    Optional<ScheduledTransfer> findByPublicIdAndUserId(UUID publicId, Long userId);
 
     /**
      * Claims an unlinked row whose claim is absent or has lapsed, in one statement, so of two confirms only one
@@ -46,4 +49,18 @@ public interface ScheduledTransferCommandRepository extends JpaRepository<Schedu
     @Modifying
     @Query("UPDATE ScheduledTransfer t SET t.claimedUntil = NULL WHERE t.id = :id")
     int releaseClaim(@Param("id") Long id);
+
+    /**
+     * Links an unlinked row no confirm is working on, in one statement, so it cannot race a confirm claiming the same
+     * row. Returns the number of rows linked: 1 or 0.
+     */
+    @Modifying
+    @Query("""
+            UPDATE ScheduledTransfer t
+            SET t.fineractStandingInstructionId = :standingInstructionId, t.claimedUntil = NULL, t.updatedAt = :now
+            WHERE t.id = :id AND t.fineractStandingInstructionId IS NULL
+              AND (t.claimedUntil IS NULL OR t.claimedUntil < :now)
+            """)
+    int linkUnclaimed(@Param("id") Long id, @Param("standingInstructionId") Long standingInstructionId,
+            @Param("now") Instant now);
 }

@@ -27,6 +27,6 @@ public class ScheduledTransferNotFoundException extends AbstractConsumerExceptio
     public static final String CODE = "error.msg.consumer.scheduledtransfers.command.not.found";
 
     public ScheduledTransferNotFoundException() {
-        super(HttpStatus.NOT_FOUND, CODE, "transfer account not found");
+        super(HttpStatus.NOT_FOUND, CODE, "scheduled transfer or account not found");
     }
 }
