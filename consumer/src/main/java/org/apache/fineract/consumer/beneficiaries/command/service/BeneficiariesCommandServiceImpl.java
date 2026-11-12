@@ -36,7 +36,9 @@ import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryLimitBelowScheduledTransferException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryScheduledTransferActiveException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiarySelfAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryStepUpInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryUpstreamUnavailableException;
@@ -85,6 +87,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     private final StepUpTokenService stepUpTokenService;
     private final BeneficiaryCommandRepository beneficiaryCommandRepository;
     private final BeneficiariesFineractClient beneficiariesFineractClient;
+    private final BeneficiaryScheduledTransferLookupPort scheduledTransferLookupPort;
 
     @Override
     @Transactional(readOnly = true)
@@ -142,6 +145,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         UserQueryData user = userQueryService.findByPublicId(publicId);
         Beneficiary beneficiary = requireOwnedActive(command.getPublicId(), user.getId());
         requireNameAvailableForUpdate(user.getId(), command.getName(), beneficiary);
+        requireLimitCoversScheduledTransfers(user, beneficiary, command.getTransferLimit());
 
         sendOtp(publicId, user);
         IssuedJwt issued = stepUpTokenService.issue(publicId, command.getDeviceFingerprint(),
@@ -164,8 +168,9 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         validateOtp(publicId, command.getOtp());
 
         UserQueryData user = userQueryService.findByPublicId(publicId);
-        Beneficiary beneficiary = requireOwnedActive(command.getPublicId(), user.getId());
+        Beneficiary beneficiary = requireOwnedActiveLocked(command.getPublicId(), user.getId());
         requireNameAvailableForUpdate(user.getId(), command.getName(), beneficiary);
+        requireLimitCoversScheduledTransfers(user, beneficiary, command.getTransferLimit());
 
         beneficiary.update(command.getName(), command.getTransferLimit());
         persist(beneficiary);
@@ -177,7 +182,11 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     public void delete(Jwt jwt, UUID publicId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_DELETE);
         UserQueryData user = userQueryService.findByPublicId(publicId(jwt));
-        Beneficiary beneficiary = requireOwnedActive(publicId, user.getId());
+        Beneficiary beneficiary = requireOwnedActiveLocked(publicId, user.getId());
+        if (guard(() -> scheduledTransferLookupPort.hasActiveTransfersTo(
+                user.getId(), user.getFineractClientId(), beneficiary.getFineractAccountId()))) {
+            throw new BeneficiaryScheduledTransferActiveException();
+        }
         beneficiary.deactivate();
         beneficiaryCommandRepository.save(beneficiary);
     }
@@ -222,6 +231,31 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     private Beneficiary requireOwnedActive(UUID beneficiaryPublicId, Long userId) {
         return beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(beneficiaryPublicId, userId)
                 .orElseThrow(BeneficiaryNotFoundException::new);
+    }
+
+    /**
+     * Locks the beneficiary until the transaction ends, so a scheduled transfer confirm to it either waits for this
+     * change or is seen by the scheduled transfer check that follows.
+     */
+    private Beneficiary requireOwnedActiveLocked(UUID beneficiaryPublicId, Long userId) {
+        return beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(beneficiaryPublicId, userId)
+                .orElseThrow(BeneficiaryNotFoundException::new);
+    }
+
+    /**
+     * Fineract keeps running a standing instruction whatever happens to the beneficiary, so a limit is not lowered
+     * below an active scheduled transfer's amount. A limit that stays, rises, or is removed needs no check.
+     */
+    private void requireLimitCoversScheduledTransfers(UserQueryData user, Beneficiary beneficiary,
+            BigDecimal newLimit) {
+        BigDecimal currentLimit = beneficiary.getTransferLimit();
+        if (newLimit == null || (currentLimit != null && newLimit.compareTo(currentLimit) >= 0)) {
+            return;
+        }
+        if (guard(() -> scheduledTransferLookupPort.hasActiveTransfersAbove(
+                user.getId(), user.getFineractClientId(), beneficiary.getFineractAccountId(), newLimit))) {
+            throw new BeneficiaryLimitBelowScheduledTransferException();
+        }
     }
 
     private static void requireNotOwnAccount(ResolvedBeneficiaryAccountCommandData resolved, UserQueryData user) {
@@ -305,6 +339,14 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
 
     private static UUID publicId(Jwt jwt) {
         return UUID.fromString(jwt.getSubject());
+    }
+
+    /** The scheduled transfer check fails closed: if Fineract cannot answer, the change is not made. */
+    private static boolean guard(Supplier<Boolean> check) {
+        return FineractCaller.call(check,
+                e -> new BeneficiaryUpstreamUnavailableException(),
+                e -> new BeneficiaryUpstreamUnavailableException(),
+                e -> new BeneficiaryUpstreamUnavailableException());
     }
 
     private <T> T call(Supplier<T> upstream) {

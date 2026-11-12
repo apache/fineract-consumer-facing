@@ -19,10 +19,12 @@
 
 package org.apache.fineract.consumer.beneficiaries.query.repository;
 
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.apache.fineract.consumer.beneficiaries.query.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.query.domain.BeneficiaryQueryEntity;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.Repository;
 
 public interface BeneficiaryQueryRepository extends Repository<BeneficiaryQueryEntity, Long> {
@@ -30,5 +32,10 @@ public interface BeneficiaryQueryRepository extends Repository<BeneficiaryQueryE
     List<BeneficiaryQueryEntity> findAllByUserIdAndActiveTrueOrderByNameAsc(Long userId);
 
     Optional<BeneficiaryQueryEntity> findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
+            Long userId, Long fineractAccountId, BeneficiaryAccountType accountType);
+
+    /** Holds a share lock on the row until the caller's transaction ends. */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    Optional<BeneficiaryQueryEntity> findForShareByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
             Long userId, Long fineractAccountId, BeneficiaryAccountType accountType);
 }

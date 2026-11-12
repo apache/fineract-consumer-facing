@@ -29,4 +29,6 @@ public interface ScheduledTransferQueryRepository extends Repository<ScheduledTr
     List<ScheduledTransferQueryEntity> findAllByUserIdOrderByCreatedAtDescIdDesc(Long userId);
 
     Optional<ScheduledTransferQueryEntity> findByPublicIdAndUserId(UUID publicId, Long userId);
+
+    List<ScheduledTransferQueryEntity> findAllByUserIdAndFineractToAccountId(Long userId, Long fineractToAccountId);
 }

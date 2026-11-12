@@ -138,3 +138,20 @@ Feature: Consumer scheduled transfers
   Scenario: Cancelling a scheduled transfer without a session is rejected
     When I initiate cancelling a scheduled transfer without a session
     Then the scheduled transfer request is rejected as unauthorized
+
+  Scenario: A beneficiary with an active scheduled transfer cannot be deleted until the transfer is cancelled
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    When I schedule a monthly transfer within the limit to that beneficiary
+    And I try to delete that beneficiary
+    Then the beneficiary change is rejected because a scheduled transfer to it is active
+    When I cancel the scheduled transfer
+    And I delete that beneficiary
+    Then that beneficiary is no longer in my beneficiary list
+
+  Scenario: A beneficiary's transfer limit cannot be lowered below an active scheduled transfer's amount
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    When I schedule a monthly transfer within the limit to that beneficiary
+    And I try to lower that beneficiary's transfer limit below the scheduled amount
+    Then the beneficiary change is rejected because its limit is below a scheduled transfer
+    When I lower that beneficiary's transfer limit to the scheduled amount
+    Then that beneficiary's transfer limit is the scheduled amount

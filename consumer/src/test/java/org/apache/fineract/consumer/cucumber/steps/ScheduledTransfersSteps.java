@@ -35,15 +35,22 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryLimitBelowScheduledTransferException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryScheduledTransferActiveException;
 import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
+import org.apache.fineract.consumer.client.api.BeneficiariesQueryControllerApi;
 import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
 import org.apache.fineract.consumer.client.api.ScheduledTransfersCommandControllerApi;
 import org.apache.fineract.consumer.client.api.ScheduledTransfersQueryControllerApi;
 import org.apache.fineract.consumer.client.model.BeneficiaryChallengeCommandData;
+import org.apache.fineract.consumer.client.model.BeneficiaryCommandData;
+import org.apache.fineract.consumer.client.model.BeneficiaryQueryData;
 import org.apache.fineract.consumer.client.model.ConfirmAddBeneficiaryCommandRequest;
 import org.apache.fineract.consumer.client.model.ConfirmCancelScheduledTransferCommandRequest;
 import org.apache.fineract.consumer.client.model.ConfirmScheduledTransferCommandRequest;
+import org.apache.fineract.consumer.client.model.ConfirmUpdateBeneficiaryCommandRequest;
 import org.apache.fineract.consumer.client.model.InitiateAddBeneficiaryCommandRequest;
+import org.apache.fineract.consumer.client.model.InitiateUpdateBeneficiaryCommandRequest;
 import org.apache.fineract.consumer.client.model.InitiateScheduledTransferCommandRequest;
 import org.apache.fineract.consumer.client.model.ScheduledTransferChallengeCommandData;
 import org.apache.fineract.consumer.client.model.ScheduledTransferCommandData;
@@ -75,8 +82,10 @@ public class ScheduledTransfersSteps {
     private static final int UNAUTHORIZED = 401;
     private static final int FORBIDDEN = 403;
     private static final int NOT_FOUND = 404;
+    private static final int CONFLICT = 409;
     private static final BigDecimal TRANSFER_AMOUNT = new BigDecimal("25.50");
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
+    private static final BigDecimal BELOW_TRANSFER_AMOUNT = new BigDecimal("20.00");
     private static final BigDecimal ABOVE_LIMIT_AMOUNT = new BigDecimal("600.00");
     private static final BigDecimal FUNDED_BALANCE = new BigDecimal("100.00");
     private static final BigDecimal UNAFFORDABLE_AMOUNT = new BigDecimal("1000.00");
@@ -111,6 +120,8 @@ public class ScheduledTransfersSteps {
     private ScheduledTransfersQueryControllerApi scheduledTransfersQueryApi;
     private SavingsQueryControllerApi savingsApi;
     private BeneficiariesCommandControllerApi beneficiariesApi;
+    private BeneficiariesQueryControllerApi beneficiariesQueryApi;
+    private BeneficiaryCommandData beneficiary;
     private long secondSavingsId;
     private FineractSeeder.SeededTransferTarget beneficiaryTarget;
     private long unregisteredSavingsId;
@@ -136,6 +147,8 @@ public class ScheduledTransfersSteps {
                 SavingsQueryControllerApi.class, accessToken, DEVICE_FINGERPRINT);
         beneficiariesApi = ConsumerApiClientFactory.authenticated(
                 BeneficiariesCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
+        beneficiariesQueryApi = ConsumerApiClientFactory.authenticated(
+                BeneficiariesQueryControllerApi.class, accessToken, DEVICE_FINGERPRINT);
         startDate = LocalDate.now(ZoneId.systemDefault()).plusDays(START_IN_DAYS);
     }
 
@@ -155,7 +168,7 @@ public class ScheduledTransfersSteps {
                         .accountNumber(beneficiaryTarget.savingsAccountNumber())
                         .transferLimit(TRANSFER_LIMIT));
         String otp = mailpit.waitForOtp(user.email());
-        beneficiariesApi.confirmAddBeneficiary(DEVICE_FINGERPRINT,
+        beneficiary = beneficiariesApi.confirmAddBeneficiary(DEVICE_FINGERPRINT,
                 new ConfirmAddBeneficiaryCommandRequest()
                         .stepUpToken(challenge.getStepUpToken())
                         .otp(otp)
@@ -335,6 +348,40 @@ public class ScheduledTransfersSteps {
                         .otp(otp));
     }
 
+    @When("I try to delete that beneficiary")
+    public void tryToDeleteTheBeneficiary() {
+        lastError = captureError(() -> beneficiariesApi.deleteBeneficiary(beneficiary.getPublicId()));
+    }
+
+    @When("I delete that beneficiary")
+    public void deleteTheBeneficiary() {
+        beneficiariesApi.deleteBeneficiary(beneficiary.getPublicId());
+    }
+
+    @When("I try to lower that beneficiary's transfer limit below the scheduled amount")
+    public void tryToLowerTheLimitBelowTheScheduledAmount() {
+        lastError = captureError(() -> beneficiariesApi.initiateUpdateBeneficiary(DEVICE_FINGERPRINT,
+                beneficiary.getPublicId(), new InitiateUpdateBeneficiaryCommandRequest()
+                        .name(BENEFICIARY_NAME)
+                        .transferLimit(BELOW_TRANSFER_AMOUNT)));
+    }
+
+    @When("I lower that beneficiary's transfer limit to the scheduled amount")
+    public void lowerTheLimitToTheScheduledAmount() {
+        mailpit.deleteMessages(user.email());
+        BeneficiaryChallengeCommandData challenge = beneficiariesApi.initiateUpdateBeneficiary(DEVICE_FINGERPRINT,
+                beneficiary.getPublicId(), new InitiateUpdateBeneficiaryCommandRequest()
+                        .name(BENEFICIARY_NAME)
+                        .transferLimit(TRANSFER_AMOUNT));
+        String otp = mailpit.waitForOtp(user.email());
+        beneficiary = beneficiariesApi.confirmUpdateBeneficiary(DEVICE_FINGERPRINT, beneficiary.getPublicId(),
+                new ConfirmUpdateBeneficiaryCommandRequest()
+                        .stepUpToken(challenge.getStepUpToken())
+                        .otp(otp)
+                        .name(BENEFICIARY_NAME)
+                        .transferLimit(TRANSFER_AMOUNT));
+    }
+
     @When("I initiate cancelling the other customer's scheduled transfer")
     public void initiateCancellingOtherCustomersTransfer() {
         lastError = captureError(() -> scheduledTransfersApi.initiateCancelScheduledTransfer(
@@ -460,6 +507,28 @@ public class ScheduledTransfersSteps {
     @Then("my second savings account received only the amount of the transfer I can afford")
     public void secondAccountReceivedOnlyTheAffordableAmount() {
         assertThat(savingsApi.getSavingsAccount(secondSavingsId).getBalance()).isEqualByComparingTo(TRANSFER_AMOUNT);
+    }
+
+    @Then("the beneficiary change is rejected because a scheduled transfer to it is active")
+    public void beneficiaryChangeRejectedForActiveTransfer() {
+        assertError(CONFLICT, BeneficiaryScheduledTransferActiveException.CODE);
+    }
+
+    @Then("the beneficiary change is rejected because its limit is below a scheduled transfer")
+    public void beneficiaryChangeRejectedForLimitBelowTransfer() {
+        assertError(CONFLICT, BeneficiaryLimitBelowScheduledTransferException.CODE);
+    }
+
+    @Then("that beneficiary is no longer in my beneficiary list")
+    public void beneficiaryNoLongerListed() {
+        assertThat(beneficiariesQueryApi.listBeneficiaries())
+                .extracting(BeneficiaryQueryData::getPublicId)
+                .doesNotContain(beneficiary.getPublicId());
+    }
+
+    @Then("that beneficiary's transfer limit is the scheduled amount")
+    public void beneficiaryLimitIsTheScheduledAmount() {
+        assertThat(beneficiary.getTransferLimit()).isEqualByComparingTo(TRANSFER_AMOUNT);
     }
 
     @Then("the scheduled transfer request is rejected as not found")

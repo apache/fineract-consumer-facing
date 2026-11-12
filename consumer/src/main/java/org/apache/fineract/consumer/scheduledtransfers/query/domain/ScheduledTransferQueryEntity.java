@@ -54,6 +54,10 @@ public class ScheduledTransferQueryEntity {
     @Column(name = "fineract_standing_instruction_id", unique = true)
     private Long fineractStandingInstructionId;
 
+    /** Set while a confirm is working on the unlinked row. */
+    @Column(name = "claimed_until")
+    private Instant claimedUntil;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -62,7 +66,7 @@ public class ScheduledTransferQueryEntity {
      * materialized by Hibernate from the read path.
      */
     public static ScheduledTransferQueryEntity of(Long id, UUID publicId, Long userId, Long fineractFromAccountId,
-            Long fineractToAccountId, Long fineractStandingInstructionId) {
+            Long fineractToAccountId, Long fineractStandingInstructionId, Instant claimedUntil) {
         ScheduledTransferQueryEntity entity = new ScheduledTransferQueryEntity();
         entity.id = id;
         entity.publicId = publicId;
@@ -70,6 +74,7 @@ public class ScheduledTransferQueryEntity {
         entity.fineractFromAccountId = fineractFromAccountId;
         entity.fineractToAccountId = fineractToAccountId;
         entity.fineractStandingInstructionId = fineractStandingInstructionId;
+        entity.claimedUntil = claimedUntil;
         entity.createdAt = Instant.now();
         return entity;
     }
