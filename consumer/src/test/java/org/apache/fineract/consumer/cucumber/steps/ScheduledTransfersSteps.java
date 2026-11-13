@@ -36,18 +36,25 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryLimitBelowScheduledTransferException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryScheduledTransferActiveException;
+import org.apache.fineract.consumer.client.ApiClient;
 import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
 import org.apache.fineract.consumer.client.api.BeneficiariesQueryControllerApi;
 import org.apache.fineract.consumer.client.api.SavingsQueryControllerApi;
@@ -84,6 +91,7 @@ import org.apache.fineract.consumer.scheduledtransfers.command.exception.Schedul
 import org.apache.fineract.consumer.scheduledtransfers.command.exception.ScheduledTransferNotFoundException;
 import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferRunStatus;
 import org.apache.fineract.consumer.scheduledtransfers.query.exception.ScheduledTransferQueryAccessDeniedException;
+import org.apache.fineract.consumer.scheduledtransfers.query.exception.ScheduledTransferQueryDisabledException;
 import org.apache.fineract.consumer.scheduledtransfers.query.exception.ScheduledTransferQueryNotFoundException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -115,6 +123,12 @@ public class ScheduledTransfersSteps {
     private static final Duration BFF_TODAY_CATCH_UP = Duration.ofSeconds(45);
     private static final Duration LIST_POLL_INTERVAL = Duration.ofSeconds(1);
     private static final Duration PENDING_REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    // How long after the confirm each race round starts its delete; negative starts the delete first. The ends are far
+    // enough apart that one side has finished, or holds its row, before the other starts; the middle overlaps them.
+    private static final List<Duration> RACE_DELETE_OFFSETS =
+            LongStream.of(-300, -100, -50, -20, 0, 0, 10, 20, 30, 50, 75, 100, 150, 250, 500, 1000)
+                    .mapToObj(Duration::ofMillis)
+                    .toList();
     private static final ObjectMapper JSON = JsonMapper.builder().build();
     private static final String JDBC_URL = System.getenv()
             .getOrDefault("BFF_DB_URL", "jdbc:postgresql://localhost:5432/consumerapp");
@@ -135,6 +149,10 @@ public class ScheduledTransfersSteps {
             WHERE user_id = (SELECT id FROM users WHERE email = ?)
               AND fineract_standing_instruction_id IS NULL AND claimed_until > now()
             """;
+    private static final String COUNT_SCHEDULED_TRANSFERS_TO_SQL = """
+            SELECT count(*), count(fineract_standing_instruction_id) FROM scheduled_transfers
+            WHERE user_id = (SELECT id FROM users WHERE email = ?) AND fineract_to_account_id = ?
+            """;
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final FineractSeeder fineractSeeder = new FineractSeeder();
@@ -144,6 +162,7 @@ public class ScheduledTransfersSteps {
     private final FineractBusinessDate fineractBusinessDate = new FineractBusinessDate();
 
     private RegistrationHelper.BoundUserWithAccounts user;
+    private String accessToken;
     private ScheduledTransfersCommandControllerApi scheduledTransfersApi;
     private ScheduledTransfersQueryControllerApi scheduledTransfersQueryApi;
     private SavingsQueryControllerApi savingsApi;
@@ -164,6 +183,7 @@ public class ScheduledTransfersSteps {
     private String pendingOtp;
     private BeneficiaryRowLock beneficiaryLock;
     private CompletableFuture<Optional<FeignException>> pendingRequest;
+    private final List<RaceRound> raceRounds = new ArrayList<>();
     private UUID otherCustomersTransferId;
     private UUID unownedSourceTransferId;
     private FeignException lastError;
@@ -171,7 +191,7 @@ public class ScheduledTransfersSteps {
     @Given("a logged-in customer setting up scheduled transfers")
     public void loggedInCustomer() {
         user = registrationHelper.registerBoundUserWithAccounts();
-        String accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
+        accessToken = loginHelper.login(user.email(), user.password(), DEVICE_FINGERPRINT);
         scheduledTransfersApi = ConsumerApiClientFactory.authenticated(
                 ScheduledTransfersCommandControllerApi.class, accessToken, DEVICE_FINGERPRINT);
         scheduledTransfersQueryApi = ConsumerApiClientFactory.authenticated(
@@ -192,20 +212,20 @@ public class ScheduledTransfersSteps {
 
     @Given("another client's savings account is my scheduled transfer beneficiary with a transfer limit")
     public void beneficiaryWithTransferLimit() {
-        addBeneficiary(TRANSFER_LIMIT);
+        addBeneficiary(BENEFICIARY_NAME, TRANSFER_LIMIT);
     }
 
     @Given("another client's savings account is my scheduled transfer beneficiary with no transfer limit")
     public void beneficiaryWithNoTransferLimit() {
-        addBeneficiary(null);
+        addBeneficiary(BENEFICIARY_NAME, null);
     }
 
-    private void addBeneficiary(BigDecimal transferLimit) {
+    private void addBeneficiary(String name, BigDecimal transferLimit) {
         beneficiaryTarget = fineractSeeder.seedTransferTarget();
         mailpit.deleteMessages(user.email());
         BeneficiaryChallengeCommandData challenge = beneficiariesApi.initiateAddBeneficiary(DEVICE_FINGERPRINT,
                 new InitiateAddBeneficiaryCommandRequest()
-                        .name(BENEFICIARY_NAME)
+                        .name(name)
                         .officeName(beneficiaryTarget.officeName())
                         .accountNumber(beneficiaryTarget.savingsAccountNumber())
                         .transferLimit(transferLimit));
@@ -214,7 +234,7 @@ public class ScheduledTransfersSteps {
                 new ConfirmAddBeneficiaryCommandRequest()
                         .stepUpToken(challenge.getStepUpToken())
                         .otp(otp)
-                        .name(BENEFICIARY_NAME)
+                        .name(name)
                         .officeName(beneficiaryTarget.officeName())
                         .accountNumber(beneficiaryTarget.savingsAccountNumber())
                         .transferLimit(transferLimit));
@@ -518,6 +538,44 @@ public class ScheduledTransfersSteps {
         lastError = awaitPendingRequest().orElse(null);
     }
 
+    @Given("the second BFF has scheduled transfers turned off")
+    public void secondBffHasScheduledTransfersTurnedOff() {
+        FeignException error = captureError(
+                () -> onSecondBff(ScheduledTransfersQueryControllerApi.class).listScheduledTransfers());
+        assertThat(error.status())
+                .as("the second BFF at %s answers 404 to the scheduled transfers list; is compose.second-bff.yaml up?",
+                        ConsumerApiClientFactory.SECOND_BFF_BASE_URL)
+                .isEqualTo(NOT_FOUND);
+        assertThat(readCode(error.contentUTF8())).isEqualTo(ScheduledTransferQueryDisabledException.CODE);
+    }
+
+    @When("I try to delete that beneficiary through the second BFF")
+    public void tryToDeleteTheBeneficiaryThroughTheSecondBff() {
+        lastError = captureError(() -> onSecondBff(BeneficiariesCommandControllerApi.class)
+                .deleteBeneficiary(beneficiary.getPublicId()));
+    }
+
+    @When("I try to lower that beneficiary's transfer limit below the scheduled amount through the second BFF")
+    public void tryToLowerTheLimitThroughTheSecondBff() {
+        tryToChangeTheLimit(onSecondBff(BeneficiariesCommandControllerApi.class), BELOW_TRANSFER_AMOUNT);
+    }
+
+    /**
+     * Each round adds a new beneficiary and initiates a transfer to it, then confirms the transfer on the first BFF
+     * while the second deletes the beneficiary, the delete starting at that round's offset from the confirm.
+     */
+    @When("I race confirming a scheduled transfer on the first BFF against deleting its beneficiary on the second")
+    public void raceConfirmsAgainstDeletes() {
+        BeneficiariesCommandControllerApi secondBffBeneficiaries = onSecondBff(BeneficiariesCommandControllerApi.class);
+        try (ScheduledExecutorService racers = Executors.newScheduledThreadPool(2)) {
+            for (int round = 0; round < RACE_DELETE_OFFSETS.size(); round++) {
+                addBeneficiary(BENEFICIARY_NAME + " " + round, TRANSFER_LIMIT);
+                initiatedMonthlyToBeneficiary();
+                raceRounds.add(race(racers, secondBffBeneficiaries, RACE_DELETE_OFFSETS.get(round)));
+            }
+        }
+    }
+
     @When("I initiate cancelling the other customer's scheduled transfer")
     public void initiateCancellingOtherCustomersTransfer() {
         lastError = captureError(() -> scheduledTransfersApi.initiateCancelScheduledTransfer(
@@ -713,6 +771,49 @@ public class ScheduledTransfersSteps {
         assertThat(countScheduledTransfers(COUNT_SCHEDULED_TRANSFERS_SQL)).isZero();
     }
 
+    @Then("in every round either the confirm or the delete succeeded, and the other was refused")
+    public void everyRoundHasOneWinner() {
+        assertThat(raceRounds).hasSize(RACE_DELETE_OFFSETS.size());
+        for (RaceRound round : raceRounds) {
+            assertThat(round.confirm().isEmpty()).as(round.describe()).isNotEqualTo(round.delete().isEmpty());
+            if (round.confirmWon()) {
+                assertRefused(round, round.delete(), CONFLICT, BeneficiaryScheduledTransferActiveException.CODE);
+            } else {
+                assertRefused(round, round.confirm(), FORBIDDEN, ScheduledTransferAccessDeniedException.CODE);
+            }
+        }
+    }
+
+    @Then("no round left a scheduled transfer to a deleted beneficiary, in the BFF or in Fineract")
+    public void noTransferToADeletedBeneficiary() {
+        Set<UUID> listedBeneficiaries = beneficiariesQueryApi.listBeneficiaries().stream()
+                .map(BeneficiaryQueryData::getPublicId)
+                .collect(Collectors.toUnmodifiableSet());
+        Map<Long, Long> instructionsTo = fineractSeeder.standingInstructionsFrom(user.savingsAccountId()).stream()
+                .collect(Collectors.groupingBy(instruction -> instruction.getToAccount().getId(),
+                        Collectors.counting()));
+        for (RaceRound round : raceRounds) {
+            long instructions = instructionsTo.getOrDefault(round.toAccountId(), 0L);
+            long[] rows = scheduledTransferRowsTo(round.toAccountId());
+            if (round.confirmWon()) {
+                assertThat(listedBeneficiaries).as(round.describe()).contains(round.beneficiaryId());
+                assertThat(rows).as(round.describe() + ": rows, linked rows").containsExactly(1, 1);
+                assertThat(instructions).as(round.describe()).isEqualTo(1);
+            } else {
+                assertThat(listedBeneficiaries).as(round.describe()).doesNotContain(round.beneficiaryId());
+                assertThat(rows).as(round.describe() + ": rows, linked rows").containsExactly(0, 0);
+                assertThat(instructions).as(round.describe()).isZero();
+            }
+        }
+    }
+
+    /** Otherwise every round may have gone one way, and the race would not have been run from both sides. */
+    @Then("the confirm won some rounds and the delete others")
+    public void bothSidesWonRounds() {
+        String rounds = raceRounds.stream().map(RaceRound::describe).collect(Collectors.joining("\n"));
+        assertThat(raceRounds).as(rounds).anyMatch(RaceRound::confirmWon).anyMatch(round -> !round.confirmWon());
+    }
+
     /** Lets a request still waiting on a lock this scenario holds go on, so it cannot hold up the next scenario. */
     @After
     public void releaseTheBeneficiaryLock() {
@@ -832,10 +933,14 @@ public class ScheduledTransfersSteps {
         return ScheduledTransferRunQueryData.StatusEnum.fromValue(status.name());
     }
 
-    /** Initiates a change to the beneficiary's limit, clearing the mailbox first so a step can tell no OTP went out. */
     private void tryToChangeTheLimit(BigDecimal transferLimit) {
+        tryToChangeTheLimit(beneficiariesApi, transferLimit);
+    }
+
+    /** Initiates a change to the beneficiary's limit, clearing the mailbox first so a step can tell no OTP went out. */
+    private void tryToChangeTheLimit(BeneficiariesCommandControllerApi api, BigDecimal transferLimit) {
         mailpit.deleteMessages(user.email());
-        lastError = captureError(() -> beneficiariesApi.initiateUpdateBeneficiary(DEVICE_FINGERPRINT,
+        lastError = captureError(() -> api.initiateUpdateBeneficiary(DEVICE_FINGERPRINT,
                 beneficiary.getPublicId(), new InitiateUpdateBeneficiaryCommandRequest()
                         .name(BENEFICIARY_NAME)
                         .transferLimit(transferLimit)));
@@ -874,17 +979,65 @@ public class ScheduledTransfersSteps {
     }
 
     private Optional<FeignException> awaitPendingRequest() {
+        return await(pendingRequest);
+    }
+
+    private static Optional<FeignException> await(Future<Optional<FeignException>> request) {
         try {
-            return pendingRequest.get(PENDING_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+            return request.get(PENDING_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted while waiting for the request behind the lock", e);
+            throw new IllegalStateException("interrupted while waiting for a request", e);
         } catch (ExecutionException e) {
-            throw new IllegalStateException("the request behind the lock failed", e.getCause());
+            throw new IllegalStateException("a request failed", e.getCause());
         } catch (TimeoutException e) {
-            throw new AssertionError("the request behind the lock did not finish within "
-                    + PENDING_REQUEST_TIMEOUT.toSeconds() + "s", e);
+            throw new AssertionError("a request did not finish within " + PENDING_REQUEST_TIMEOUT.toSeconds() + "s",
+                    e);
         }
+    }
+
+    /** Confirms the pending transfer on the first BFF and deletes its beneficiary on {@code deleter} at once. */
+    private RaceRound race(ScheduledExecutorService racers, BeneficiariesCommandControllerApi deleter,
+            Duration deleteOffset) {
+        UUID beneficiaryId = beneficiary.getPublicId();
+        long toAccountId = beneficiaryTarget.savingsAccountId();
+        ScheduledTransferChallengeCommandData challenge = pendingChallenge;
+        String otp = pendingOtp;
+        long offset = deleteOffset.toMillis();
+        Future<Optional<FeignException>> confirm = racers.schedule(() -> outcomeOf(() -> confirmAs(user,
+                scheduledTransfersApi, challenge, otp, toAccountId, TRANSFER_AMOUNT, ScheduledTransferFrequency.MONTHLY,
+                null, UUID.randomUUID().toString())), Math.max(0, -offset), TimeUnit.MILLISECONDS);
+        Future<Optional<FeignException>> delete = racers.schedule(
+                () -> outcomeOf(() -> deleter.deleteBeneficiary(beneficiaryId)), Math.max(0, offset),
+                TimeUnit.MILLISECONDS);
+        return new RaceRound(deleteOffset, toAccountId, beneficiaryId, await(confirm), await(delete));
+    }
+
+    private static void assertRefused(RaceRound round, Optional<FeignException> refused, int status, String code) {
+        assertThat(refused).as(round.describe()).isPresent();
+        assertThat(refused.get().status()).as(round.describe()).isEqualTo(status);
+        assertThat(readCode(refused.get().contentUTF8())).as(round.describe()).isEqualTo(code);
+    }
+
+    /** All of this customer's scheduled transfer rows to {@code toAccountId}, then those linked to an instruction. */
+    private long[] scheduledTransferRowsTo(long toAccountId) {
+        try (Connection connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASSWORD);
+             PreparedStatement statement = connection.prepareStatement(COUNT_SCHEDULED_TRANSFERS_TO_SQL)) {
+            statement.setString(1, user.email());
+            statement.setLong(2, toAccountId);
+            try (ResultSet count = statement.executeQuery()) {
+                assertThat(count.next()).isTrue();
+                return new long[] {count.getLong(1), count.getLong(2)};
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(
+                    "Failed to count scheduled_transfers rows at " + JDBC_URL + "; is the Docker Compose stack up?", e);
+        }
+    }
+
+    private <T extends ApiClient.Api> T onSecondBff(Class<T> apiType) {
+        return ConsumerApiClientFactory.authenticated(apiType, accessToken, DEVICE_FINGERPRINT,
+                ConsumerApiClientFactory.SECOND_BFF_BASE_URL);
     }
 
     private long countScheduledTransfers(String sql) {
@@ -963,6 +1116,24 @@ public class ScheduledTransfersSteps {
             return JSON.readTree(body).path("code").asString();
         } catch (Exception e) {
             throw new IllegalStateException("could not parse error response body: " + body, e);
+        }
+    }
+
+    /** One round of the race: an empty outcome means that request succeeded. */
+    private record RaceRound(Duration deleteOffset, long toAccountId, UUID beneficiaryId,
+            Optional<FeignException> confirm, Optional<FeignException> delete) {
+
+        boolean confirmWon() {
+            return confirm.isEmpty();
+        }
+
+        String describe() {
+            return "round with the delete " + deleteOffset.toMillis() + "ms after the confirm: confirm "
+                    + outcome(confirm) + ", delete " + outcome(delete);
+        }
+
+        private static String outcome(Optional<FeignException> error) {
+            return error.map(e -> e.status() + " " + readCode(e.contentUTF8())).orElse("succeeded");
         }
     }
 }
