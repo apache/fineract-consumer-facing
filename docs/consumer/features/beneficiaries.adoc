@@ -31,12 +31,12 @@ Command side (`command.api.BeneficiariesCommandController`):
 
 |PUT
 |`/api/v1/beneficiaries/{publicId}/confirm`
-|Complete the update. Verifies step-up token and OTP, then applies the new name and transfer limit.
+|Complete the update. Verifies step-up token and OTP, then applies the new name and transfer limit. Initiate and confirm both refuse a limit below an active scheduled transfer's amount with HTTP 409 (see <<beneficiaries-scheduled-transfers>>).
 |Access JWT, `X-Device-Fingerprint` header, valid step-up token and OTP in the body, ABAC action `BENEFICIARY_MODIFY`. The beneficiary must belong to the caller and be active.
 
 |DELETE
 |`/api/v1/beneficiaries/{publicId}`
-|Soft-delete a beneficiary (sets `is_active` to false). Returns 204. No OTP or step-up challenge.
+|Soft-delete a beneficiary (sets `is_active` to false). Returns 204. No OTP or step-up challenge. Refused with HTTP 409 while a scheduled transfer to the beneficiary is active (see <<beneficiaries-scheduled-transfers>>).
 |Access JWT, `X-Device-Fingerprint` header, ABAC action `BENEFICIARY_DELETE`. The beneficiary must belong to the caller and be active.
 |===
 
@@ -66,7 +66,7 @@ If validation passes, the service sends an OTP to the caller's registered email 
 
 *Confirm.* The caller resubmits the same parameters plus the step-up token and OTP. The service recomputes the action fingerprint and verifies the token against the subject, device fingerprint, and action fingerprint; any mismatch (including changed parameters or a different device) returns HTTP 401 with code `error.msg.consumer.beneficiaries.command.stepup.invalid`. It then validates the OTP, re-runs the name, account, and self-account checks, and persists. A duplicate name detected at either the application check or the database unique index returns HTTP 409.
 
-*Update* follows the same initiate/confirm pattern but only the name and transfer limit are editable; the destination account fields are immutable (`updatable = false` on the entity). *Delete* is a single call with no challenge; it deactivates the row, which also frees the name for reuse (the unique index only covers active rows).
+*Update* follows the same initiate/confirm pattern but only the name and transfer limit are editable; the destination account fields are immutable (`updatable = false` on the entity). *Delete* is a single call with no challenge; it deactivates the row, which also frees the name for reuse (the unique index only covers active rows). Both a delete and an update's confirm lock the row for update first (`findLockedByPublicIdAndUserIdAndActiveTrue`), so they wait for, or are seen by, a scheduled transfer confirm to the same account (see <<beneficiaries-scheduled-transfers>>).
 
 == ABAC
 
@@ -76,7 +76,7 @@ The policies carry no resource-ownership rule because ownership is structural: e
 
 == Storage and Fineract interaction
 
-Beneficiary data lives entirely in the BFF's PostgreSQL database. Fineract holds no beneficiary record and is never written to by this module. Fineract is called only during add-time validation, and all three calls are reads: savings search, savings account retrieval, and client retrieval. The resolved Fineract office, client, and account ids are stored on the BFF row so later transfers need no re-resolution.
+Beneficiary data lives entirely in the BFF's PostgreSQL database. Fineract holds no beneficiary record and is never written to by this module. Fineract is called during add-time validation, and all three calls are reads: savings search, savings account retrieval, and client retrieval. A delete or a lowered limit also reads the client's standing instructions, through the scheduled transfers module, when the customer has scheduled transfers to the account. The resolved Fineract office, client, and account ids are stored on the BFF row so later transfers need no re-resolution.
 
 == Interaction with transfers
 
@@ -87,6 +87,20 @@ A transfer does not reference a beneficiary by public id. The caller submits a d
 . With no beneficiary match, the caller must own the destination savings account (ABAC ownership check), otherwise the transfer is rejected with `TransferAccessDeniedException`.
 
 `findActiveByAccount` is an internal method on the query service, not an HTTP endpoint, and performs no ABAC authorize of its own; the transfers service has already authorized `TRANSFER_EXECUTE`. Because the check is by account id, deleting a beneficiary immediately closes the transfer path to that account.
+
+[[beneficiaries-scheduled-transfers]]
+== Interaction with scheduled transfers
+
+A scheduled transfer to a beneficiary is a Fineract standing instruction, which keeps running whatever happens to the beneficiary in the BFF. So while one is active:
+
+* A delete answers HTTP 409 with code `error.msg.consumer.beneficiaries.command.scheduled.transfer.active` (`BeneficiaryScheduledTransferActiveException`).
+* An update whose new limit is below the transfer's amount answers HTTP 409 with code `error.msg.consumer.beneficiaries.command.limit.below.scheduled.transfer` (`BeneficiaryLimitBelowScheduledTransferException`), at initiate (before any OTP is sent) and again at confirm. A limit that stays the same, rises, or is removed is not checked.
+
+The customer cancels the transfer first (see <<scheduled-transfers-cancel>>). If Fineract cannot be reached, the request answers HTTP 502 and nothing changes.
+
+The service asks through `command.service.BeneficiaryScheduledTransferLookupPort`, which `scheduledtransfers.query.service.BeneficiaryScheduledTransferLookupAdapter` implements; the scheduled transfers module depends on this one, so this module cannot depend on it. What counts as active, why the check ignores the scheduled transfers feature flag, and how the row locks keep it consistent with a concurrent confirm are described in <<scheduled-transfers-beneficiary-guard>>.
+
+The confirm side of scheduled transfers reads the beneficiary through `BeneficiariesQueryService.findActiveByAccountForShare`, which holds a share lock on the row. It must run inside the caller's read-write transaction (it is declared `Propagation.MANDATORY`), because PostgreSQL refuses a row lock in a read-only one.
 
 == Data model
 
@@ -111,8 +125,8 @@ One table, created by `db/changelog/beneficiaries/003-create-beneficiaries.yaml`
 
 == Testing coverage
 
-* Unit: `BeneficiariesCommandServiceImplTest` covers OTP issuance and email masking, duplicate names (including case-only renames), unresolvable and closed accounts, office name mismatch, self-account rejection at initiate and confirm, Feign error translation, invalid step-up and OTP rejection, database duplicate mapping, soft delete, and ABAC denial paths for every command. `BeneficiariesQueryServiceImplTest` covers mapping, empty list, ABAC denial, and `findActiveByAccount` match and no-match paths. `TransfersCommandServiceImplTest` covers beneficiary-gated destinations and limit enforcement.
-* End to end: `src/test/resources/features/beneficiaries.feature` (glue in `cucumber.steps.BeneficiariesSteps`) runs four scenarios: add and list, limit enforcement on a real transfer, denial of transfers to unregistered destinations, and delete closing the transfer path. `ratelimit.feature` uses the beneficiary list endpoint as its rate-limit probe.
+* Unit: `BeneficiariesCommandServiceImplTest` covers OTP issuance and email masking, duplicate names (including case-only renames), unresolvable and closed accounts, office name mismatch, self-account rejection at initiate and confirm, Feign error translation, invalid step-up and OTP rejection, database duplicate mapping, soft delete, and ABAC denial paths for every command. For scheduled transfers, it covers a delete refused while one is active and failing closed when Fineract cannot answer, a lower limit refused at initiate (with no OTP sent) and at confirm (keeping the old limit), a lower limit that still covers every transfer, a limit set where there was none being checked, and a limit that stays, rises, or is removed not being checked. `BeneficiariesQueryServiceImplTest` covers mapping, empty list, ABAC denial, `findActiveByAccount` match and no-match paths, and `findActiveByAccountForShare` reading through the locking query. `TransfersCommandServiceImplTest` covers beneficiary-gated destinations and limit enforcement.
+* End to end: `src/test/resources/features/beneficiaries.feature` (glue in `cucumber.steps.BeneficiariesSteps`) runs four scenarios: add and list, limit enforcement on a real transfer, denial of transfers to unregistered destinations, and delete closing the transfer path. `ratelimit.feature` uses the beneficiary list endpoint as its rate-limit probe. `scheduledtransfers.feature` covers the guard on deletes and limit changes while a scheduled transfer to the beneficiary is active, including how it ends with the transfer's end date and how it holds up against a racing confirm (see xref:scheduled-transfers-beneficiary-guard[Beneficiary guard]).
 * Frontend: `frontend/src/app/features/beneficiaries/beneficiaries.store.spec.ts` and `beneficiaries.component.spec.ts` (Vitest) cover the Angular store and screen.
 
 == Design rationale

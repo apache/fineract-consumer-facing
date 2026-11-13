@@ -31,6 +31,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import feign.FeignException;
@@ -52,7 +53,9 @@ import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryLimitBelowScheduledTransferException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryScheduledTransferActiveException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiarySelfAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryStepUpInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryUpstreamUnavailableException;
@@ -103,6 +106,8 @@ class BeneficiariesCommandServiceImplTest {
     private static final String ACCOUNT_NUMBER = "000000123";
     private static final String OTHER_ACCOUNT_NUMBER = "999999999";
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
+    private static final BigDecimal CURRENT_LIMIT = BigDecimal.TEN;
+    private static final BigDecimal LOWER_LIMIT = new BigDecimal("5.00");
     private static final Long SAVINGS_ID = 66L;
     private static final Long CALLER_CLIENT_ID = 42L;
     private static final Long DEST_CLIENT_ID = 99L;
@@ -127,6 +132,9 @@ class BeneficiariesCommandServiceImplTest {
 
     @Mock
     private BeneficiariesFineractClient beneficiariesFineractClient;
+
+    @Mock
+    private BeneficiaryScheduledTransferLookupPort scheduledTransferLookupPort;
 
     @InjectMocks
     private BeneficiariesCommandServiceImpl service;
@@ -171,28 +179,40 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     private static InitiateUpdateBeneficiaryCommand initiateUpdateCommand(String name) {
+        return initiateUpdateCommand(name, TRANSFER_LIMIT);
+    }
+
+    private static InitiateUpdateBeneficiaryCommand initiateUpdateCommand(String name, BigDecimal transferLimit) {
         return InitiateUpdateBeneficiaryCommand.builder()
                 .publicId(BENEFICIARY_PUBLIC_ID)
                 .name(name)
-                .transferLimit(TRANSFER_LIMIT)
+                .transferLimit(transferLimit)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
     }
 
     private static ConfirmUpdateBeneficiaryCommand confirmUpdateCommand(String name) {
+        return confirmUpdateCommand(name, TRANSFER_LIMIT);
+    }
+
+    private static ConfirmUpdateBeneficiaryCommand confirmUpdateCommand(String name, BigDecimal transferLimit) {
         return ConfirmUpdateBeneficiaryCommand.builder()
                 .stepUpToken(STEP_UP_TOKEN)
                 .otp(OTP)
                 .publicId(BENEFICIARY_PUBLIC_ID)
                 .name(name)
-                .transferLimit(TRANSFER_LIMIT)
+                .transferLimit(transferLimit)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
     }
 
     private static Beneficiary existingBeneficiary(String name) {
+        return existingBeneficiary(name, CURRENT_LIMIT);
+    }
+
+    private static Beneficiary existingBeneficiary(String name, BigDecimal transferLimit) {
         return Beneficiary.register(BENEFICIARY_PUBLIC_ID, USER_ID, name, DEST_OFFICE_ID, DEST_CLIENT_ID,
-                SAVINGS_ID, BigDecimal.TEN);
+                SAVINGS_ID, transferLimit);
     }
 
     private static SavingsAccountData savingsAccount(String accountNo, Long statusId) {
@@ -225,8 +245,12 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     private void stubUpdateFingerprint(String name) {
+        stubUpdateFingerprint(name, TRANSFER_LIMIT);
+    }
+
+    private void stubUpdateFingerprint(String name, Object transferLimitPart) {
         when(stepUpTokenService.actionFingerprint(BeneficiaryConstants.UPDATE_ACTION_ID,
-                BENEFICIARY_PUBLIC_ID.toString(), name, TRANSFER_LIMIT))
+                BENEFICIARY_PUBLIC_ID.toString(), name, transferLimitPart))
                 .thenReturn(ACTION_FINGERPRINT);
     }
 
@@ -602,7 +626,7 @@ class BeneficiariesCommandServiceImplTest {
                 .thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         Beneficiary beneficiary = existingBeneficiary(OLD_NAME);
-        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
                 .thenReturn(Optional.of(beneficiary));
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
@@ -633,13 +657,134 @@ class BeneficiariesCommandServiceImplTest {
     void deleteDeactivatesBeneficiary() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         Beneficiary beneficiary = existingBeneficiary(NAME);
-        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
                 .thenReturn(Optional.of(beneficiary));
 
         service.delete(jwt(), BENEFICIARY_PUBLIC_ID);
 
+        verify(scheduledTransferLookupPort).hasActiveTransfersTo(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID);
         verify(beneficiaryCommandRepository).save(beneficiary);
         assertThat(beneficiary.isActive()).isFalse();
+    }
+
+    @Test
+    void deleteRejectsABeneficiaryWithAnActiveScheduledTransfer() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        Beneficiary beneficiary = existingBeneficiary(NAME);
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(beneficiary));
+        when(scheduledTransferLookupPort.hasActiveTransfersTo(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(jwt(), BENEFICIARY_PUBLIC_ID))
+                .isInstanceOf(BeneficiaryScheduledTransferActiveException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiaryScheduledTransferActiveException.CODE);
+
+        verify(beneficiaryCommandRepository, never()).save(any());
+        assertThat(beneficiary.isActive()).isTrue();
+    }
+
+    @Test
+    void deleteFailsClosedWhenFineractCannotSayWhetherAScheduledTransferIsActive() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        Beneficiary beneficiary = existingBeneficiary(NAME);
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(beneficiary));
+        when(scheduledTransferLookupPort.hasActiveTransfersTo(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID))
+                .thenThrow(mock(FeignException.InternalServerError.class));
+
+        assertThatThrownBy(() -> service.delete(jwt(), BENEFICIARY_PUBLIC_ID))
+                .isInstanceOf(BeneficiaryUpstreamUnavailableException.class);
+
+        verify(beneficiaryCommandRepository, never()).save(any());
+        assertThat(beneficiary.isActive()).isTrue();
+    }
+
+    @Test
+    void initiateUpdateRejectsALimitBelowAnActiveScheduledTransferAndSendsNoOtp() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME)));
+        when(scheduledTransferLookupPort.hasActiveTransfersAbove(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID, LOWER_LIMIT))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, LOWER_LIMIT)))
+                .isInstanceOf(BeneficiaryLimitBelowScheduledTransferException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiaryLimitBelowScheduledTransferException.CODE);
+
+        verify(otpService, never()).createOtp(any(), any(), any());
+    }
+
+    @Test
+    void initiateUpdateLowersALimitThatStillCoversEveryScheduledTransfer() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME)));
+        stubUpdateFingerprint(NAME, LOWER_LIMIT);
+        stubIssuedToken(Instant.now().plusSeconds(300));
+
+        service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, LOWER_LIMIT));
+
+        verify(scheduledTransferLookupPort).hasActiveTransfersAbove(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID, LOWER_LIMIT);
+        verify(otpService).createOtp(eq(PUBLIC_ID), eq(OtpPurpose.BENEFICIARY), any());
+    }
+
+    @Test
+    void initiateUpdateChecksScheduledTransfersWhenALimitIsSetWhereThereWasNone() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME, null)));
+        when(scheduledTransferLookupPort.hasActiveTransfersAbove(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID, LOWER_LIMIT))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, LOWER_LIMIT)))
+                .isInstanceOf(BeneficiaryLimitBelowScheduledTransferException.class);
+    }
+
+    @Test
+    void initiateUpdateDoesNotCheckScheduledTransfersWhenTheLimitStaysOrRises() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME)));
+        stubUpdateFingerprint(NAME, CURRENT_LIMIT);
+        stubUpdateFingerprint(NAME, TRANSFER_LIMIT);
+        stubIssuedToken(Instant.now().plusSeconds(300));
+
+        service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, CURRENT_LIMIT));
+        service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, TRANSFER_LIMIT));
+
+        verifyNoInteractions(scheduledTransferLookupPort);
+    }
+
+    @Test
+    void initiateUpdateDoesNotCheckScheduledTransfersWhenTheLimitIsRemoved() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME)));
+        stubUpdateFingerprint(NAME, "");
+        stubIssuedToken(Instant.now().plusSeconds(300));
+
+        service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, null));
+
+        verifyNoInteractions(scheduledTransferLookupPort);
+    }
+
+    @Test
+    void confirmUpdateRechecksTheLimitUnderALockAndKeepsTheOldOneWhenAScheduledTransferIsAbove() {
+        stubUpdateFingerprint(NAME, LOWER_LIMIT);
+        when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT))
+                .thenReturn(true);
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        Beneficiary beneficiary = existingBeneficiary(NAME);
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(beneficiary));
+        when(scheduledTransferLookupPort.hasActiveTransfersAbove(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID, LOWER_LIMIT))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.confirmUpdate(jwt(), confirmUpdateCommand(NAME, LOWER_LIMIT)))
+                .isInstanceOf(BeneficiaryLimitBelowScheduledTransferException.class);
+
+        verify(beneficiaryCommandRepository, never()).saveAndFlush(any());
+        assertThat(beneficiary.getTransferLimit()).isEqualByComparingTo(CURRENT_LIMIT);
     }
 
     @Test
@@ -700,7 +845,7 @@ class BeneficiariesCommandServiceImplTest {
     @Test
     void deleteRejectsUnknownBeneficiary() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.delete(jwt(), BENEFICIARY_PUBLIC_ID))

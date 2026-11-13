@@ -470,7 +470,7 @@ class ScheduledTransfersQueryServiceImplTest {
 
     private static ScheduledTransferQueryEntity row(UUID publicId, Long fromSavingsId, Long instructionId) {
         return ScheduledTransferQueryEntity.of(instructionId, publicId, USER_ID, fromSavingsId, TO_SAVINGS_ID,
-                instructionId);
+                instructionId, null);
     }
 
     private static GetPageItemsStandingInstructionSwagger weekly(Long id, UUID publicId) {

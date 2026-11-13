@@ -19,14 +19,23 @@
 
 package org.apache.fineract.consumer.beneficiaries.command.repository;
 
+import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 
 public interface BeneficiaryCommandRepository extends JpaRepository<Beneficiary, Long> {
 
     Optional<Beneficiary> findByPublicIdAndUserIdAndActiveTrue(UUID publicId, Long userId);
+
+    /**
+     * Locks the row until the transaction ends. A scheduled transfer confirm reads the beneficiary with a share lock
+     * after reserving its row, so it waits for this transaction, or this one sees its reservation.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Beneficiary> findLockedByPublicIdAndUserIdAndActiveTrue(UUID publicId, Long userId);
 
     boolean existsByUserIdAndNameIgnoreCaseAndActiveTrue(Long userId, String name);
 

@@ -29,6 +29,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -153,7 +154,8 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
 
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
-        requireDestinationAllowed(jwt, user.getId(), command.getToAccountId(), command.getAmount());
+        requireDestinationAllowed(jwt, user.getId(), command.getToAccountId(), command.getAmount(),
+                beneficiariesQueryService::findActiveByAccount);
         resolveDestinationClientId(command.getFromAccountId(), command.getToAccountId());
 
         String actionFingerprint = createActionFingerprint(command.getFromAccountId(), command.getToAccountId(),
@@ -187,9 +189,11 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
 
         Long standingInstructionId;
         try {
-            // Re-checked after the reservation, so a beneficiary removed meanwhile is either seen here or sees the
-            // reserved row.
-            requireDestinationAllowed(jwt, user.getId(), command.getToAccountId(), command.getAmount());
+            // Re-checked after the reservation, under a share lock on the beneficiary. A delete or limit change that
+            // locked it first is seen here once it commits; one that locks it after this check sees the reserved row.
+            transactionTemplate.executeWithoutResult(status -> requireDestinationAllowed(jwt, user.getId(),
+                    command.getToAccountId(), command.getAmount(),
+                    beneficiariesQueryService::findActiveByAccountForShare));
             Long destinationClientId =
                     resolveDestinationClientId(command.getFromAccountId(), command.getToAccountId());
             standingInstructionId =
@@ -360,8 +364,9 @@ public class ScheduledTransfersCommandServiceImpl implements ScheduledTransfersC
         }
     }
 
-    private void requireDestinationAllowed(Jwt jwt, Long userId, Long toAccountId, BigDecimal amount) {
-        Optional<BeneficiaryQueryData> beneficiary = beneficiariesQueryService.findActiveByAccount(userId, toAccountId);
+    private void requireDestinationAllowed(Jwt jwt, Long userId, Long toAccountId, BigDecimal amount,
+            BiFunction<Long, Long, Optional<BeneficiaryQueryData>> activeBeneficiary) {
+        Optional<BeneficiaryQueryData> beneficiary = activeBeneficiary.apply(userId, toAccountId);
         if (beneficiary.isPresent()) {
             BigDecimal limit = beneficiary.get().getTransferLimit();
             if (limit != null && amount.compareTo(limit) > 0) {

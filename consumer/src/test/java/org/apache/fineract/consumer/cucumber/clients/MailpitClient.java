@@ -49,6 +49,15 @@ public class MailpitClient {
         delete("/api/v1/search?query=" + urlEncode("to:" + recipient));
     }
 
+    /**
+     * Whether Mailpit holds any message for {@code recipient}. The BFF sends its emails before it answers, so once a
+     * request has been answered, an email it sent is already here.
+     */
+    public boolean hasMessages(String recipient) {
+        JsonNode messages = get("/api/v1/search?query=" + urlEncode("to:" + recipient)).path("messages");
+        return messages.isArray() && !messages.isEmpty();
+    }
+
     public String waitForOtp(String recipient) {
         long deadline = System.nanoTime() + POLL_TIMEOUT.toNanos();
         while (System.nanoTime() < deadline) {

@@ -29,4 +29,11 @@ public interface BeneficiariesQueryService {
     List<BeneficiaryQueryData> listBeneficiaries(Jwt jwt);
 
     Optional<BeneficiaryQueryData> findActiveByAccount(Long userId, Long fineractAccountId);
+
+    /**
+     * Like {@link #findActiveByAccount}, but holds a share lock on the beneficiary until the caller's transaction ends,
+     * so it waits for a delete or limit change in progress, and one that starts later waits for it. Must be called
+     * inside the caller's read-write transaction.
+     */
+    Optional<BeneficiaryQueryData> findActiveByAccountForShare(Long userId, Long fineractAccountId);
 }

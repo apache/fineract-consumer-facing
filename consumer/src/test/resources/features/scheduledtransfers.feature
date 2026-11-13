@@ -138,3 +138,89 @@ Feature: Consumer scheduled transfers
   Scenario: Cancelling a scheduled transfer without a session is rejected
     When I initiate cancelling a scheduled transfer without a session
     Then the scheduled transfer request is rejected as unauthorized
+
+  Scenario: A beneficiary with an active scheduled transfer cannot be deleted until the transfer is cancelled
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    When I schedule a monthly transfer within the limit to that beneficiary
+    And I try to delete that beneficiary
+    Then the beneficiary change is rejected because a scheduled transfer to it is active
+    When I cancel the scheduled transfer
+    And I delete that beneficiary
+    Then that beneficiary is no longer in my beneficiary list
+
+  Scenario: A beneficiary's transfer limit cannot be lowered below an active scheduled transfer's amount
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    When I schedule a monthly transfer within the limit to that beneficiary
+    And I try to lower that beneficiary's transfer limit below the scheduled amount
+    Then the beneficiary change is rejected because its limit is below a scheduled transfer
+    And no verification code was emailed to me
+    When I lower that beneficiary's transfer limit to the scheduled amount
+    Then that beneficiary's transfer limit is the scheduled amount
+
+  Scenario: A beneficiary's transfer limit can be raised or removed while a scheduled transfer to it is active
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    When I schedule a monthly transfer within the limit to that beneficiary
+    And I raise that beneficiary's transfer limit
+    Then that beneficiary's transfer limit is the raised limit
+    When I remove that beneficiary's transfer limit
+    Then that beneficiary has no transfer limit
+
+  Scenario: A limit set below an active scheduled transfer's amount on a beneficiary that had none is rejected
+    Given another client's savings account is my scheduled transfer beneficiary with no transfer limit
+    When I schedule a monthly transfer to that beneficiary
+    And I try to set that beneficiary's transfer limit below the scheduled amount
+    Then the beneficiary change is rejected because its limit is below a scheduled transfer
+
+  Scenario: A new beneficiary limit is checked against the amount Fineract holds, not the one first set up
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    When I schedule a monthly transfer within the limit to that beneficiary
+    And bank staff raise the scheduled transfer's amount in Fineract above the beneficiary's limit
+    And I try to lower that beneficiary's transfer limit to the scheduled amount
+    Then the beneficiary change is rejected because its limit is below a scheduled transfer
+
+  # Fineract's validTill is exclusive, so a transfer still runs on its end date and stops the day after. The
+  # transfer to my second savings account ends a day earlier, which lets the steps see when the BFF has caught up
+  # with each business date; the BFF caches Fineract's today for 30 seconds.
+  Scenario: A scheduled transfer stops guarding its beneficiary the day after its end date by Fineract's date
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    And I own a second savings account for scheduled transfers
+    When I schedule a weekly transfer to that beneficiary with an end date
+    And I schedule a weekly transfer to my second savings account ending the day before
+    And Fineract's business date is my end date
+    And I try to delete that beneficiary
+    Then the beneficiary change is rejected because a scheduled transfer to it is active
+    When Fineract's business date is the day after my end date
+    And I lower that beneficiary's transfer limit below the scheduled amount
+    Then that beneficiary's transfer limit is below the scheduled amount
+    When I delete that beneficiary
+    Then that beneficiary is no longer in my beneficiary list
+
+  # The cancelled transfer keeps its row, so the guard reads the client's instructions from Fineract and meets the
+  # bank's one, which pays the same account from the same source account.
+  Scenario: A standing instruction the bank set up to a beneficiary does not stop it being deleted
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    When I schedule a monthly transfer within the limit to that beneficiary
+    And I cancel the scheduled transfer
+    And the bank sets up a standing instruction from my savings account to that beneficiary
+    And I delete that beneficiary
+    Then that beneficiary is no longer in my beneficiary list
+
+  # In the next two scenarios the test's own database connection holds the beneficiary row lock, the way a delete or
+  # a confirm's re-check would, and lets go once Postgres reports the BFF's request waiting behind it.
+  Scenario: A scheduled transfer confirmed while a delete holds its beneficiary is refused once the delete commits
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    And I have initiated a monthly transfer within the limit to that beneficiary
+    When I confirm the transfer while a beneficiary delete holds that beneficiary
+    Then my confirm waits with the transfer reserved
+    When the delete marks that beneficiary deleted and commits
+    Then the scheduled transfer request is denied as forbidden
+    And Fineract holds no standing instruction from my savings account
+    And I have no scheduled transfer on record
+
+  Scenario: Deleting a beneficiary waits while a scheduled transfer confirm checks it
+    Given another client's savings account is my scheduled transfer beneficiary with a transfer limit
+    When I delete that beneficiary while a scheduled transfer confirm holds it for its check
+    Then my delete waits for the confirm's check
+    When the confirm's check commits
+    Then my delete succeeds
+    And that beneficiary is no longer in my beneficiary list

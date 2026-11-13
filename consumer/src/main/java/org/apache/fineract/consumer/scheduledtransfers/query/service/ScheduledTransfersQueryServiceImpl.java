@@ -117,8 +117,8 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
         }
         List<ScheduledTransferQueryData> active = new ArrayList<>();
         for (ScheduledTransferQueryEntity transfer : visible) {
-            instructionOf(transfer, instructions)
-                    .filter(instruction -> isActive(instruction, today))
+            ScheduledTransferInstructionMatcher.instructionOf(transfer, instructions)
+                    .filter(instruction -> ScheduledTransferInstructionMatcher.isActive(instruction, today))
                     .flatMap(instruction -> toQueryData(transfer, instruction))
                     .ifPresent(active::add);
         }
@@ -141,7 +141,7 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
         Long clientId = userClientResolver.resolveClientId(jwt);
         Long instructionId = transfer.getFineractStandingInstructionId() != null
                 ? transfer.getFineractStandingInstructionId()
-                : instructionOf(transfer, clientInstructions(clientId))
+                : ScheduledTransferInstructionMatcher.instructionOf(transfer, clientInstructions(clientId))
                         .map(GetPageItemsStandingInstructionSwagger::getId)
                         .orElse(null);
         if (instructionId == null) {
@@ -182,31 +182,6 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
 
     private List<GetPageItemsStandingInstructionSwagger> clientInstructions(Long clientId) {
         return fetch(() -> standingInstructionFineractClient.listClientStandingInstructions(clientId));
-    }
-
-    /**
-     * The instruction a row stands for. A linked row names it by id. A row stays unlinked when confirm's outcome was
-     * unknown and nobody retried; Fineract may still have created the instruction, under the name derived from the
-     * row's publicId, so it is matched by name. Either way the instruction must debit the row's source account.
-     */
-    private static Optional<GetPageItemsStandingInstructionSwagger> instructionOf(ScheduledTransferQueryEntity transfer,
-            List<GetPageItemsStandingInstructionSwagger> instructions) {
-        Long linkedId = transfer.getFineractStandingInstructionId();
-        String name = ScheduledTransferQueryConstants.INSTRUCTION_NAME_PREFIX + transfer.getPublicId();
-        return instructions.stream()
-                .filter(instruction -> linkedId != null
-                        ? linkedId.equals(instruction.getId())
-                        : name.equals(instruction.getName()))
-                .filter(instruction -> instruction.getFromAccount() != null
-                        && transfer.getFineractFromAccountId().equals(instruction.getFromAccount().getId()))
-                .findFirst();
-    }
-
-    /** Fineract keeps an ended instruction active; its validTill is exclusive, so it ends the day before. */
-    private static boolean isActive(GetPageItemsStandingInstructionSwagger instruction, LocalDate today) {
-        boolean statusActive = instruction.getStatus() != null && instruction.getStatus().getId() != null
-                && instruction.getStatus().getId() == ScheduledTransferQueryConstants.ACTIVE_STATUS_ID;
-        return statusActive && (instruction.getValidTill() == null || instruction.getValidTill().isAfter(today));
     }
 
     private static Optional<ScheduledTransferQueryData> toQueryData(ScheduledTransferQueryEntity transfer,

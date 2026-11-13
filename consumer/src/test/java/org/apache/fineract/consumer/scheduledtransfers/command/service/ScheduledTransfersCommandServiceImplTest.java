@@ -172,6 +172,7 @@ class ScheduledTransfersCommandServiceImplTest {
         service = service(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiariesQueryService.findActiveByAccount(USER_ID, TO_SAVINGS_ID)).thenReturn(Optional.empty());
+        when(beneficiariesQueryService.findActiveByAccountForShare(USER_ID, TO_SAVINGS_ID)).thenReturn(Optional.empty());
         when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(true);
         when(savingsFineractClient.getAccount(FROM_SAVINGS_ID)).thenReturn(account(CLIENT_ID, USD));
         when(savingsFineractClient.getAccount(TO_SAVINGS_ID)).thenReturn(account(DEST_CLIENT_ID, USD));
@@ -472,6 +473,36 @@ class ScheduledTransfersCommandServiceImplTest {
         assertThatThrownBy(() -> service.confirm(jwt(), confirm(ScheduledTransferFrequency.MONTHLY)))
                 .isInstanceOf(ScheduledTransferInvalidException.class);
         verify(repository).delete(reserved);
+    }
+
+    @Test
+    void confirmRechecksTheBeneficiaryUnderAShareLockAfterReserving() {
+        when(beneficiariesQueryService.findActiveByAccountForShare(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(AMOUNT)));
+        when(accessPolicyEvaluator.ownsResource(any(), eq(ResourceType.SAVINGS), eq(TO_SAVINGS_ID))).thenReturn(false);
+        when(standingInstructionFineractClient.createStandingInstruction(any())).thenReturn(STANDING_INSTRUCTION_ID);
+
+        service.confirm(jwt(), confirm(ScheduledTransferFrequency.MONTHLY));
+
+        InOrder order = inOrder(repository, beneficiariesQueryService, standingInstructionFineractClient);
+        order.verify(repository).saveAndFlush(any(ScheduledTransfer.class));
+        order.verify(beneficiariesQueryService).findActiveByAccountForShare(USER_ID, TO_SAVINGS_ID);
+        order.verify(standingInstructionFineractClient).createStandingInstruction(any());
+        verify(beneficiariesQueryService, never()).findActiveByAccount(any(), any());
+    }
+
+    @Test
+    void confirmReleasesTheReservationWhenTheBeneficiaryLimitWasLoweredMeanwhile() {
+        ScheduledTransfer reserved = reserved();
+        when(repository.saveAndFlush(any(ScheduledTransfer.class))).thenReturn(reserved);
+        when(repository.findById(reserved.getId())).thenReturn(Optional.of(reserved));
+        when(beneficiariesQueryService.findActiveByAccountForShare(USER_ID, TO_SAVINGS_ID))
+                .thenReturn(Optional.of(beneficiary(new BigDecimal("25.49"))));
+
+        assertThatThrownBy(() -> service.confirm(jwt(), confirm(ScheduledTransferFrequency.MONTHLY)))
+                .isInstanceOf(ScheduledTransferBeneficiaryLimitExceededException.class);
+        verify(repository).delete(reserved);
+        verify(standingInstructionFineractClient, never()).createStandingInstruction(any());
     }
 
     @Test
