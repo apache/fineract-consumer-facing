@@ -22,6 +22,7 @@ package org.apache.fineract.consumer.cucumber.steps;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import feign.FeignException;
+import io.cucumber.java.After;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
@@ -29,12 +30,22 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryLimitBelowScheduledTransferException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryScheduledTransferActiveException;
 import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
@@ -57,7 +68,9 @@ import org.apache.fineract.consumer.client.model.ScheduledTransferCommandData;
 import org.apache.fineract.consumer.client.model.ScheduledTransferQueryData;
 import org.apache.fineract.consumer.client.model.ScheduledTransferRunQueryData;
 import org.apache.fineract.consumer.cucumber.clients.MailpitClient;
+import org.apache.fineract.consumer.cucumber.helpers.BeneficiaryRowLock;
 import org.apache.fineract.consumer.cucumber.helpers.ConsumerApiClientFactory;
+import org.apache.fineract.consumer.cucumber.helpers.FineractBusinessDate;
 import org.apache.fineract.consumer.cucumber.helpers.FineractJobRunner;
 import org.apache.fineract.consumer.cucumber.helpers.FineractSeeder;
 import org.apache.fineract.consumer.cucumber.helpers.LoginHelper;
@@ -86,6 +99,7 @@ public class ScheduledTransfersSteps {
     private static final BigDecimal TRANSFER_AMOUNT = new BigDecimal("25.50");
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
     private static final BigDecimal BELOW_TRANSFER_AMOUNT = new BigDecimal("20.00");
+    private static final BigDecimal RAISED_TRANSFER_LIMIT = new BigDecimal("750.00");
     private static final BigDecimal ABOVE_LIMIT_AMOUNT = new BigDecimal("600.00");
     private static final BigDecimal FUNDED_BALANCE = new BigDecimal("100.00");
     private static final BigDecimal UNAFFORDABLE_AMOUNT = new BigDecimal("1000.00");
@@ -97,6 +111,10 @@ public class ScheduledTransfersSteps {
     private static final int RUN_FOR_MONTHS = 3;
     private static final int LONGEST_MONTH_DAYS = 31;
     private static final String DELETED_NAME_SUFFIX = "_deleted_";
+    // BusinessDateFineractClientImpl caches Fineract's today for 30 seconds; this leaves room for one refresh.
+    private static final Duration BFF_TODAY_CATCH_UP = Duration.ofSeconds(45);
+    private static final Duration LIST_POLL_INTERVAL = Duration.ofSeconds(1);
+    private static final Duration PENDING_REQUEST_TIMEOUT = Duration.ofSeconds(30);
     private static final ObjectMapper JSON = JsonMapper.builder().build();
     private static final String JDBC_URL = System.getenv()
             .getOrDefault("BFF_DB_URL", "jdbc:postgresql://localhost:5432/consumerapp");
@@ -108,12 +126,22 @@ public class ScheduledTransfersSteps {
                 created_at, updated_at)
             SELECT ?, id, ?, ?, ?, now(), now() FROM users WHERE email = ?
             """;
+    private static final String COUNT_SCHEDULED_TRANSFERS_SQL = """
+            SELECT count(*) FROM scheduled_transfers
+            WHERE user_id = (SELECT id FROM users WHERE email = ?)
+            """;
+    private static final String COUNT_RESERVED_SCHEDULED_TRANSFERS_SQL = """
+            SELECT count(*) FROM scheduled_transfers
+            WHERE user_id = (SELECT id FROM users WHERE email = ?)
+              AND fineract_standing_instruction_id IS NULL AND claimed_until > now()
+            """;
 
     private final RegistrationHelper registrationHelper = new RegistrationHelper();
     private final FineractSeeder fineractSeeder = new FineractSeeder();
     private final LoginHelper loginHelper = new LoginHelper();
     private final MailpitClient mailpit = new MailpitClient();
     private final FineractJobRunner fineractJobRunner = new FineractJobRunner();
+    private final FineractBusinessDate fineractBusinessDate = new FineractBusinessDate();
 
     private RegistrationHelper.BoundUserWithAccounts user;
     private ScheduledTransfersCommandControllerApi scheduledTransfersApi;
@@ -131,6 +159,11 @@ public class ScheduledTransfersSteps {
     private ScheduledTransferCommandData secondResult;
     private ScheduledTransferCommandData affordable;
     private ScheduledTransferCommandData unaffordable;
+    private ScheduledTransferCommandData endsTheDayBefore;
+    private ScheduledTransferChallengeCommandData pendingChallenge;
+    private String pendingOtp;
+    private BeneficiaryRowLock beneficiaryLock;
+    private CompletableFuture<Optional<FeignException>> pendingRequest;
     private UUID otherCustomersTransferId;
     private UUID unownedSourceTransferId;
     private FeignException lastError;
@@ -159,6 +192,15 @@ public class ScheduledTransfersSteps {
 
     @Given("another client's savings account is my scheduled transfer beneficiary with a transfer limit")
     public void beneficiaryWithTransferLimit() {
+        addBeneficiary(TRANSFER_LIMIT);
+    }
+
+    @Given("another client's savings account is my scheduled transfer beneficiary with no transfer limit")
+    public void beneficiaryWithNoTransferLimit() {
+        addBeneficiary(null);
+    }
+
+    private void addBeneficiary(BigDecimal transferLimit) {
         beneficiaryTarget = fineractSeeder.seedTransferTarget();
         mailpit.deleteMessages(user.email());
         BeneficiaryChallengeCommandData challenge = beneficiariesApi.initiateAddBeneficiary(DEVICE_FINGERPRINT,
@@ -166,7 +208,7 @@ public class ScheduledTransfersSteps {
                         .name(BENEFICIARY_NAME)
                         .officeName(beneficiaryTarget.officeName())
                         .accountNumber(beneficiaryTarget.savingsAccountNumber())
-                        .transferLimit(TRANSFER_LIMIT));
+                        .transferLimit(transferLimit));
         String otp = mailpit.waitForOtp(user.email());
         beneficiary = beneficiariesApi.confirmAddBeneficiary(DEVICE_FINGERPRINT,
                 new ConfirmAddBeneficiaryCommandRequest()
@@ -175,7 +217,7 @@ public class ScheduledTransfersSteps {
                         .name(BENEFICIARY_NAME)
                         .officeName(beneficiaryTarget.officeName())
                         .accountNumber(beneficiaryTarget.savingsAccountNumber())
-                        .transferLimit(TRANSFER_LIMIT));
+                        .transferLimit(transferLimit));
     }
 
     @Given("another client owns a savings account that is not my scheduled transfer beneficiary")
@@ -214,6 +256,25 @@ public class ScheduledTransfersSteps {
         fineractSeeder.seedBankStandingInstruction(user.savingsAccountId(), secondSavingsId);
     }
 
+    @Given("the bank sets up a standing instruction from my savings account to that beneficiary")
+    public void bankSetsUpStandingInstructionToTheBeneficiary() {
+        fineractSeeder.seedBankStandingInstruction(user.savingsAccountId(), beneficiaryTarget.savingsAccountId());
+    }
+
+    @Given("bank staff raise the scheduled transfer's amount in Fineract above the beneficiary's limit")
+    public void bankStaffRaiseTheScheduledAmount() {
+        fineractSeeder.updateStandingInstructionAmount(onlyInstructionFromMySavings().getId(), ABOVE_LIMIT_AMOUNT);
+    }
+
+    @Given("I have initiated a monthly transfer within the limit to that beneficiary")
+    public void initiatedMonthlyToBeneficiary() {
+        mailpit.deleteMessages(user.email());
+        pendingChallenge = scheduledTransfersApi.initiateScheduledTransfer(DEVICE_FINGERPRINT,
+                initiateRequest(user.savingsAccountId(), beneficiaryTarget.savingsAccountId(), TRANSFER_AMOUNT,
+                        ScheduledTransferFrequency.MONTHLY, startDate, null));
+        pendingOtp = mailpit.waitForOtp(user.email());
+    }
+
     @Given("another customer has set up a scheduled transfer")
     public void anotherCustomerSetUpAScheduledTransfer() {
         RegistrationHelper.BoundUserWithAccounts other = registrationHelper.registerBoundUserWithAccounts();
@@ -236,6 +297,41 @@ public class ScheduledTransfersSteps {
     public void scheduleMonthlyToBeneficiary() {
         result = schedule(beneficiaryTarget.savingsAccountId(), TRANSFER_AMOUNT, ScheduledTransferFrequency.MONTHLY,
                 null, UUID.randomUUID().toString());
+    }
+
+    @When("I schedule a monthly transfer to that beneficiary")
+    public void scheduleMonthlyToBeneficiaryWithNoLimit() {
+        scheduleMonthlyToBeneficiary();
+    }
+
+    @When("I schedule a weekly transfer to that beneficiary with an end date")
+    public void scheduleWeeklyToBeneficiaryWithAnEndDate() {
+        endDate = startDate.plusMonths(RUN_FOR_MONTHS);
+        result = schedule(beneficiaryTarget.savingsAccountId(), TRANSFER_AMOUNT, ScheduledTransferFrequency.WEEKLY,
+                endDate, UUID.randomUUID().toString());
+    }
+
+    @When("I schedule a weekly transfer to my second savings account ending the day before")
+    public void scheduleWeeklyToSecondSavingsEndingTheDayBefore() {
+        endsTheDayBefore = schedule(secondSavingsId, TRANSFER_AMOUNT, ScheduledTransferFrequency.WEEKLY,
+                endDate.minusDays(1), UUID.randomUUID().toString());
+    }
+
+    /**
+     * The BFF caches Fineract's today, so the step waits until the BFF has caught up: its list leaves out a transfer
+     * past its end date, so on the end date it shows the transfer to the beneficiary but not the one ending the day
+     * before.
+     */
+    @When("Fineract's business date is my end date")
+    public void fineractsBusinessDateIsMyEndDate() {
+        fineractBusinessDate.moveTo(endDate);
+        awaitListed(transfers -> transfers.equals(Set.of(result.getPublicId())));
+    }
+
+    @When("Fineract's business date is the day after my end date")
+    public void fineractsBusinessDateIsTheDayAfterMyEndDate() {
+        fineractBusinessDate.moveTo(endDate.plusDays(1));
+        awaitListed(Set::isEmpty);
     }
 
     @When("I initiate a scheduled transfer above the limit to that beneficiary")
@@ -360,26 +456,66 @@ public class ScheduledTransfersSteps {
 
     @When("I try to lower that beneficiary's transfer limit below the scheduled amount")
     public void tryToLowerTheLimitBelowTheScheduledAmount() {
-        lastError = captureError(() -> beneficiariesApi.initiateUpdateBeneficiary(DEVICE_FINGERPRINT,
-                beneficiary.getPublicId(), new InitiateUpdateBeneficiaryCommandRequest()
-                        .name(BENEFICIARY_NAME)
-                        .transferLimit(BELOW_TRANSFER_AMOUNT)));
+        tryToChangeTheLimit(BELOW_TRANSFER_AMOUNT);
+    }
+
+    @When("I try to set that beneficiary's transfer limit below the scheduled amount")
+    public void tryToSetTheLimitBelowTheScheduledAmount() {
+        tryToChangeTheLimit(BELOW_TRANSFER_AMOUNT);
+    }
+
+    @When("I try to lower that beneficiary's transfer limit to the scheduled amount")
+    public void tryToLowerTheLimitToTheScheduledAmount() {
+        tryToChangeTheLimit(TRANSFER_AMOUNT);
     }
 
     @When("I lower that beneficiary's transfer limit to the scheduled amount")
     public void lowerTheLimitToTheScheduledAmount() {
-        mailpit.deleteMessages(user.email());
-        BeneficiaryChallengeCommandData challenge = beneficiariesApi.initiateUpdateBeneficiary(DEVICE_FINGERPRINT,
-                beneficiary.getPublicId(), new InitiateUpdateBeneficiaryCommandRequest()
-                        .name(BENEFICIARY_NAME)
-                        .transferLimit(TRANSFER_AMOUNT));
-        String otp = mailpit.waitForOtp(user.email());
-        beneficiary = beneficiariesApi.confirmUpdateBeneficiary(DEVICE_FINGERPRINT, beneficiary.getPublicId(),
-                new ConfirmUpdateBeneficiaryCommandRequest()
-                        .stepUpToken(challenge.getStepUpToken())
-                        .otp(otp)
-                        .name(BENEFICIARY_NAME)
-                        .transferLimit(TRANSFER_AMOUNT));
+        changeTheLimit(TRANSFER_AMOUNT);
+    }
+
+    @When("I lower that beneficiary's transfer limit below the scheduled amount")
+    public void lowerTheLimitBelowTheScheduledAmount() {
+        changeTheLimit(BELOW_TRANSFER_AMOUNT);
+    }
+
+    @When("I raise that beneficiary's transfer limit")
+    public void raiseTheLimit() {
+        changeTheLimit(RAISED_TRANSFER_LIMIT);
+    }
+
+    @When("I remove that beneficiary's transfer limit")
+    public void removeTheLimit() {
+        changeTheLimit(null);
+    }
+
+    @When("I confirm the transfer while a beneficiary delete holds that beneficiary")
+    public void confirmWhileADeleteHoldsTheBeneficiary() {
+        beneficiaryLock = BeneficiaryRowLock.forUpdate(beneficiary.getPublicId());
+        pendingRequest = CompletableFuture.supplyAsync(() -> outcomeOf(() -> confirmAs(user, scheduledTransfersApi,
+                pendingChallenge, pendingOtp, beneficiaryTarget.savingsAccountId(), TRANSFER_AMOUNT,
+                ScheduledTransferFrequency.MONTHLY, null, UUID.randomUUID().toString())));
+        beneficiaryLock.awaitWaiter(pendingRequest);
+    }
+
+    @When("the delete marks that beneficiary deleted and commits")
+    public void theDeleteCommits() {
+        beneficiaryLock.deactivateAndCommit();
+        lastError = awaitPendingRequest().orElse(null);
+    }
+
+    @When("I delete that beneficiary while a scheduled transfer confirm holds it for its check")
+    public void deleteWhileAConfirmHoldsTheBeneficiary() {
+        beneficiaryLock = BeneficiaryRowLock.forShare(beneficiary.getPublicId());
+        pendingRequest = CompletableFuture.supplyAsync(
+                () -> outcomeOf(() -> beneficiariesApi.deleteBeneficiary(beneficiary.getPublicId())));
+        beneficiaryLock.awaitWaiter(pendingRequest);
+    }
+
+    @When("the confirm's check commits")
+    public void theConfirmsCheckCommits() {
+        beneficiaryLock.commit();
+        lastError = awaitPendingRequest().orElse(null);
     }
 
     @When("I initiate cancelling the other customer's scheduled transfer")
@@ -531,6 +667,80 @@ public class ScheduledTransfersSteps {
         assertThat(beneficiary.getTransferLimit()).isEqualByComparingTo(TRANSFER_AMOUNT);
     }
 
+    @Then("that beneficiary's transfer limit is below the scheduled amount")
+    public void beneficiaryLimitIsBelowTheScheduledAmount() {
+        assertThat(beneficiary.getTransferLimit()).isEqualByComparingTo(BELOW_TRANSFER_AMOUNT);
+    }
+
+    @Then("that beneficiary's transfer limit is the raised limit")
+    public void beneficiaryLimitIsTheRaisedLimit() {
+        assertThat(beneficiary.getTransferLimit()).isEqualByComparingTo(RAISED_TRANSFER_LIMIT);
+    }
+
+    @Then("that beneficiary has no transfer limit")
+    public void beneficiaryHasNoLimit() {
+        assertThat(beneficiary.getTransferLimit()).isNull();
+    }
+
+    @Then("no verification code was emailed to me")
+    public void noVerificationCodeWasEmailed() {
+        assertThat(mailpit.hasMessages(user.email())).isFalse();
+    }
+
+    @Then("my confirm waits with the transfer reserved")
+    public void confirmWaitsWithTheTransferReserved() {
+        assertThat(pendingRequest).isNotDone();
+        assertThat(countScheduledTransfers(COUNT_RESERVED_SCHEDULED_TRANSFERS_SQL)).isEqualTo(1);
+    }
+
+    @Then("my delete waits for the confirm's check")
+    public void deleteWaitsForTheConfirmsCheck() {
+        assertThat(pendingRequest).isNotDone();
+    }
+
+    @Then("my delete succeeds")
+    public void deleteSucceeds() {
+        assertThat(lastError).isNull();
+    }
+
+    @Then("Fineract holds no standing instruction from my savings account")
+    public void fineractHoldsNoInstruction() {
+        assertThat(fineractSeeder.standingInstructionsFrom(user.savingsAccountId())).isEmpty();
+    }
+
+    @Then("I have no scheduled transfer on record")
+    public void noScheduledTransferOnRecord() {
+        assertThat(countScheduledTransfers(COUNT_SCHEDULED_TRANSFERS_SQL)).isZero();
+    }
+
+    /** Lets a request still waiting on a lock this scenario holds go on, so it cannot hold up the next scenario. */
+    @After
+    public void releaseTheBeneficiaryLock() {
+        if (beneficiaryLock != null) {
+            beneficiaryLock.close();
+        }
+        if (pendingRequest != null && !pendingRequest.isDone()) {
+            awaitPendingRequest();
+        }
+    }
+
+    /**
+     * Puts Fineract's business date back and waits until the BFF has too, so the next scenario's start dates are
+     * checked against the real today: the transfer ending the day before is listed again.
+     */
+    @After
+    public void putFineractsBusinessDateBack() {
+        if (!fineractBusinessDate.isMoved()) {
+            return;
+        }
+        fineractBusinessDate.restore();
+        if (endsTheDayBefore != null) {
+            awaitListed(transfers -> transfers.contains(endsTheDayBefore.getPublicId()));
+        } else {
+            sleep(BFF_TODAY_CATCH_UP);
+        }
+    }
+
     @Then("the scheduled transfer request is rejected as not found")
     public void rejectedNotFound() {
         assertError(NOT_FOUND, ScheduledTransferQueryNotFoundException.CODE);
@@ -575,6 +785,13 @@ public class ScheduledTransfersSteps {
         ScheduledTransferChallengeCommandData challenge = api.initiateScheduledTransfer(DEVICE_FINGERPRINT,
                 initiateRequest(customer.savingsAccountId(), toAccountId, amount, frequency, startDate, end));
         String otp = mailpit.waitForOtp(customer.email());
+        return confirmAs(customer, api, challenge, otp, toAccountId, amount, frequency, end, idempotencyKey);
+    }
+
+    private ScheduledTransferCommandData confirmAs(RegistrationHelper.BoundUserWithAccounts customer,
+            ScheduledTransfersCommandControllerApi api, ScheduledTransferChallengeCommandData challenge, String otp,
+            long toAccountId, BigDecimal amount, ScheduledTransferFrequency frequency, LocalDate end,
+            String idempotencyKey) {
         return api.confirmScheduledTransfer(DEVICE_FINGERPRINT, idempotencyKey,
                 new ConfirmScheduledTransferCommandRequest()
                         .stepUpToken(challenge.getStepUpToken())
@@ -613,6 +830,93 @@ public class ScheduledTransfersSteps {
 
     private static ScheduledTransferRunQueryData.StatusEnum runStatus(ScheduledTransferRunStatus status) {
         return ScheduledTransferRunQueryData.StatusEnum.fromValue(status.name());
+    }
+
+    /** Initiates a change to the beneficiary's limit, clearing the mailbox first so a step can tell no OTP went out. */
+    private void tryToChangeTheLimit(BigDecimal transferLimit) {
+        mailpit.deleteMessages(user.email());
+        lastError = captureError(() -> beneficiariesApi.initiateUpdateBeneficiary(DEVICE_FINGERPRINT,
+                beneficiary.getPublicId(), new InitiateUpdateBeneficiaryCommandRequest()
+                        .name(BENEFICIARY_NAME)
+                        .transferLimit(transferLimit)));
+    }
+
+    private void changeTheLimit(BigDecimal transferLimit) {
+        mailpit.deleteMessages(user.email());
+        BeneficiaryChallengeCommandData challenge = beneficiariesApi.initiateUpdateBeneficiary(DEVICE_FINGERPRINT,
+                beneficiary.getPublicId(), new InitiateUpdateBeneficiaryCommandRequest()
+                        .name(BENEFICIARY_NAME)
+                        .transferLimit(transferLimit));
+        String otp = mailpit.waitForOtp(user.email());
+        beneficiary = beneficiariesApi.confirmUpdateBeneficiary(DEVICE_FINGERPRINT, beneficiary.getPublicId(),
+                new ConfirmUpdateBeneficiaryCommandRequest()
+                        .stepUpToken(challenge.getStepUpToken())
+                        .otp(otp)
+                        .name(BENEFICIARY_NAME)
+                        .transferLimit(transferLimit));
+    }
+
+    /** Polls the scheduled transfers list until the public ids it shows satisfy {@code expected}. */
+    private void awaitListed(Predicate<Set<UUID>> expected) {
+        long deadline = System.nanoTime() + BFF_TODAY_CATCH_UP.toNanos();
+        Set<UUID> listed = Set.of();
+        while (System.nanoTime() < deadline) {
+            listed = scheduledTransfersQueryApi.listScheduledTransfers().stream()
+                    .map(ScheduledTransferQueryData::getPublicId)
+                    .collect(Collectors.toUnmodifiableSet());
+            if (expected.test(listed)) {
+                return;
+            }
+            sleep(LIST_POLL_INTERVAL);
+        }
+        throw new AssertionError("the scheduled transfers list still shows " + listed + " after "
+                + BFF_TODAY_CATCH_UP.toSeconds() + "s; has the BFF caught up with Fineract's business date?");
+    }
+
+    private Optional<FeignException> awaitPendingRequest() {
+        try {
+            return pendingRequest.get(PENDING_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting for the request behind the lock", e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("the request behind the lock failed", e.getCause());
+        } catch (TimeoutException e) {
+            throw new AssertionError("the request behind the lock did not finish within "
+                    + PENDING_REQUEST_TIMEOUT.toSeconds() + "s", e);
+        }
+    }
+
+    private long countScheduledTransfers(String sql) {
+        try (Connection connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASSWORD);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, user.email());
+            try (ResultSet count = statement.executeQuery()) {
+                assertThat(count.next()).isTrue();
+                return count.getLong(1);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(
+                    "Failed to count scheduled_transfers rows at " + JDBC_URL + "; is the Docker Compose stack up?", e);
+        }
+    }
+
+    private static Optional<FeignException> outcomeOf(Runnable call) {
+        try {
+            call.run();
+            return Optional.empty();
+        } catch (FeignException e) {
+            return Optional.of(e);
+        }
+    }
+
+    private static void sleep(Duration duration) {
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting", e);
+        }
     }
 
     private GetPageItemsStandingInstructionSwagger onlyInstructionFromMySavings() {

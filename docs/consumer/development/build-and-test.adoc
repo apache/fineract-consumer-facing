@@ -62,6 +62,11 @@ Feature files cover registration, login, savings, loans, transfers, scheduled tr
 
 Fineract runs a standing instruction only once the tenant's business date reaches its start date, and the BFF accepts only start dates after today. A scenario that needs a run calls `FineractJobRunner.runStandingInstructionsDueOn(date)` (in `cucumber.helpers`). It turns on Fineract's `enable-business-date` setting, sets the business date, runs the *Execute Standing Instruction* job (`STI_EXEC`) and waits for it to finish, then puts the setting back as it was. The job runs every instruction in the tenant that is due on that date, so such a scenario picks a date no other scenario's instructions start on.
 
+[[build-and-test-cucumber-business-date]]
+=== Scenarios that move the business date
+
+A scenario that keeps Fineract's business date moved across several steps uses `FineractBusinessDate` (in `cucumber.helpers`), as `FineractJobRunner` does: `moveTo(date)` turns the setting on and sets the date, and `restore()` puts both back. The BFF caches Fineract's today for 30 seconds (see xref:fineract-today[Fineract's current date]), so after each move the scenario waits until something the BFF answers by that date has changed, and it waits again after restoring, so that the next scenario's start dates are checked against the real today. `ScheduledTransfersSteps` polls its list, which leaves out transfers past their end date, and restores in an `@After` hook, so a failed scenario puts the date back too. Each such wait can take up to the 30 seconds.
+
 == Static analysis
 
 The BFF build runs the same Java analyzers as Apache Fineract core, with versions matched to core's:

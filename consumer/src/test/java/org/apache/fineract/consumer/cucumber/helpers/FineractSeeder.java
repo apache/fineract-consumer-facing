@@ -67,6 +67,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsProductsRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.StandingInstructionCreationRequest;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.StandingInstructionUpdatesRequest;
 import org.springframework.cloud.openfeign.support.SpringMvcContract;
 
 public class FineractSeeder {
@@ -92,6 +93,7 @@ public class FineractSeeder {
     private static final String APPROVE_COMMAND = "approve";
     private static final String DISBURSE_COMMAND = "disburse";
     private static final String DEPOSIT_COMMAND = "deposit";
+    private static final String UPDATE_COMMAND = "update";
     private static final int SEED_PAYMENT_TYPE_ID = 2;
     private static final String FIRST_NAME = "Test";
     private static final String LAST_NAME_PREFIX = "User-";
@@ -208,26 +210,36 @@ public class FineractSeeder {
         ensureUsdCurrency();
         long clientId = createActiveClient(null);
         createDormantStandingInstruction(clientId, createActiveSavingsAccount(clientId),
-                createActiveSavingsAccount(clientId));
+                clientId, createActiveSavingsAccount(clientId));
     }
 
     /**
-     * Creates a standing instruction between two savings accounts of the client that owns them, the way bank staff
-     * would in the back office. It starts a year from now, so it never runs.
+     * Creates a standing instruction between two savings accounts, the way bank staff would in the back office. The
+     * accounts may belong to different clients. It starts a year from now, so it never runs.
      */
     public void seedBankStandingInstruction(long fromSavingsId, long toSavingsId) {
-        createDormantStandingInstruction(savingsAccountClientId(fromSavingsId), fromSavingsId, toSavingsId);
+        createDormantStandingInstruction(savingsAccountClientId(fromSavingsId), fromSavingsId,
+                savingsAccountClientId(toSavingsId), toSavingsId);
     }
 
-    private static void createDormantStandingInstruction(long clientId, long fromSavingsId, long toSavingsId) {
+    /** Changes a standing instruction's amount, the way bank staff would in the back office. */
+    public void updateStandingInstructionAmount(long standingInstructionId, BigDecimal amount) {
+        STANDING_INSTRUCTIONS.updateStandingInstruction(standingInstructionId, UPDATE_COMMAND,
+                new StandingInstructionUpdatesRequest()
+                        .amount(amount.toPlainString())
+                        .locale(LOCALE));
+    }
+
+    private static void createDormantStandingInstruction(long fromClientId, long fromSavingsId, long toClientId,
+            long toSavingsId) {
         STANDING_INSTRUCTIONS.createStandingInstruction(new StandingInstructionCreationRequest()
                 .name(SEED_INSTRUCTION_NAME_PREFIX + UUID.randomUUID())
                 .fromOfficeId(String.valueOf(HEAD_OFFICE_ID))
-                .fromClientId(String.valueOf(clientId))
+                .fromClientId(String.valueOf(fromClientId))
                 .fromAccountType(SAVINGS_ACCOUNT_TYPE)
                 .fromAccountId(String.valueOf(fromSavingsId))
                 .toOfficeId(String.valueOf(HEAD_OFFICE_ID))
-                .toClientId(String.valueOf(clientId))
+                .toClientId(String.valueOf(toClientId))
                 .toAccountType(SAVINGS_ACCOUNT_TYPE)
                 .toAccountId(String.valueOf(toSavingsId))
                 .transferType(ACCOUNT_TRANSFER)
