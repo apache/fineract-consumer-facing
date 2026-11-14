@@ -266,6 +266,50 @@
       }
     }
   },
+  "scheduledTransfers": {
+    "title": "Scheduled transfers",
+    "newCta": "Set up a scheduled transfer",
+    "backCta": "Back to scheduled transfers",
+    "disabled": "Scheduled transfers aren't available on this service.",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "noEndDate": "No end date",
+    "frequency": {
+      "label": "Frequency",
+      "WEEKLY": "Weekly",
+      "MONTHLY": "Monthly"
+    },
+    "list": {
+      "empty": "No scheduled transfers yet.",
+      "viewCta": "View"
+    },
+    "form": {
+      "title": "Set up a scheduled transfer",
+      "amountLabel": "Amount each time",
+      "endDateLabel": "End date (optional)",
+      "submitCta": "Set up transfer",
+      "done": "Your scheduled transfer is set up. The first transfer runs on the start date.",
+      "error": {
+        "startDateRequired": "Choose a start date."
+      }
+    },
+    "detail": {
+      "title": "Scheduled transfer",
+      "cancelCta": "Cancel this transfer",
+      "cancelPrompt": "Enter the code we sent you to cancel this scheduled transfer. Transfers that already ran are not reversed.",
+      "cancelled": "Scheduled transfer cancelled.",
+      "notActive": "This transfer is no longer active. Its past runs are listed below."
+    },
+    "runs": {
+      "title": "Run history",
+      "empty": "No runs yet.",
+      "status": {
+        "label": "Result",
+        "SUCCEEDED": "Succeeded",
+        "FAILED": "Failed"
+      }
+    }
+  },
   "beneficiaries": {
     "title": "Beneficiaries",
     "list": {
@@ -449,6 +493,8 @@
   "error.msg.consumer.beneficiaries.command.upstream.unavailable": "Beneficiaries are temporarily unavailable. Please try again later.",
   "error.msg.consumer.beneficiaries.command.account.self": "You can't add one of your own accounts as a beneficiary.",
   "error.msg.consumer.beneficiaries.command.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
+  "error.msg.consumer.beneficiaries.command.scheduled.transfer.active": "This beneficiary has an active scheduled transfer. Cancel the scheduled transfer first.",
+  "error.msg.consumer.beneficiaries.command.limit.below.scheduled.transfer": "The new limit is below the amount of an active scheduled transfer to this beneficiary.",
   "error.msg.consumer.internal.error": "Something went wrong on our end. Please try again.",
   "error.msg.consumer.request.body.malformed": "We couldn't read your request. Please try again.",
   "error.msg.consumer.request.validation.failed": "Please check the form for errors and try again.",
@@ -575,5 +621,18 @@
   "error.msg.consumer.authentication.kyc.revoked": "Your identity verification is no longer valid. Please contact support.",
   "error.msg.consumer.summary.upstream.unavailable": "Account summary is temporarily unavailable.",
   "error.msg.consumer.transfers.command.loan.overpayment": "The amount exceeds your loan's outstanding balance.",
-  "error.msg.consumer.transfers.command.loan.not.active": "This loan can't receive a repayment right now."
+  "error.msg.consumer.transfers.command.loan.not.active": "This loan can't receive a repayment right now.",
+  "error.msg.consumer.scheduledtransfers.disabled": "Scheduled transfers aren't available on this service.",
+  "error.msg.consumer.scheduledtransfers.command.access.denied": "You don't have access to one of these accounts.",
+  "error.msg.consumer.scheduledtransfers.command.beneficiary.limit.exceeded": "That amount is over the transfer limit set for this beneficiary.",
+  "error.msg.consumer.scheduledtransfers.command.currency.mismatch": "Both accounts must hold the same currency.",
+  "error.msg.consumer.scheduledtransfers.command.invalid": "Check the accounts and dates: the start date must be after today, and the end date can't be before it.",
+  "error.msg.consumer.scheduledtransfers.command.not.found": "We couldn't find that scheduled transfer or account.",
+  "error.msg.consumer.scheduledtransfers.command.request.in.progress": "Your previous request is still processing. Please try again shortly.",
+  "error.msg.consumer.scheduledtransfers.command.stepup.invalid": "That verification code is invalid or has expired. Please try again.",
+  "error.msg.consumer.scheduledtransfers.command.upstream.unavailable": "Scheduled transfers are temporarily unavailable. Please try again later.",
+  "error.msg.consumer.scheduledtransfers.query.access.denied": "You don't have access to this scheduled transfer.",
+  "error.msg.consumer.scheduledtransfers.query.invalid": "That page of run history can't be shown.",
+  "error.msg.consumer.scheduledtransfers.query.not.found": "We couldn't find that scheduled transfer.",
+  "error.msg.consumer.scheduledtransfers.query.upstream.unavailable": "Scheduled transfers are temporarily unavailable. Please try again later."
 }

@@ -1,0 +1,77 @@
+= Scheduled transfers
+
+== Purpose
+
+Scheduled transfers let the customer set up a weekly or monthly transfer from one of their own savings accounts to another of their own savings accounts or to a saved beneficiary, see the active ones with each one's run history, and cancel one. Fineract Core runs every transfer as a standing instruction; the client only sets them up, lists them and cancels them through the BFF. Setting one up and cancelling one are step-up flows, like a one-off transfer: the form only initiates, and nothing changes until the customer enters the OTP and the confirm call succeeds.
+
+Code lives under `frontend/src/app/features/scheduled-transfers/`. `ScheduledTransfersStore` holds the active list, the "turned off" state, the current step-up challenge and the run-history page as signals, and calls the `SCHEDULED_TRANSFER_API` port (`core/adapters/api/scheduled-transfer.api.ts`), whose default implementation wraps the generated `@bff/client` services.
+
+== Screens and routes
+
+[cols="2,3,4", options="header"]
+|===
+| Route | Component | Purpose
+
+| `/transfers/scheduled`
+| `ScheduledTransfersComponent` (`scheduled-transfers.component.ts`)
+| The active scheduled transfers, a button to set one up, and a link from each row to its details. Reached from the Transfers page header.
+
+| `/transfers/scheduled/new`
+| `ScheduledTransferFormComponent` (`scheduled-transfer-form.component.ts`)
+| Three-step set-up flow: form, OTP challenge, summary.
+
+| `/transfers/scheduled/:publicId`
+| `ScheduledTransferDetailComponent` (`scheduled-transfer-detail.component.ts`)
+| The transfer's details, its paged run history, and cancel with an OTP challenge.
+|===
+
+All three routes sit inside the authenticated shell and are protected by `authGuard`.
+
+== Flows
+
+*List.* On entry the list loads the active transfers, the customer's savings accounts and their beneficiaries. The BFF returns only account ids, so the table shows the account as "product · account number" for the customer's own accounts and the beneficiary's name for a beneficiary's account, falling back to `#id`. This is display only. Frequency is rendered through `scheduledTransfers.frequency.<value>`, and a missing end date reads "No end date".
+
+*Turned off.* A deployment can run with `consumer.scheduled-transfers.enabled` off, and the BFF then answers every scheduled-transfer call with HTTP 404 `error.msg.consumer.scheduledtransfers.disabled`. There is no separate flag endpoint: the list call is the probe. The adapter sends that call with the `QUIET_ERROR_CODES` HTTP context token set to the disabled code, so the error interceptor audits and rethrows it without a toast. The store turns that code into a `disabled` signal and an empty list, and the screen says in place that scheduled transfers aren't available and hides "Set up". Any other error on the call still toasts.
+
+*Set up, step `form`.* The fields are the source account, the destination (grouped into "my savings" and "beneficiaries" exactly as in the transfer form, without the chosen source), the amount per run, the frequency (`WEEKLY` or `MONTHLY`, default monthly), the start date and an optional end date. The dates use `ion-datetime-button` with a modal `ion-datetime` and are sent as ISO dates. The start date is suggested as tomorrow in the browser's calendar. That is only a suggestion: the BFF checks the start date against Fineract's own today and answers `error.msg.consumer.scheduledtransfers.command.invalid` if it is not after it. Only missing values are caught in the client (no source, no destination, amount missing or below 0.01, no start date), as translated toasts. The beneficiary limit, the currency check and the date rules are the BFF's. Submitting calls initiate with the `X-Device-Fingerprint` header and records a `SENSITIVE_ACTION` client audit event (`SCHEDULED_TRANSFER_CREATE`).
+
+*Set up, steps `otp` and `done`.* The shared `app-otp` component takes the code. Confirm sends the step-up token, the OTP and the same transfer details with an `Idempotency-Key` header. As in the transfer form, the key is generated on the first confirm attempt, reused on retries, reset whenever the form changes, and cleared on success. The summary repeats what was set up.
+
+*Details and run history.* The details card shows the transfer while it is in the active list. Run history pages through `GET /api/v1/scheduled-transfers/{publicId}/runs` ten at a time, with each run's date, a `SUCCEEDED` or `FAILED` badge, and the amount (a dash on a failed run, where nothing moved). A transfer that has ended or been cancelled is no longer in the active list, but the BFF still serves its run history by `publicId`, so the screen keeps the history, says the transfer is no longer active, and offers no cancel.
+
+*Cancel.* "Cancel this transfer" calls cancel initiate and records a `SENSITIVE_ACTION` client audit event (`SCHEDULED_TRANSFER_CANCEL`). After the OTP, cancel confirm is sent with its own `Idempotency-Key`, reused on retries. On success the store drops the transfer from the list, a toast confirms it, and the customer returns to the list. Runs that already happened are not reversed.
+
+*Beneficiary guard.* While a scheduled transfer to a beneficiary is active, the BFF refuses to delete that beneficiary or lower its limit below the transfer's amount. The beneficiaries screen needs no change for this: the refusal arrives as a translated error toast (`error.msg.consumer.beneficiaries.command.scheduled.transfer.active` or `...limit.below.scheduled.transfer`).
+
+== BFF endpoints used
+
+[cols="3,4", options="header"]
+|===
+| User action | Generated `@bff/client` call
+
+| View the list (entry to the list and details screens)
+| `ScheduledTransfersQueryControllerService.listScheduledTransfers()` (`GET /api/v1/scheduled-transfers`)
+
+| View run history (entry, Previous/Next)
+| `ScheduledTransfersQueryControllerService.listScheduledTransferRuns(publicId, page, size)` (`GET /api/v1/scheduled-transfers/{publicId}/runs`)
+
+| Submit the set-up form
+| `ScheduledTransfersCommandControllerService.initiateScheduledTransfer(xDeviceFingerprint, request)` (`POST /api/v1/scheduled-transfers/initiate`)
+
+| Confirm set-up with OTP
+| `ScheduledTransfersCommandControllerService.confirmScheduledTransfer(xDeviceFingerprint, idempotencyKey, request)` (`POST /api/v1/scheduled-transfers/confirm`)
+
+| Start a cancel
+| `ScheduledTransfersCommandControllerService.initiateCancelScheduledTransfer(xDeviceFingerprint, publicId)` (`POST /api/v1/scheduled-transfers/{publicId}/cancel/initiate`)
+
+| Confirm cancel with OTP
+| `ScheduledTransfersCommandControllerService.confirmCancelScheduledTransfer(xDeviceFingerprint, idempotencyKey, publicId, request)` (`POST /api/v1/scheduled-transfers/{publicId}/cancel/confirm`)
+|===
+
+The account and beneficiary labels come from `SavingsStore` and `BeneficiariesStore`, as in the transfer form. The server side, including the schedule rules, the standing-instruction mapping and the beneficiary guard, is documented in `docs/consumer/features/scheduled-transfers.adoc`.
+
+== Test coverage
+
+* Vitest: `scheduled-transfers.store.spec.ts` drives the store through the real adapter against a mocked HTTP layer (the quiet "turned off" handling, the initiate and cancel audit events, the idempotency keys, run-history paging). `scheduled-transfer-form.component.spec.ts` covers the submit guards, the default request (monthly, starting tomorrow, no end date), ISO dates from the picker, and key reuse on a confirm retry. `scheduled-transfers.component.spec.ts` and `scheduled-transfer-detail.component.spec.ts` cover the labels, the "turned off" state, a failed run, an inactive transfer and the cancel flow. `error.interceptor.spec.ts` covers `QUIET_ERROR_CODES`.
+* Playwright, mocked BFF: `frontend/playwright/tests/scheduled-transfers.spec.ts` covers the link from the Transfers page, set-up through the OTP (checking the initiate and confirm bodies and the `Idempotency-Key`), a translated error toast, run history with a failed run, cancel through the OTP, and the "turned off" screen with no toast.
+* Playwright, full stack: `frontend/playwright/full-stack/tests/scheduled-transfers.spec.ts` sets up a weekly transfer between the customer's own accounts and cancels it, each with the OTP from Mailpit, and checks the standing instruction in Fineract goes from active to deleted. A second journey sets up a transfer to a beneficiary and shows that deleting the beneficiary is refused. It picks a start date a week out with the `pickDate` helper, because the suggested "tomorrow" is in the browser's time zone and can already be Fineract's today.

@@ -73,3 +73,33 @@ export async function submitOtp(page: Page, code: string) {
 export async function expectToast(page: Page, text: string | RegExp) {
   await expect(page.locator('ion-toast').filter({ hasText: text }).last()).toBeVisible();
 }
+
+/**
+ * Picks `isoDate` (`YYYY-MM-DD`, on or after the month the picker opens on) in the modal
+ * `ion-datetime` that `ion-datetime-button[datetime=id]` opens, and closes it with Done.
+ */
+export async function pickDate(page: Page, datetimeId: string, isoDate: string) {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  await page.locator(`ion-datetime-button[datetime="${datetimeId}"]`).click();
+  const datetime = page.locator(`ion-datetime#${datetimeId}`);
+  const shown = datetime.locator('.calendar-month-year');
+  await expect(shown).toBeVisible();
+
+  // The heading reads "November 2026". Step one month at a time, waiting for each to render.
+  const monthIndex = (heading: string) => {
+    const first = new Date(`1 ${heading.trim()}`);
+    return first.getFullYear() * 12 + first.getMonth();
+  };
+  let steps = year * 12 + (month - 1) - monthIndex(await shown.innerText());
+  for (; steps > 0; steps--) {
+    const before = await shown.innerText();
+    await datetime.getByRole('button', { name: 'Next month' }).click();
+    await expect(shown).not.toHaveText(before);
+  }
+
+  await datetime
+    .locator(`button.calendar-day[data-year="${year}"][data-month="${month}"][data-day="${day}"]`)
+    .click();
+  await datetime.getByRole('button', { name: 'Done' }).click();
+  await expect(datetime).toBeHidden();
+}
