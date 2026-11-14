@@ -20,7 +20,10 @@ research pipelines **should not file security reports against this repository**
 unless a finding is:
 
 1. exploitable in the context described under [Scope and Intended Use](#scope-and-intended-use) below, **and**
-2. not already excluded by [What This Prototype Does Not Protect Against](#what-this-prototype-does-not-protect-against).
+2. not already excluded by [What This Prototype Does Not Protect Against](#what-this-prototype-does-not-protect-against), **and**
+3. not disposed of by rule 1 of
+   [Triage: this project is unreleased](#triage-this-project-is-unreleased-and-that-is-decided-first)
+   — which, while this repository stays unreleased, disposes of all of them.
 
 Findings that amount to "a prototype lacks production hardening" (missing rate
 limiting, development TLS configuration, development Docker Compose defaults,
@@ -29,11 +32,34 @@ similar) are **known and by design** at this stage and will be triaged as
 non-findings. This notice exists to keep the Apache Fineract security inbox
 free of false positives about preliminary work.
 
+## Triage: this project is unreleased, and that is decided first
+
+Reports against this repository are triaged in the order below. **Rule 1 is
+checked before anything else and short-circuits the rest.**
+
+| Order | Disposition | Meaning |
+|---|---|---|
+| **1** | `NOT-ACCEPTED: unreleased-project` | This repository has never been released by the Apache Fineract PMC, is not production-ready, and processes no real customer data. A report against it is **closed without further triage**: no CVE is requested, no security release is made, and no embargo applies. Nothing below is evaluated. |
+| 2 | `OUT-OF-MODEL: upstream-layer` | The finding is in Fineract Core, Spring, or another dependency rather than in this prototype. Route it to that project's security team. |
+| 3 | `KNOWN-NON-FINDING` | The finding matches [What This Prototype Does Not Protect Against](#what-this-prototype-does-not-protect-against) or [Known Misuse Patterns](#known-misuse-patterns) — missing rate limiting, development TLS, compose defaults, sample credentials, Mailpit. |
+| 4 | `TRACKED-AS-ISSUE` | A genuine weakness worth fixing, which because of rule 1 is handled as an ordinary public GitHub issue rather than as a vulnerability. |
+
+Rule 1 is not a refusal to read mail. The Apache Software Foundation's security
+inbox receives what is sent to it, and the ASF Security Team routes reports as it
+sees fit. What this project is stating is what the **disposition** will be: the
+threshold for a vulnerability is code that someone could be running, and nothing
+here is released for anyone to run.
+
+If this prototype is ever proposed for a production-oriented release, rule 1 is
+removed in the same change that replaces this document with the full threat model
+described under [Before Any Production Release](#before-any-production-release) —
+not separately, and not later.
+
 ## Reporting a Vulnerability
 
 If you believe you have found a genuine vulnerability that would survive the
-scoping rules above, please **do not open a public GitHub issue**. Follow the
-standard Apache security reporting process:
+scoping rules above **and rule 1 above**, please **do not open a public GitHub
+issue**. Follow the standard Apache security reporting process:
 
 * Email the ASF Security Team: <security@apache.org>
 * General ASF guidance: <https://www.apache.org/security/>
