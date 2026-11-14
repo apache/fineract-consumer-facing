@@ -33,11 +33,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import feign.FeignException;
+import feign.Request;
+import feign.Response;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
@@ -169,10 +173,11 @@ class SavingsCommandServiceImplTest {
         return data;
     }
 
-    private FeignException feignStatus(int status) {
-        FeignException mock = mock(FeignException.class);
-        when(mock.status()).thenReturn(status);
-        return mock;
+    private static FeignException feignStatus(int status) {
+        Request request = Request.create(Request.HttpMethod.POST, "/savings", Map.of(), null,
+                StandardCharsets.UTF_8, null);
+        Response response = Response.builder().status(status).request(request).headers(Map.of()).build();
+        return FeignException.errorStatus("savingsCommand", response);
     }
 
     @Test
