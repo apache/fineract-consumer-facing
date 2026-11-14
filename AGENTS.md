@@ -55,6 +55,9 @@ docker compose up -d --build --wait && ./gradlew test; docker compose down -v
 # End-to-end tests (Cucumber)
 docker compose up -d --build --wait && ./gradlew cucumber; docker compose down -v
 
+# The @second-bff scenarios, against a second BFF with scheduled transfers off
+docker compose -f compose.yaml -f compose.second-bff.yaml up -d --build --wait && ./gradlew cucumber --tags @second-bff; docker compose -f compose.yaml -f compose.second-bff.yaml down -v
+
 # OpenAPI spec → build/openapi/openapi.json
 docker compose up -d --build --wait && ./gradlew openapi; docker compose down -v
 ```

@@ -1,0 +1,42 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+
+# Adds a second BFF on port 8081, with scheduled transfers turned off. It shares the database, Fineract, Valkey,
+# Mailpit and JWT signing key with the first, like a second instance of a deployment that turned the feature off
+# after customers had set up transfers. Only the scenarios tagged @second-bff use it:
+#
+#   docker compose -f compose.yaml -f compose.second-bff.yaml up -d --build --wait
+#   ./gradlew cucumber --tags @second-bff
+services:
+  second-bff:
+    extends:
+      file: compose.yaml
+      service: bff
+    container_name: second-bff
+    # Starts once the first BFF is up, so the first alone applies the Liquibase changelog.
+    depends_on:
+      bff:
+        condition: service_healthy
+    environment:
+      CONSUMER_SCHEDULED_TRANSFERS_ENABLED: "false"
+      # No JaCoCo agent: it would write to the same report file as the first BFF's.
+      JAVA_TOOL_OPTIONS: ""
+    volumes: !override
+      - ./dev-jwt-key.pem:/etc/bff/jwt-key.pem:ro
+    ports: !override
+      - "8081:8080"

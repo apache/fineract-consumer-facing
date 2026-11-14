@@ -129,3 +129,66 @@ jobs:
           name: test-results
           path: 'consumer/**/build/reports/'
           retention-days: 5
+
+  # The @second-bff scenarios: the beneficiary guard with scheduled transfers turned off, and a beneficiary delete
+  # racing a scheduled transfer confirm across two BFFs. They need a second BFF (compose.second-bff.yaml), so they run
+  # here, next to the test job, and the test job's Cucumber run skips them.
+  beneficiary-guard:
+    name: Beneficiary guard on two BFFs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          java-version: '25'
+          distribution: 'zulu'
+
+      - name: Setup Gradle and Validate Wrapper
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          validate-wrappers: true
+
+      - name: Generate dev JWT signing key
+        run: ./scripts/generate-dev-jwt-key.sh
+
+      # This job sets no BFF_JACOCO_OPTS, so neither BFF runs the JaCoCo agent here and the second BFF's
+      # JAVA_TOOL_OPTIONS override only matters locally with coverage on. The first BFF still bind-mounts these
+      # directories, so create them, or Docker creates them owned by root.
+      - name: Pre-create JaCoCo mount directories
+        run: mkdir -p build/jacoco-agent build/jacoco
+
+      - name: Start application stack with a second BFF
+        run: docker compose -f compose.yaml -f compose.second-bff.yaml up -d --build --wait --wait-timeout 300
+
+      # The Cucumber glue compiles against the Java client generated from the running BFF's spec.
+      - name: Capture OpenAPI spec
+        run: ./gradlew --no-daemon openapi
+
+      - name: Generate clients
+        run: ./gradlew --no-daemon generateClients
+
+      - name: Run the second BFF scenarios
+        run: ./gradlew --no-daemon cucumber --tags @second-bff
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose -f compose.yaml -f compose.second-bff.yaml logs --no-color
+
+      - name: Tear down application stack
+        if: always()
+        run: docker compose -f compose.yaml -f compose.second-bff.yaml down -v
+
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: second-bff-test-results
+          path: 'consumer/**/build/reports/'
+          retention-days: 5
