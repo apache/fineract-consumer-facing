@@ -21,6 +21,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import {
   HttpClient,
+  HttpContext,
   HttpErrorResponse,
   provideHttpClient,
   withInterceptors,
@@ -33,6 +34,7 @@ import { OVERLAY } from '../adapters';
 import { AuthService } from '../auth/auth.service';
 import { I18nService } from '../i18n/i18n.service';
 import { errorInterceptor } from './error.interceptor';
+import { QUIET_ERROR_CODES } from './quiet-error-codes';
 
 describe('errorInterceptor', () => {
   const toast = vi.fn(() => Promise.resolve());
@@ -131,5 +133,51 @@ describe('errorInterceptor', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
     controller.expectOne('/api/v1/savings').flush([{ id: 1 }]);
     expect(result).toEqual([{ id: 1 }]);
+  });
+
+  describe('QUIET_ERROR_CODES', () => {
+    const quiet = 'error.msg.consumer.scheduledtransfers.disabled';
+
+    function getQuietly(): { error?: unknown } {
+      const outcome: { error?: unknown } = {};
+      http
+        .get('/api/v1/scheduled-transfers', {
+          context: new HttpContext().set(QUIET_ERROR_CODES, [quiet]),
+        })
+        .subscribe({ error: (error: unknown) => (outcome.error = error) });
+      return outcome;
+    }
+
+    it('rethrows a quiet code without a toast, so the caller can render it', () => {
+      const outcome = getQuietly();
+
+      controller
+        .expectOne('/api/v1/scheduled-transfers')
+        .flush({ code: quiet, defaultMessage: 'not enabled' } satisfies ConsumerApiError, {
+          status: 404,
+          statusText: 'Not Found',
+        });
+
+      expect(outcome.error).toBeInstanceOf(HttpErrorResponse);
+      expect(toast).not.toHaveBeenCalled();
+    });
+
+    it('still toasts any other code on a request that set quiet codes', () => {
+      const outcome = getQuietly();
+      const envelope: ConsumerApiError = {
+        code: 'error.msg.consumer.scheduledtransfers.query.upstream.unavailable',
+        defaultMessage: 'Fineract is unavailable.',
+      };
+
+      controller.expectOne('/api/v1/scheduled-transfers').flush(envelope, {
+        status: 503,
+        statusText: 'Service Unavailable',
+      });
+
+      expect(outcome.error).toBeInstanceOf(HttpErrorResponse);
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ message: envelope.defaultMessage }),
+      );
+    });
   });
 });

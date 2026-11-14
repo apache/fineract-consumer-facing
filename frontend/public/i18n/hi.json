@@ -266,6 +266,50 @@
       }
     }
   },
+  "scheduledTransfers": {
+    "title": "नियमित ट्रांसफ़र",
+    "newCta": "नियमित ट्रांसफ़र सेट करें",
+    "backCta": "नियमित ट्रांसफ़र पर वापस जाएं",
+    "disabled": "इस सेवा पर नियमित ट्रांसफ़र उपलब्ध नहीं हैं।",
+    "startDate": "शुरुआत की तारीख",
+    "endDate": "समाप्ति की तारीख",
+    "noEndDate": "कोई समाप्ति तारीख नहीं",
+    "frequency": {
+      "label": "आवृत्ति",
+      "WEEKLY": "साप्ताहिक",
+      "MONTHLY": "मासिक"
+    },
+    "list": {
+      "empty": "अभी तक कोई नियमित ट्रांसफ़र नहीं।",
+      "viewCta": "देखें"
+    },
+    "form": {
+      "title": "नियमित ट्रांसफ़र सेट करें",
+      "amountLabel": "हर बार की राशि",
+      "endDateLabel": "समाप्ति की तारीख (वैकल्पिक)",
+      "submitCta": "ट्रांसफ़र सेट करें",
+      "done": "आपका नियमित ट्रांसफ़र सेट हो गया है। पहला ट्रांसफ़र शुरुआत की तारीख को होगा।",
+      "error": {
+        "startDateRequired": "शुरुआत की तारीख चुनें।"
+      }
+    },
+    "detail": {
+      "title": "नियमित ट्रांसफ़र",
+      "cancelCta": "यह ट्रांसफ़र रद्द करें",
+      "cancelPrompt": "यह नियमित ट्रांसफ़र रद्द करने के लिए हमारा भेजा गया कोड दर्ज करें। जो ट्रांसफ़र पहले हो चुके हैं, वे वापस नहीं होंगे।",
+      "cancelled": "नियमित ट्रांसफ़र रद्द कर दिया गया।",
+      "notActive": "यह ट्रांसफ़र अब सक्रिय नहीं है। इसके पिछले ट्रांसफ़र नीचे दिए गए हैं।"
+    },
+    "runs": {
+      "title": "पिछले ट्रांसफ़र",
+      "empty": "अभी तक कोई ट्रांसफ़र नहीं हुआ।",
+      "status": {
+        "label": "परिणाम",
+        "SUCCEEDED": "सफल",
+        "FAILED": "विफल"
+      }
+    }
+  },
   "beneficiaries": {
     "title": "लाभार्थी",
     "list": {
@@ -449,6 +493,8 @@
   "error.msg.consumer.beneficiaries.command.upstream.unavailable": "लाभार्थी अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
   "error.msg.consumer.beneficiaries.command.account.self": "आप अपने ही किसी खाते को लाभार्थी के रूप में नहीं जोड़ सकते।",
   "error.msg.consumer.beneficiaries.command.stepup.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.beneficiaries.command.scheduled.transfer.active": "इस लाभार्थी के लिए एक नियमित ट्रांसफ़र सक्रिय है। पहले वह नियमित ट्रांसफ़र रद्द करें।",
+  "error.msg.consumer.beneficiaries.command.limit.below.scheduled.transfer": "नई सीमा इस लाभार्थी के सक्रिय नियमित ट्रांसफ़र की राशि से कम है।",
   "error.msg.consumer.internal.error": "हमारी ओर से कुछ ग़लत हो गया। कृपया पुनः प्रयास करें।",
   "error.msg.consumer.request.body.malformed": "हम आपका अनुरोध नहीं पढ़ सके। कृपया पुनः प्रयास करें।",
   "error.msg.consumer.request.validation.failed": "कृपया फ़ॉर्म में त्रुटियों की जाँच करें और पुनः प्रयास करें।",
@@ -575,5 +621,18 @@
   "error.msg.consumer.authentication.kyc.revoked": "आपका पहचान सत्यापन अब मान्य नहीं है। कृपया सहायता से संपर्क करें।",
   "error.msg.consumer.summary.upstream.unavailable": "खाता सारांश अस्थायी रूप से अनुपलब्ध है।",
   "error.msg.consumer.transfers.command.loan.overpayment": "राशि आपके ऋण की बकाया राशि से अधिक है।",
-  "error.msg.consumer.transfers.command.loan.not.active": "इस ऋण पर अभी पुनर्भुगतान प्राप्त नहीं किया जा सकता है।"
+  "error.msg.consumer.transfers.command.loan.not.active": "इस ऋण पर अभी पुनर्भुगतान प्राप्त नहीं किया जा सकता है।",
+  "error.msg.consumer.scheduledtransfers.disabled": "इस सेवा पर नियमित ट्रांसफ़र उपलब्ध नहीं हैं।",
+  "error.msg.consumer.scheduledtransfers.command.access.denied": "आपके पास इनमें से किसी एक खाते तक पहुँच नहीं है।",
+  "error.msg.consumer.scheduledtransfers.command.beneficiary.limit.exceeded": "यह राशि इस लाभार्थी के लिए निर्धारित स्थानांतरण सीमा से अधिक है।",
+  "error.msg.consumer.scheduledtransfers.command.currency.mismatch": "दोनों खातों की मुद्रा एक ही होनी चाहिए।",
+  "error.msg.consumer.scheduledtransfers.command.invalid": "खाते और तारीखें जाँचें: शुरुआत की तारीख आज के बाद की होनी चाहिए, और समाप्ति की तारीख उससे पहले की नहीं हो सकती।",
+  "error.msg.consumer.scheduledtransfers.command.not.found": "हमें वह नियमित ट्रांसफ़र या खाता नहीं मिला।",
+  "error.msg.consumer.scheduledtransfers.command.request.in.progress": "आपका पिछला अनुरोध अभी संसाधित हो रहा है। कृपया थोड़ी देर में पुनः प्रयास करें।",
+  "error.msg.consumer.scheduledtransfers.command.stepup.invalid": "वह सत्यापन कोड अमान्य है या समाप्त हो गया है। कृपया पुनः प्रयास करें।",
+  "error.msg.consumer.scheduledtransfers.command.upstream.unavailable": "नियमित ट्रांसफ़र अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।",
+  "error.msg.consumer.scheduledtransfers.query.access.denied": "आपके पास इस नियमित ट्रांसफ़र तक पहुँच नहीं है।",
+  "error.msg.consumer.scheduledtransfers.query.invalid": "रन इतिहास का वह पृष्ठ नहीं दिखाया जा सकता।",
+  "error.msg.consumer.scheduledtransfers.query.not.found": "हमें वह नियमित ट्रांसफ़र नहीं मिला।",
+  "error.msg.consumer.scheduledtransfers.query.upstream.unavailable": "नियमित ट्रांसफ़र अस्थायी रूप से अनुपलब्ध हैं। कृपया बाद में पुनः प्रयास करें।"
 }
