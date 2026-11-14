@@ -228,7 +228,7 @@ public class SavingsSteps {
         assertThat(account).isNotNull();
         assertThat(account.getId()).isEqualTo(pendingSavingsId);
         assertThat(account.getProductName()).isNotEqualTo(initialProductName);
-        assertThat(account.isActive()).isFalse();
+        assertThat(account.getActive()).isFalse();
         assertThat(account.getStatus()).containsIgnoringCase("pending");
     }
 
@@ -368,7 +368,7 @@ public class SavingsSteps {
 
     private static String readCode(String body) {
         try {
-            return JSON.readTree(body).path("code").asString();
+            return JSON.readTree(body).path("code").asText();
         } catch (Exception e) {
             throw new IllegalStateException("could not parse error response body: " + body, e);
         }
