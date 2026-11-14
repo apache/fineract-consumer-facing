@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.infrastructure.fineractclient.service;
 
+import java.time.LocalDate;
 import java.util.List;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetPageItemsStandingInstructionSwagger;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetStandingInstructionHistoryPageItemsResponse;
@@ -42,8 +43,9 @@ public interface StandingInstructionFineractClient {
     void deleteStandingInstruction(Long standingInstructionId);
 
     /**
-     * Every recorded run of the instructions debiting the client's savings account, oldest first, including runs of
-     * instructions deleted since.
+     * Every recorded run of the instructions debiting the client's savings account between fromDate and toDate
+     * (either may be null for no bound), oldest first, including runs of instructions deleted since.
      */
-    List<GetStandingInstructionHistoryPageItemsResponse> listSavingsAccountRunHistory(Long clientId, Long savingsAccountId);
+    List<GetStandingInstructionHistoryPageItemsResponse> listSavingsAccountRunHistory(
+            Long clientId, Long savingsAccountId, LocalDate fromDate, LocalDate toDate);
 }
