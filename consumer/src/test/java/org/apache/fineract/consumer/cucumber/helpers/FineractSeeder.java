@@ -64,6 +64,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostLoansRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountTransactionsRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsAccountIdRequest;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsProductsRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.StandingInstructionCreationRequest;
