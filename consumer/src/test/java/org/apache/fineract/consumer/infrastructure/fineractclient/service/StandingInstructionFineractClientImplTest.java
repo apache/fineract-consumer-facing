@@ -20,8 +20,10 @@
 package org.apache.fineract.consumer.infrastructure.fineractclient.service;
 
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.ASCENDING;
+import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.DATE_FORMAT;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.DELETE_COMMAND;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.INSTRUCTION_ORDER;
+import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.LOCALE;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.PAGE_SIZE;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.RUN_ORDER;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.SAVINGS_ACCOUNT_TYPE;
@@ -29,10 +31,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -54,6 +58,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.OngoingStubbing;
 
 @ExtendWith(MockitoExtension.class)
 class StandingInstructionFineractClientImplTest {
@@ -156,30 +161,105 @@ class StandingInstructionFineractClientImplTest {
 
     @Test
     void listSavingsAccountRunHistoryFiltersBySavingsSourceAccountInRunOrder() {
-        GetStandingInstructionHistoryPageItemsResponse run =
-                new GetStandingInstructionHistoryPageItemsResponse().standingInstructionId(INSTRUCTION_ID).status("success");
-        when(standingInstructionsHistoryApi.retrieveAllStandingInstructionHistory(
-                null, 0, PAGE_SIZE, RUN_ORDER, ASCENDING, null, null, CLIENT_ID, SAVINGS_ID, SAVINGS_ACCOUNT_TYPE,
-                null, null, null, null))
-                .thenReturn(new GetStandingInstructionRunHistoryResponse().pageItems(List.of(run)).totalFilteredRecords(1));
+        GetStandingInstructionHistoryPageItemsResponse run = run(INSTRUCTION_ID, "success");
+        stubRunHistory(0, null, null).thenReturn(page(List.of(run), 1));
 
-        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID)).containsExactly(run);
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).containsExactly(run);
     }
 
     @Test
     void listSavingsAccountRunHistoryKeepsIdenticalRuns() {
         // Two failed runs of one instruction on one business date carry identical fields; both must survive.
-        GetStandingInstructionHistoryPageItemsResponse failedRun =
-                new GetStandingInstructionHistoryPageItemsResponse().standingInstructionId(INSTRUCTION_ID).status("failed");
-        GetStandingInstructionHistoryPageItemsResponse sameFailedRun =
-                new GetStandingInstructionHistoryPageItemsResponse().standingInstructionId(INSTRUCTION_ID).status("failed");
-        when(standingInstructionsHistoryApi.retrieveAllStandingInstructionHistory(
-                null, 0, PAGE_SIZE, RUN_ORDER, ASCENDING, null, null, CLIENT_ID, SAVINGS_ID, SAVINGS_ACCOUNT_TYPE,
-                null, null, null, null))
-                .thenReturn(new GetStandingInstructionRunHistoryResponse()
-                        .pageItems(new ArrayList<>(List.of(failedRun, sameFailedRun))).totalFilteredRecords(2));
+        List<GetStandingInstructionHistoryPageItemsResponse> failedRuns =
+                new ArrayList<>(List.of(run(INSTRUCTION_ID, "failed"), run(INSTRUCTION_ID, "failed")));
+        stubRunHistory(0, null, null).thenReturn(page(failedRuns, 2));
 
-        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID)).hasSize(2);
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).hasSize(2);
+    }
+
+    @Test
+    void listSavingsAccountRunHistorySendsTheWindowAsIsoDates() {
+        LocalDate from = LocalDate.of(2029, 1, 15);
+        LocalDate to = LocalDate.of(2030, 1, 14);
+        GetStandingInstructionHistoryPageItemsResponse run = run(INSTRUCTION_ID, "success");
+        stubRunHistory(0, "2029-01-15", "2030-01-14").thenReturn(page(List.of(run), 1));
+
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, from, to)).containsExactly(run);
+    }
+
+    @Test
+    void listSavingsAccountRunHistorySendsNoEndDateWhenTheWindowIsOpenEnded() {
+        LocalDate from = LocalDate.of(2029, 1, 15);
+        GetStandingInstructionHistoryPageItemsResponse run = run(INSTRUCTION_ID, "success");
+        stubRunHistory(0, "2029-01-15", null).thenReturn(page(List.of(run), 1));
+
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, from, null)).containsExactly(run);
+    }
+
+    @Test
+    void listSavingsAccountRunHistoryKeepsTheWindowOnEveryPageAndRunOrder() {
+        LocalDate from = LocalDate.of(2029, 1, 15);
+        List<GetStandingInstructionHistoryPageItemsResponse> firstPage = runs(1, PAGE_SIZE);
+        List<GetStandingInstructionHistoryPageItemsResponse> secondPage = runs(PAGE_SIZE + 1L, PAGE_SIZE + 1L);
+        int total = PAGE_SIZE + 1;
+        stubRunHistory(0, "2029-01-15", null).thenReturn(page(firstPage, total));
+        stubRunHistory(PAGE_SIZE, "2029-01-15", null).thenReturn(page(secondPage, total));
+
+        List<GetStandingInstructionHistoryPageItemsResponse> result =
+                client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, from, null);
+
+        List<GetStandingInstructionHistoryPageItemsResponse> expected = new ArrayList<>(firstPage);
+        expected.addAll(secondPage);
+        assertThat(result).containsExactlyElementsOf(expected);
+    }
+
+    @Test
+    void listSavingsAccountRunHistoryFollowsPagesUntilTheTotalIsReached() {
+        List<GetStandingInstructionHistoryPageItemsResponse> firstPage = runs(1, PAGE_SIZE);
+        List<GetStandingInstructionHistoryPageItemsResponse> secondPage = runs(PAGE_SIZE + 1L, PAGE_SIZE + 1L);
+        int total = PAGE_SIZE + 1;
+        stubRunHistory(0, null, null).thenReturn(page(firstPage, total));
+        stubRunHistory(PAGE_SIZE, null, null).thenReturn(page(secondPage, total));
+
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).hasSize(total);
+    }
+
+    @Test
+    void listSavingsAccountRunHistoryStopsAtAFullPageThatReachesTheTotal() {
+        stubRunHistory(0, null, null).thenReturn(page(runs(1, PAGE_SIZE), PAGE_SIZE));
+
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).hasSize(PAGE_SIZE);
+        verify(standingInstructionsHistoryApi, never()).retrieveAllStandingInstructionHistory(
+                any(), eq(PAGE_SIZE), anyInt(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any());
+    }
+
+    @Test
+    void listSavingsAccountRunHistoryIsEmptyWhenFineractReturnsNothing() {
+        stubRunHistory(0, null, null).thenReturn(null);
+
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).isEmpty();
+    }
+
+    /** Stubs the one Fineract request a run history read makes for a page. */
+    private OngoingStubbing<GetStandingInstructionRunHistoryResponse> stubRunHistory(
+            int offset, String fromDate, String toDate) {
+        return lenient().when(standingInstructionsHistoryApi.retrieveAllStandingInstructionHistory(
+                null, offset, PAGE_SIZE, RUN_ORDER, ASCENDING, null, null, CLIENT_ID, SAVINGS_ID,
+                SAVINGS_ACCOUNT_TYPE, LOCALE, DATE_FORMAT, fromDate, toDate));
+    }
+
+    private static GetStandingInstructionRunHistoryResponse page(
+            List<GetStandingInstructionHistoryPageItemsResponse> items, int total) {
+        return new GetStandingInstructionRunHistoryResponse().pageItems(items).totalFilteredRecords(total);
+    }
+
+    private static GetStandingInstructionHistoryPageItemsResponse run(Long instructionId, String status) {
+        return new GetStandingInstructionHistoryPageItemsResponse().standingInstructionId(instructionId).status(status);
+    }
+
+    private static List<GetStandingInstructionHistoryPageItemsResponse> runs(long firstId, long lastId) {
+        return LongStream.rangeClosed(firstId, lastId).mapToObj(id -> run(id, "success")).toList();
     }
 
     private static Set<GetPageItemsStandingInstructionSwagger> instructions(long firstId, long lastId) {

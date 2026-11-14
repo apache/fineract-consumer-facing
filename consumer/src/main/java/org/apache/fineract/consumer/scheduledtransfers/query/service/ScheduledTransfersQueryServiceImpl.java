@@ -62,6 +62,8 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
     // native image would ignore the runtime setting.
     private static final String ENABLED_PROPERTY = "${consumer.scheduled-transfers.enabled:false}";
 
+    private static final int DEFAULT_RUN_WINDOW_MONTHS = 12;
+
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final UserClientResolver userClientResolver;
     private final StandingInstructionFineractClient standingInstructionFineractClient;
@@ -130,6 +132,7 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
     public ScheduledTransferRunQueryResponse listRuns(Jwt jwt, ScheduledTransferRunHistoryQuery query) {
         requireEnabled();
         requireValidPage(query.getPage(), query.getSize());
+        requireOrderedDates(query.getFromDate(), query.getToDate());
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.SCHEDULED_TRANSFER_LIST);
         // Another customer's transfer is reported as missing, so its existence is not revealed.
         ScheduledTransferQueryEntity transfer = scheduledTransferQueryRepository
@@ -147,8 +150,13 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
         if (instructionId == null) {
             return toRunPage(List.of(), query);
         }
+        // Only the window is read from Fineract, so a request costs the same however old the account is.
+        LocalDate fromDate = query.getFromDate() != null ? query.getFromDate() : defaultRunsFromDate();
+        LocalDate toDate = query.getToDate();
+        requireOrderedDates(fromDate, toDate);
         List<GetStandingInstructionHistoryPageItemsResponse> history = fetch(
-                () -> standingInstructionFineractClient.listSavingsAccountRunHistory(clientId, sourceAccountId));
+                () -> standingInstructionFineractClient.listSavingsAccountRunHistory(
+                        clientId, sourceAccountId, fromDate, toDate));
         List<ScheduledTransferRunQueryData> runs = new ArrayList<>();
         for (GetStandingInstructionHistoryPageItemsResponse run : history) {
             if (instructionId.equals(run.getStandingInstructionId())) {
@@ -160,6 +168,22 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
         runs.sort(Comparator.comparing(ScheduledTransferRunQueryData::getDate,
                 Comparator.nullsLast(Comparator.reverseOrder())));
         return toRunPage(runs, query);
+    }
+
+    /** Runs from the last 12 months by Fineract's own date, which is not necessarily this server's. */
+    private LocalDate defaultRunsFromDate() {
+        LocalDate today = fetch(businessDateFineractClient::today);
+        if (today == null) {
+            throw new ScheduledTransferQueryUpstreamUnavailableException(
+                    new IllegalStateException("Fineract returned no current date"));
+        }
+        return today.minusMonths(DEFAULT_RUN_WINDOW_MONTHS);
+    }
+
+    private static void requireOrderedDates(LocalDate fromDate, LocalDate toDate) {
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            throw new ScheduledTransferQueryInvalidException();
+        }
     }
 
     private void requireEnabled() {

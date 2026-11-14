@@ -408,13 +408,13 @@ public class ScheduledTransfersSteps {
     @When("I request the run history of the other customer's scheduled transfer")
     public void requestOtherCustomersRunHistory() {
         lastError = captureError(
-                () -> scheduledTransfersQueryApi.listScheduledTransferRuns(otherCustomersTransferId, null, null));
+                () -> scheduledTransfersQueryApi.listScheduledTransferRuns(otherCustomersTransferId, null, null, null, null));
     }
 
     @When("I request the run history of the transfer from that account")
     public void requestUnownedSourceRunHistory() {
         lastError = captureError(
-                () -> scheduledTransfersQueryApi.listScheduledTransferRuns(unownedSourceTransferId, null, null));
+                () -> scheduledTransfersQueryApi.listScheduledTransferRuns(unownedSourceTransferId, null, null, null, null));
     }
 
     @When("I list scheduled transfers without a session")
@@ -816,7 +816,7 @@ public class ScheduledTransfersSteps {
     }
 
     private List<ScheduledTransferRunQueryData> runsOf(ScheduledTransferCommandData transfer) {
-        return scheduledTransfersQueryApi.listScheduledTransferRuns(transfer.getPublicId(), null, null).getContent();
+        return scheduledTransfersQueryApi.listScheduledTransferRuns(transfer.getPublicId(), null, null, null, null).getContent();
     }
 
     /**

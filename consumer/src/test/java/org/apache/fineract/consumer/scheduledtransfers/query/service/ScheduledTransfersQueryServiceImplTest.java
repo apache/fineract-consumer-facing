@@ -95,6 +95,8 @@ class ScheduledTransfersQueryServiceImplTest {
     private static final LocalDate TODAY = LocalDate.of(2030, 1, 15);
     private static final LocalDate START = TODAY.plusDays(10);
     private static final LocalDate END = START.plusMonths(3);
+    // Run history with no dates asked for starts twelve months before Fineract's date.
+    private static final LocalDate DEFAULT_RUNS_FROM = TODAY.minusMonths(12);
 
     @Mock
     private AccessPolicyEvaluator accessPolicyEvaluator;
@@ -385,11 +387,12 @@ class ScheduledTransfersQueryServiceImplTest {
     void runHistoryShowsOnlyThisTransfersRunsNewestFirstWithoutFineractsErrorLog() {
         LocalDate first = START;
         LocalDate second = START.plusWeeks(1);
-        when(standingInstructionFineractClient.listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID))
+        when(standingInstructionFineractClient.listSavingsAccountRunHistory(
+                CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, null))
                 .thenReturn(List.of(
-                        run(INSTRUCTION_ID, "success", AMOUNT, first),
+                        run(INSTRUCTION_ID, "failed", BigDecimal.ZERO, second).errorLog("Insufficient balance"),
                         run(OTHER_INSTRUCTION_ID, "success", AMOUNT, first),
-                        run(INSTRUCTION_ID, "failed", BigDecimal.ZERO, second).errorLog("Insufficient balance")));
+                        run(INSTRUCTION_ID, "success", AMOUNT, first)));
 
         ScheduledTransferRunQueryResponse page = service.listRuns(jwt(), runs(0, 20));
 
@@ -406,7 +409,8 @@ class ScheduledTransfersQueryServiceImplTest {
 
     @Test
     void runHistoryLeavesOutRunStatusesTheBffNeverCreates() {
-        when(standingInstructionFineractClient.listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID))
+        when(standingInstructionFineractClient.listSavingsAccountRunHistory(
+                CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, null))
                 .thenReturn(List.of(run(INSTRUCTION_ID, "partial", AMOUNT, START)));
 
         assertThat(service.listRuns(jwt(), runs(0, 20)).getContent()).isEmpty();
@@ -414,11 +418,12 @@ class ScheduledTransfersQueryServiceImplTest {
 
     @Test
     void runHistoryIsPaged() {
-        when(standingInstructionFineractClient.listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID))
+        when(standingInstructionFineractClient.listSavingsAccountRunHistory(
+                CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, null))
                 .thenReturn(List.of(
-                        run(INSTRUCTION_ID, "success", AMOUNT, START),
+                        run(INSTRUCTION_ID, "success", AMOUNT, START.plusWeeks(2)),
                         run(INSTRUCTION_ID, "success", AMOUNT, START.plusWeeks(1)),
-                        run(INSTRUCTION_ID, "success", AMOUNT, START.plusWeeks(2))));
+                        run(INSTRUCTION_ID, "success", AMOUNT, START)));
 
         ScheduledTransferRunQueryResponse page = service.listRuns(jwt(), runs(1, 2));
 
@@ -435,7 +440,8 @@ class ScheduledTransfersQueryServiceImplTest {
                 .thenReturn(Optional.of(row(PUBLIC_ID, FROM_SAVINGS_ID, null)));
         when(standingInstructionFineractClient.listClientStandingInstructions(CLIENT_ID))
                 .thenReturn(List.of(weekly(INSTRUCTION_ID, PUBLIC_ID)));
-        when(standingInstructionFineractClient.listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID))
+        when(standingInstructionFineractClient.listSavingsAccountRunHistory(
+                CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, null))
                 .thenReturn(List.of(run(INSTRUCTION_ID, "success", AMOUNT, START)));
 
         assertThat(service.listRuns(jwt(), runs(0, 20)).getContent()).hasSize(1);
@@ -451,16 +457,110 @@ class ScheduledTransfersQueryServiceImplTest {
 
         assertThat(page.getContent()).isEmpty();
         assertThat(page.getTotalElements()).isZero();
-        verify(standingInstructionFineractClient, never()).listSavingsAccountRunHistory(any(), any());
+        verify(standingInstructionFineractClient, never()).listSavingsAccountRunHistory(any(), any(), any(), any());
     }
 
     @Test
     void runHistoryReportsUpstreamUnavailableWhenFineractFails() {
-        when(standingInstructionFineractClient.listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID))
+        when(standingInstructionFineractClient.listSavingsAccountRunHistory(
+                CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, null))
                 .thenThrow(feignStatus(500));
 
         assertThatThrownBy(() -> service.listRuns(jwt(), runs(0, 20)))
                 .isInstanceOf(ScheduledTransferQueryUpstreamUnavailableException.class);
+    }
+
+    @Test
+    void runHistoryShowsTheLatestRunOfADayFirst() {
+        when(standingInstructionFineractClient.listSavingsAccountRunHistory(
+                CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, null))
+                .thenReturn(List.of(
+                        run(INSTRUCTION_ID, "success", AMOUNT, START),
+                        run(INSTRUCTION_ID, "failed", BigDecimal.ZERO, START)));
+
+        assertThat(service.listRuns(jwt(), runs(0, 20)).getContent())
+                .extracting(ScheduledTransferRunQueryData::getStatus)
+                .containsExactly(ScheduledTransferRunStatus.FAILED, ScheduledTransferRunStatus.SUCCEEDED);
+    }
+
+    @Test
+    void runHistoryReadsTheLastTwelveMonthsOfFineractsDateByDefault() {
+        service.listRuns(jwt(), runs(0, 20));
+
+        verify(standingInstructionFineractClient)
+                .listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, null);
+    }
+
+    @Test
+    void runHistoryPassesAnExplicitWindowThroughWithoutAskingFineractForItsDate() {
+        LocalDate from = LocalDate.of(2028, 1, 1);
+        LocalDate to = LocalDate.of(2028, 12, 31);
+
+        service.listRuns(jwt(), runsBetween(from, to));
+
+        verify(standingInstructionFineractClient).listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID, from, to);
+        verify(businessDateFineractClient, never()).today();
+    }
+
+    @Test
+    void runHistoryWithOnlyAFromDateLeavesTheEndOpen() {
+        LocalDate from = LocalDate.of(2028, 1, 1);
+
+        service.listRuns(jwt(), runsBetween(from, null));
+
+        verify(standingInstructionFineractClient).listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID, from, null);
+        verify(businessDateFineractClient, never()).today();
+    }
+
+    @Test
+    void runHistoryWithOnlyAToDateStillStartsTwelveMonthsBeforeFineractsDate() {
+        LocalDate to = TODAY.minusDays(1);
+
+        service.listRuns(jwt(), runsBetween(null, to));
+
+        verify(standingInstructionFineractClient)
+                .listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, to);
+    }
+
+    @Test
+    void runHistoryAcceptsAWindowOfOneDay() {
+        service.listRuns(jwt(), runsBetween(START, START));
+
+        verify(standingInstructionFineractClient)
+                .listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID, START, START);
+    }
+
+    @Test
+    void runHistoryRejectsAFromDateAfterTheToDateBeforeAnyCheck() {
+        assertThatThrownBy(() -> service.listRuns(jwt(), runsBetween(START.plusDays(1), START)))
+                .isInstanceOf(ScheduledTransferQueryInvalidException.class)
+                .hasFieldOrPropertyWithValue("code", ScheduledTransferQueryInvalidException.CODE);
+        verifyNoInteractions(accessPolicyEvaluator, repository, standingInstructionFineractClient);
+    }
+
+    @Test
+    void runHistoryRejectsAToDateBeforeTheDefaultStartWhenNoFromDateIsGiven() {
+        assertThatThrownBy(() -> service.listRuns(jwt(), runsBetween(null, DEFAULT_RUNS_FROM.minusDays(1))))
+                .isInstanceOf(ScheduledTransferQueryInvalidException.class);
+        verify(standingInstructionFineractClient, never()).listSavingsAccountRunHistory(any(), any(), any(), any());
+    }
+
+    @Test
+    void runHistoryReportsUpstreamUnavailableWhenFineractReportsNoDate() {
+        when(businessDateFineractClient.today()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.listRuns(jwt(), runs(0, 20)))
+                .isInstanceOf(ScheduledTransferQueryUpstreamUnavailableException.class);
+        verify(standingInstructionFineractClient, never()).listSavingsAccountRunHistory(any(), any(), any(), any());
+    }
+
+    @Test
+    void runHistoryReportsUpstreamUnavailableWhenFineractsDateCannotBeRead() {
+        when(businessDateFineractClient.today()).thenThrow(feignStatus(503));
+
+        assertThatThrownBy(() -> service.listRuns(jwt(), runs(0, 20)))
+                .isInstanceOf(ScheduledTransferQueryUpstreamUnavailableException.class);
+        verify(standingInstructionFineractClient, never()).listSavingsAccountRunHistory(any(), any(), any(), any());
     }
 
     private ScheduledTransfersQueryServiceImpl service(boolean enabled) {
@@ -504,6 +604,16 @@ class ScheduledTransfersQueryServiceImplTest {
 
     private static ScheduledTransferRunHistoryQuery runs(UUID publicId, int page, int size) {
         return ScheduledTransferRunHistoryQuery.builder().publicId(publicId).page(page).size(size).build();
+    }
+
+    private static ScheduledTransferRunHistoryQuery runsBetween(LocalDate fromDate, LocalDate toDate) {
+        return ScheduledTransferRunHistoryQuery.builder()
+                .publicId(PUBLIC_ID)
+                .page(0)
+                .size(20)
+                .fromDate(fromDate)
+                .toDate(toDate)
+                .build();
     }
 
     private static FeignException feignStatus(int status) {

@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.consumer.scheduledtransfers.query.data;
 
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -35,4 +36,6 @@ public final class ScheduledTransferRunHistoryQuery {
     private final UUID publicId;
     private final Integer page;
     private final Integer size;
+    private final LocalDate fromDate;
+    private final LocalDate toDate;
 }
