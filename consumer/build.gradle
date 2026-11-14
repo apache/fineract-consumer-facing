@@ -408,6 +408,23 @@ def fixClientImageResponseShape(paths) {
 	]]
 }
 
+// The spec types the run history's fromDate and toDate as the DateParam object, so the generated client binds them
+// as an unnamed Object parameter and cannot send them. Retyped as strings, they are sent with dateFormat and locale.
+def fixStandingInstructionRunHistoryDateParams(paths) {
+	def pathName = '/v1/standinginstructionrunhistory'
+	def parameters = paths[pathName]?.get?.parameters
+	if (parameters == null) {
+		throw new GradleException("Fineract spec path '$pathName' GET missing — revisit fixStandingInstructionRunHistoryDateParams")
+	}
+	['fromDate', 'toDate'].each { paramName ->
+		def parameter = parameters.find { it.name == paramName }
+		if (parameter == null) {
+			throw new GradleException("Fineract spec parameter '$paramName' of '$pathName' missing — revisit fixStandingInstructionRunHistoryDateParams")
+		}
+		parameter.schema = [type: 'string']
+	}
+}
+
 // Fineract returns a standing instruction's validTill, but the spec omits it from both read schemas, so the
 // generated model would drop the end date. The create response declares resourceId as int32 although instruction
 // ids are BIGINT. Run history pages are declared uniqueItems, which generates a Set; two failed runs of one
@@ -519,6 +536,7 @@ task sanitizeFineractSpec {
 		fixObligeeDetailsResponseShape(spec.paths)
 		fixClientImageResponseShape(spec.paths)
 		fixStandingInstructionSchemas(spec.components.schemas)
+		fixStandingInstructionRunHistoryDateParams(spec.paths)
 		pruneToUsedFineractApis(spec, fineractApiTags, fineractUntaggedOperationIds)
 		fineractSanitizedSpec.parentFile.mkdirs()
 		fineractSanitizedSpec.text = JsonOutput.toJson(spec)

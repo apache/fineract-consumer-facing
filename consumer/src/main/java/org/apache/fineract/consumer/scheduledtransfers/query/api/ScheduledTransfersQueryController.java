@@ -19,6 +19,7 @@
 package org.apache.fineract.consumer.scheduledtransfers.query.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTrans
 import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferRunHistoryQuery;
 import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferRunQueryResponse;
 import org.apache.fineract.consumer.scheduledtransfers.query.service.ScheduledTransfersQueryService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -52,17 +54,23 @@ public class ScheduledTransfersQueryController {
 
     @Operation(operationId = "listScheduledTransferRuns",
             description = "The runs of one of the caller's scheduled transfers, newest first. A failed run moved "
-                    + "nothing and carries no amount.")
+                    + "nothing and carries no amount. Only runs between fromDate and toDate (ISO dates) are read; "
+                    + "with no fromDate the window starts twelve months before the core banking system's current "
+                    + "date, and with no toDate it is open at the end. Ask for an earlier window to see older runs.")
     @GetMapping("/{publicId}/runs")
     public ScheduledTransferRunQueryResponse listScheduledTransferRuns(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID publicId,
             @RequestParam(defaultValue = "0") Integer page,
-            @RequestParam(defaultValue = "20") Integer size) {
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
         ScheduledTransferRunHistoryQuery query = ScheduledTransferRunHistoryQuery.builder()
                 .publicId(publicId)
                 .page(page)
                 .size(size)
+                .fromDate(fromDate)
+                .toDate(toDate)
                 .build();
         return scheduledTransfersQueryService.listRuns(jwt, query);
     }

@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.infrastructure.fineractclient.service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -40,16 +41,18 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class StandingInstructionFineractClientImpl implements StandingInstructionFineractClient {
-
     // Fineract pages these lists by offset and applies no order of its own, so every page is requested in the same
-    // order to keep the offsets stable. orderBy must name a column through Fineract's own SQL alias (atsi is the
-    // instruction table, atsih the run history table); anything else fails with HTTP 500.
+    // order to keep the offsets stable. Instructions are read oldest first and run history newest first. orderBy must
+    // name a column through Fineract's own SQL alias (atsi is the instruction table, atsih the run history table);
+    // anything else fails with HTTP 500.
     static final int PAGE_SIZE = 200;
     static final String INSTRUCTION_ORDER = "atsi.id";
     static final String RUN_ORDER = "atsih.id";
     static final String ASCENDING = "ASC";
     static final int SAVINGS_ACCOUNT_TYPE = 2;
     static final String DELETE_COMMAND = "delete";
+    static final String LOCALE = "en";
+    static final String DATE_FORMAT = "yyyy-MM-dd";
 
     private final StandingInstructionsApi standingInstructionsApi;
     private final StandingInstructionsHistoryApi standingInstructionsHistoryApi;
@@ -82,13 +85,17 @@ public class StandingInstructionFineractClientImpl implements StandingInstructio
 
     @Override
     public List<GetStandingInstructionHistoryPageItemsResponse> listSavingsAccountRunHistory(
-            Long clientId, Long savingsAccountId) {
+            Long clientId, Long savingsAccountId, LocalDate fromDate, LocalDate toDate) {
         return fetchAllPages(
                 offset -> standingInstructionsHistoryApi.retrieveAllStandingInstructionHistory(
                         null, offset, PAGE_SIZE, RUN_ORDER, ASCENDING, null, null, clientId, savingsAccountId,
-                        SAVINGS_ACCOUNT_TYPE, null, null, null, null),
+                        SAVINGS_ACCOUNT_TYPE, LOCALE, DATE_FORMAT, isoDate(fromDate), isoDate(toDate)),
                 GetStandingInstructionRunHistoryResponse::getPageItems,
                 GetStandingInstructionRunHistoryResponse::getTotalFilteredRecords);
+    }
+
+    private static String isoDate(LocalDate date) {
+        return date == null ? null : date.toString();
     }
 
     private static <P, T> List<T> fetchAllPages(IntFunction<P> fetchPage, Function<P, ? extends Collection<T>> itemsOf,

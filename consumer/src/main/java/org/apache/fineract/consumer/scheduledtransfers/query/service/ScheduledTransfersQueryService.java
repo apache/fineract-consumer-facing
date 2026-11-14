@@ -29,6 +29,9 @@ public interface ScheduledTransfersQueryService {
     /** The caller's active scheduled transfers, newest first. Only transfers set up through the BFF are listed. */
     List<ScheduledTransferQueryData> listScheduledTransfers(Jwt jwt);
 
-    /** The runs of one of the caller's scheduled transfers, newest first. */
+    /**
+     * The runs of one of the caller's scheduled transfers, newest first, within the query's date window. With no
+     * fromDate the window starts twelve months before Fineract's current date; with no toDate it is open at the end.
+     */
     ScheduledTransferRunQueryResponse listRuns(Jwt jwt, ScheduledTransferRunHistoryQuery query);
 }
