@@ -158,6 +158,9 @@ jobs:
       - name: Generate dev JWT signing key
         run: ./scripts/generate-dev-jwt-key.sh
 
+      # This job sets no BFF_JACOCO_OPTS, so neither BFF runs the JaCoCo agent here and the second BFF's
+      # JAVA_TOOL_OPTIONS override only matters locally with coverage on. The first BFF still bind-mounts these
+      # directories, so create them, or Docker creates them owned by root.
       - name: Pre-create JaCoCo mount directories
         run: mkdir -p build/jacoco-agent build/jacoco
 
@@ -181,3 +184,11 @@ jobs:
       - name: Tear down application stack
         if: always()
         run: docker compose -f compose.yaml -f compose.second-bff.yaml down -v
+
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: second-bff-test-results
+          path: 'consumer/**/build/reports/'
+          retention-days: 5

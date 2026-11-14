@@ -41,10 +41,11 @@ Feature: Beneficiary guard on a second BFF
     And no verification code was emailed to me
 
   # Unlike the two lock scenarios in scheduledtransfers.feature, both sides are the BFF's own requests, on two
-  # instances that share only Postgres. Each round uses a new beneficiary and starts the delete at a different offset
-  # from the confirm.
+  # instances that share only Postgres. Each round uses a new beneficiary. Two rounds finish one request before starting
+  # the other, once each way, so both outcomes occur on every run; the rest start the delete at a different offset from
+  # the confirm, and timing decides which wins.
   Scenario: A beneficiary delete on one BFF and a scheduled transfer confirm on another never both succeed
     When I race confirming a scheduled transfer on the first BFF against deleting its beneficiary on the second
     Then in every round either the confirm or the delete succeeded, and the other was refused
     And no round left a scheduled transfer to a deleted beneficiary, in the BFF or in Fineract
-    And the confirm won some rounds and the delete others
+    And each round run one request after the other was won by the request that ran first

@@ -50,6 +50,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryLimitBelowScheduledTransferException;
@@ -123,10 +124,10 @@ public class ScheduledTransfersSteps {
     private static final Duration BFF_TODAY_CATCH_UP = Duration.ofSeconds(45);
     private static final Duration LIST_POLL_INTERVAL = Duration.ofSeconds(1);
     private static final Duration PENDING_REQUEST_TIMEOUT = Duration.ofSeconds(30);
-    // How long after the confirm each race round starts its delete; negative starts the delete first. The ends are far
-    // enough apart that one side has finished, or holds its row, before the other starts; the middle overlaps them.
+    // How long after the confirm each overlapping race round starts its delete; negative starts the delete first. Which
+    // request wins one of these rounds depends on timing, so they check only that exactly one did.
     private static final List<Duration> RACE_DELETE_OFFSETS =
-            LongStream.of(-300, -100, -50, -20, 0, 0, 10, 20, 30, 50, 75, 100, 150, 250, 500, 1000)
+            LongStream.of(-100, -50, -20, 0, 0, 10, 20, 30, 50, 75, 100, 150, 250, 500)
                     .mapToObj(Duration::ofMillis)
                     .toList();
     private static final ObjectMapper JSON = JsonMapper.builder().build();
@@ -561,17 +562,20 @@ public class ScheduledTransfersSteps {
     }
 
     /**
-     * Each round adds a new beneficiary and initiates a transfer to it, then confirms the transfer on the first BFF
-     * while the second deletes the beneficiary, the delete starting at that round's offset from the confirm.
+     * Each round adds a new beneficiary and initiates a transfer to it, then confirms the transfer on the first BFF and
+     * deletes the beneficiary on the second. The first two rounds run one request to completion before the other
+     * starts, once each way, so both outcomes occur on every run. The rest overlap them, the delete starting at that
+     * round's offset from the confirm.
      */
     @When("I race confirming a scheduled transfer on the first BFF against deleting its beneficiary on the second")
     public void raceConfirmsAgainstDeletes() {
         BeneficiariesCommandControllerApi secondBffBeneficiaries = onSecondBff(BeneficiariesCommandControllerApi.class);
+        for (RaceSide first : RaceSide.values()) {
+            raceRounds.add(oneAfterTheOther(first, secondBffBeneficiaries));
+        }
         try (ScheduledExecutorService racers = Executors.newScheduledThreadPool(2)) {
-            for (int round = 0; round < RACE_DELETE_OFFSETS.size(); round++) {
-                addBeneficiary(BENEFICIARY_NAME + " " + round, TRANSFER_LIMIT);
-                initiatedMonthlyToBeneficiary();
-                raceRounds.add(race(racers, secondBffBeneficiaries, RACE_DELETE_OFFSETS.get(round)));
+            for (Duration deleteOffset : RACE_DELETE_OFFSETS) {
+                raceRounds.add(race(racers, secondBffBeneficiaries, deleteOffset));
             }
         }
     }
@@ -773,7 +777,7 @@ public class ScheduledTransfersSteps {
 
     @Then("in every round either the confirm or the delete succeeded, and the other was refused")
     public void everyRoundHasOneWinner() {
-        assertThat(raceRounds).hasSize(RACE_DELETE_OFFSETS.size());
+        assertThat(raceRounds).hasSize(RaceSide.values().length + RACE_DELETE_OFFSETS.size());
         for (RaceRound round : raceRounds) {
             assertThat(round.confirm().isEmpty()).as(round.describe()).isNotEqualTo(round.delete().isEmpty());
             if (round.confirmWon()) {
@@ -807,11 +811,16 @@ public class ScheduledTransfersSteps {
         }
     }
 
-    /** Otherwise every round may have gone one way, and the race would not have been run from both sides. */
-    @Then("the confirm won some rounds and the delete others")
-    public void bothSidesWonRounds() {
-        String rounds = raceRounds.stream().map(RaceRound::describe).collect(Collectors.joining("\n"));
-        assertThat(raceRounds).as(rounds).anyMatch(RaceRound::confirmWon).anyMatch(round -> !round.confirmWon());
+    /** Their order decides these two rounds, so both outcomes are checked however the overlapping rounds went. */
+    @Then("each round run one request after the other was won by the request that ran first")
+    public void orderedRoundsWonByTheRequestThatRanFirst() {
+        for (RaceSide first : RaceSide.values()) {
+            List<RaceRound> rounds = raceRounds.stream()
+                    .filter(round -> round.ranFirst().equals(Optional.of(first)))
+                    .toList();
+            assertThat(rounds).as("rounds that ran the %s first", first).hasSize(1);
+            assertThat(rounds.getFirst().winner()).as(rounds.getFirst().describe()).isEqualTo(first);
+        }
     }
 
     /** Lets a request still waiting on a lock this scenario holds go on, so it cannot hold up the next scenario. */
@@ -996,21 +1005,60 @@ public class ScheduledTransfersSteps {
         }
     }
 
+    /** Runs {@code first} of the round's requests to completion, then the other, so {@code first} must win. */
+    private RaceRound oneAfterTheOther(RaceSide first, BeneficiariesCommandControllerApi deleter) {
+        startRaceRound();
+        Supplier<Optional<FeignException>> confirm = confirmRequest();
+        Supplier<Optional<FeignException>> delete = deleteRequest(deleter);
+        if (first == RaceSide.CONFIRM) {
+            Optional<FeignException> confirmed = confirm.get();
+            return raceRound("with the confirm finished before the delete", Optional.of(first), confirmed,
+                    delete.get());
+        }
+        Optional<FeignException> deleted = delete.get();
+        return raceRound("with the delete finished before the confirm", Optional.of(first), confirm.get(), deleted);
+    }
+
     /** Confirms the pending transfer on the first BFF and deletes its beneficiary on {@code deleter} at once. */
     private RaceRound race(ScheduledExecutorService racers, BeneficiariesCommandControllerApi deleter,
             Duration deleteOffset) {
-        UUID beneficiaryId = beneficiary.getPublicId();
-        long toAccountId = beneficiaryTarget.savingsAccountId();
+        startRaceRound();
+        Supplier<Optional<FeignException>> confirmRequest = confirmRequest();
+        Supplier<Optional<FeignException>> deleteRequest = deleteRequest(deleter);
+        long offset = deleteOffset.toMillis();
+        Future<Optional<FeignException>> confirm =
+                racers.schedule(confirmRequest::get, Math.max(0, -offset), TimeUnit.MILLISECONDS);
+        Future<Optional<FeignException>> delete =
+                racers.schedule(deleteRequest::get, Math.max(0, offset), TimeUnit.MILLISECONDS);
+        return raceRound("with the delete " + offset + "ms after the confirm", Optional.empty(), await(confirm),
+                await(delete));
+    }
+
+    /** Adds a new beneficiary and initiates a monthly transfer to it, for the next race round. */
+    private void startRaceRound() {
+        addBeneficiary(BENEFICIARY_NAME + " " + raceRounds.size(), TRANSFER_LIMIT);
+        initiatedMonthlyToBeneficiary();
+    }
+
+    /** The round's confirm on the first BFF, bound now to its challenge so it can run on another thread. */
+    private Supplier<Optional<FeignException>> confirmRequest() {
         ScheduledTransferChallengeCommandData challenge = pendingChallenge;
         String otp = pendingOtp;
-        long offset = deleteOffset.toMillis();
-        Future<Optional<FeignException>> confirm = racers.schedule(() -> outcomeOf(() -> confirmAs(user,
-                scheduledTransfersApi, challenge, otp, toAccountId, TRANSFER_AMOUNT, ScheduledTransferFrequency.MONTHLY,
-                null, UUID.randomUUID().toString())), Math.max(0, -offset), TimeUnit.MILLISECONDS);
-        Future<Optional<FeignException>> delete = racers.schedule(
-                () -> outcomeOf(() -> deleter.deleteBeneficiary(beneficiaryId)), Math.max(0, offset),
-                TimeUnit.MILLISECONDS);
-        return new RaceRound(deleteOffset, toAccountId, beneficiaryId, await(confirm), await(delete));
+        long toAccountId = beneficiaryTarget.savingsAccountId();
+        return () -> outcomeOf(() -> confirmAs(user, scheduledTransfersApi, challenge, otp, toAccountId,
+                TRANSFER_AMOUNT, ScheduledTransferFrequency.MONTHLY, null, UUID.randomUUID().toString()));
+    }
+
+    /** The round's delete of its beneficiary on {@code deleter}, bound now so it can run on another thread. */
+    private Supplier<Optional<FeignException>> deleteRequest(BeneficiariesCommandControllerApi deleter) {
+        UUID beneficiaryId = beneficiary.getPublicId();
+        return () -> outcomeOf(() -> deleter.deleteBeneficiary(beneficiaryId));
+    }
+
+    private RaceRound raceRound(String timing, Optional<RaceSide> ranFirst, Optional<FeignException> confirm,
+            Optional<FeignException> delete) {
+        return new RaceRound(timing, ranFirst, beneficiaryTarget.savingsAccountId(), beneficiary.getPublicId(),
+                confirm, delete);
     }
 
     private static void assertRefused(RaceRound round, Optional<FeignException> refused, int status, String code) {
@@ -1119,17 +1167,29 @@ public class ScheduledTransfersSteps {
         }
     }
 
-    /** One round of the race: an empty outcome means that request succeeded. */
-    private record RaceRound(Duration deleteOffset, long toAccountId, UUID beneficiaryId,
+    /** The two requests in a race round. */
+    private enum RaceSide {
+        CONFIRM,
+        DELETE
+    }
+
+    /**
+     * One round of the race: an empty outcome means that request succeeded. {@code ranFirst} is present when the round
+     * ran that request to completion before starting the other.
+     */
+    private record RaceRound(String timing, Optional<RaceSide> ranFirst, long toAccountId, UUID beneficiaryId,
             Optional<FeignException> confirm, Optional<FeignException> delete) {
 
         boolean confirmWon() {
             return confirm.isEmpty();
         }
 
+        RaceSide winner() {
+            return confirmWon() ? RaceSide.CONFIRM : RaceSide.DELETE;
+        }
+
         String describe() {
-            return "round with the delete " + deleteOffset.toMillis() + "ms after the confirm: confirm "
-                    + outcome(confirm) + ", delete " + outcome(delete);
+            return "round " + timing + ": confirm " + outcome(confirm) + ", delete " + outcome(delete);
         }
 
         private static String outcome(Optional<FeignException> error) {
