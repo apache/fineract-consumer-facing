@@ -45,14 +45,15 @@ public class StandingInstructionFineractClientImpl implements StandingInstructio
     // order to keep the offsets stable. Instructions are read oldest first and run history newest first. orderBy must
     // name a column through Fineract's own SQL alias (atsi is the instruction table, atsih the run history table);
     // anything else fails with HTTP 500.
+    // The run history fromDate/toDate filter is not used: on PostgreSQL Fineract binds the dates as text against a
+    // timestamp column and fails with HTTP 500. The window is applied here instead.
     static final int PAGE_SIZE = 200;
     static final String INSTRUCTION_ORDER = "atsi.id";
     static final String RUN_ORDER = "atsih.id";
     static final String ASCENDING = "ASC";
+    static final String DESCENDING = "DESC";
     static final int SAVINGS_ACCOUNT_TYPE = 2;
     static final String DELETE_COMMAND = "delete";
-    static final String LOCALE = "en";
-    static final String DATE_FORMAT = "yyyy-MM-dd";
 
     private final StandingInstructionsApi standingInstructionsApi;
     private final StandingInstructionsHistoryApi standingInstructionsHistoryApi;
@@ -86,16 +87,32 @@ public class StandingInstructionFineractClientImpl implements StandingInstructio
     @Override
     public List<GetStandingInstructionHistoryPageItemsResponse> listSavingsAccountRunHistory(
             Long clientId, Long savingsAccountId, LocalDate fromDate, LocalDate toDate) {
-        return fetchAllPages(
-                offset -> standingInstructionsHistoryApi.retrieveAllStandingInstructionHistory(
-                        null, offset, PAGE_SIZE, RUN_ORDER, ASCENDING, null, null, clientId, savingsAccountId,
-                        SAVINGS_ACCOUNT_TYPE, LOCALE, DATE_FORMAT, isoDate(fromDate), isoDate(toDate)),
-                GetStandingInstructionRunHistoryResponse::getPageItems,
-                GetStandingInstructionRunHistoryResponse::getTotalFilteredRecords);
-    }
-
-    private static String isoDate(LocalDate date) {
-        return date == null ? null : date.toString();
+        List<GetStandingInstructionHistoryPageItemsResponse> window = new ArrayList<>();
+        int offset = 0;
+        while (true) {
+            GetStandingInstructionRunHistoryResponse page = standingInstructionsHistoryApi
+                    .retrieveAllStandingInstructionHistory(null, offset, PAGE_SIZE, RUN_ORDER, DESCENDING, null, null,
+                            clientId, savingsAccountId, SAVINGS_ACCOUNT_TYPE, null, null, null, null);
+            List<GetStandingInstructionHistoryPageItemsResponse> items = page == null ? null : page.getPageItems();
+            if (items == null || items.isEmpty()) {
+                return window;
+            }
+            boolean reachedOlderRuns = false;
+            for (GetStandingInstructionHistoryPageItemsResponse run : items) {
+                LocalDate ran = run.getExecutionTime();
+                if (ran != null && fromDate != null && ran.isBefore(fromDate)) {
+                    reachedOlderRuns = true;
+                } else if (ran == null || toDate == null || !ran.isAfter(toDate)) {
+                    window.add(run);
+                }
+            }
+            offset += items.size();
+            Integer total = page.getTotalFilteredRecords();
+            // Newest first, so a run before fromDate means everything after it is older still: nothing more to read.
+            if (reachedOlderRuns || items.size() < PAGE_SIZE || (total != null && offset >= total)) {
+                return window;
+            }
+        }
     }
 
     private static <P, T> List<T> fetchAllPages(IntFunction<P> fetchPage, Function<P, ? extends Collection<T>> itemsOf,

@@ -20,10 +20,9 @@
 package org.apache.fineract.consumer.infrastructure.fineractclient.service;
 
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.ASCENDING;
-import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.DATE_FORMAT;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.DELETE_COMMAND;
+import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.DESCENDING;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.INSTRUCTION_ORDER;
-import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.LOCALE;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.PAGE_SIZE;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.RUN_ORDER;
 import static org.apache.fineract.consumer.infrastructure.fineractclient.service.StandingInstructionFineractClientImpl.SAVINGS_ACCOUNT_TYPE;
@@ -31,7 +30,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,7 +56,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.stubbing.OngoingStubbing;
 
 @ExtendWith(MockitoExtension.class)
 class StandingInstructionFineractClientImplTest {
@@ -160,9 +157,9 @@ class StandingInstructionFineractClientImplTest {
     }
 
     @Test
-    void listSavingsAccountRunHistoryFiltersBySavingsSourceAccountInRunOrder() {
+    void listSavingsAccountRunHistoryFiltersBySavingsSourceAccountNewestFirst() {
         GetStandingInstructionHistoryPageItemsResponse run = run(INSTRUCTION_ID, "success");
-        stubRunHistory(0, null, null).thenReturn(page(List.of(run), 1));
+        when(runHistoryRequest(0)).thenReturn(page(List.of(run), 1));
 
         assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).containsExactly(run);
     }
@@ -172,38 +169,59 @@ class StandingInstructionFineractClientImplTest {
         // Two failed runs of one instruction on one business date carry identical fields; both must survive.
         List<GetStandingInstructionHistoryPageItemsResponse> failedRuns =
                 new ArrayList<>(List.of(run(INSTRUCTION_ID, "failed"), run(INSTRUCTION_ID, "failed")));
-        stubRunHistory(0, null, null).thenReturn(page(failedRuns, 2));
+        when(runHistoryRequest(0)).thenReturn(page(failedRuns, 2));
 
         assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).hasSize(2);
     }
 
     @Test
-    void listSavingsAccountRunHistorySendsTheWindowAsIsoDates() {
+    void listSavingsAccountRunHistoryKeepsRunsInsideTheWindowAndDropsOlderOnes() {
         LocalDate from = LocalDate.of(2029, 1, 15);
-        LocalDate to = LocalDate.of(2030, 1, 14);
-        GetStandingInstructionHistoryPageItemsResponse run = run(INSTRUCTION_ID, "success");
-        stubRunHistory(0, "2029-01-15", "2030-01-14").thenReturn(page(List.of(run), 1));
+        GetStandingInstructionHistoryPageItemsResponse onTheStart = runOn(1, from);
+        GetStandingInstructionHistoryPageItemsResponse inside = runOn(2, from.plusDays(30));
+        GetStandingInstructionHistoryPageItemsResponse justBefore = runOn(3, from.minusDays(1));
+        // Newest first, as Fineract returns them.
+        when(runHistoryRequest(0)).thenReturn(page(List.of(inside, onTheStart, justBefore), 3));
 
-        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, from, to)).containsExactly(run);
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, from, null))
+                .containsExactly(inside, onTheStart);
     }
 
     @Test
-    void listSavingsAccountRunHistorySendsNoEndDateWhenTheWindowIsOpenEnded() {
-        LocalDate from = LocalDate.of(2029, 1, 15);
-        GetStandingInstructionHistoryPageItemsResponse run = run(INSTRUCTION_ID, "success");
-        stubRunHistory(0, "2029-01-15", null).thenReturn(page(List.of(run), 1));
+    void listSavingsAccountRunHistoryKeepsRunsUpToAndIncludingTheEndDate() {
+        LocalDate to = LocalDate.of(2029, 6, 30);
+        GetStandingInstructionHistoryPageItemsResponse after = runOn(1, to.plusDays(1));
+        GetStandingInstructionHistoryPageItemsResponse onTheEnd = runOn(2, to);
+        GetStandingInstructionHistoryPageItemsResponse before = runOn(3, to.minusDays(1));
+        when(runHistoryRequest(0)).thenReturn(page(List.of(after, onTheEnd, before), 3));
 
-        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, from, null)).containsExactly(run);
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, to))
+                .containsExactly(onTheEnd, before);
     }
 
     @Test
-    void listSavingsAccountRunHistoryKeepsTheWindowOnEveryPageAndRunOrder() {
+    void listSavingsAccountRunHistoryStopsReadingOnceAPageReachesRunsBeforeTheWindow() {
         LocalDate from = LocalDate.of(2029, 1, 15);
-        List<GetStandingInstructionHistoryPageItemsResponse> firstPage = runs(1, PAGE_SIZE);
-        List<GetStandingInstructionHistoryPageItemsResponse> secondPage = runs(PAGE_SIZE + 1L, PAGE_SIZE + 1L);
+        List<GetStandingInstructionHistoryPageItemsResponse> firstPage = new ArrayList<>(runsOn(PAGE_SIZE - 5, from));
+        firstPage.addAll(runsOn(5, from.minusDays(1)));
+        // The total says far more runs exist, so only the date can end the read.
+        when(runHistoryRequest(0)).thenReturn(page(firstPage, PAGE_SIZE * 10));
+
+        assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, from, null))
+                .hasSize(PAGE_SIZE - 5);
+        verify(standingInstructionsHistoryApi, never()).retrieveAllStandingInstructionHistory(
+                any(), eq(PAGE_SIZE), anyInt(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any());
+    }
+
+    @Test
+    void listSavingsAccountRunHistoryKeepsReadingWhileEveryRunIsInsideTheWindow() {
+        LocalDate from = LocalDate.of(2029, 1, 15);
+        List<GetStandingInstructionHistoryPageItemsResponse> firstPage = runsOn(PAGE_SIZE, from.plusDays(10));
+        List<GetStandingInstructionHistoryPageItemsResponse> secondPage = runsOn(1, from);
         int total = PAGE_SIZE + 1;
-        stubRunHistory(0, "2029-01-15", null).thenReturn(page(firstPage, total));
-        stubRunHistory(PAGE_SIZE, "2029-01-15", null).thenReturn(page(secondPage, total));
+        when(runHistoryRequest(0)).thenReturn(page(firstPage, total));
+        when(runHistoryRequest(PAGE_SIZE)).thenReturn(page(secondPage, total));
 
         List<GetStandingInstructionHistoryPageItemsResponse> result =
                 client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, from, null);
@@ -214,19 +232,29 @@ class StandingInstructionFineractClientImplTest {
     }
 
     @Test
+    void listSavingsAccountRunHistoryKeepsRunsWithNoDate() {
+        GetStandingInstructionHistoryPageItemsResponse undated = run(INSTRUCTION_ID, "success");
+        when(runHistoryRequest(0)).thenReturn(page(List.of(undated), 1));
+
+        assertThat(client.listSavingsAccountRunHistory(
+                CLIENT_ID, SAVINGS_ID, LocalDate.of(2029, 1, 15), LocalDate.of(2029, 12, 31)))
+                .containsExactly(undated);
+    }
+
+    @Test
     void listSavingsAccountRunHistoryFollowsPagesUntilTheTotalIsReached() {
         List<GetStandingInstructionHistoryPageItemsResponse> firstPage = runs(1, PAGE_SIZE);
         List<GetStandingInstructionHistoryPageItemsResponse> secondPage = runs(PAGE_SIZE + 1L, PAGE_SIZE + 1L);
         int total = PAGE_SIZE + 1;
-        stubRunHistory(0, null, null).thenReturn(page(firstPage, total));
-        stubRunHistory(PAGE_SIZE, null, null).thenReturn(page(secondPage, total));
+        when(runHistoryRequest(0)).thenReturn(page(firstPage, total));
+        when(runHistoryRequest(PAGE_SIZE)).thenReturn(page(secondPage, total));
 
         assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).hasSize(total);
     }
 
     @Test
     void listSavingsAccountRunHistoryStopsAtAFullPageThatReachesTheTotal() {
-        stubRunHistory(0, null, null).thenReturn(page(runs(1, PAGE_SIZE), PAGE_SIZE));
+        when(runHistoryRequest(0)).thenReturn(page(runs(1, PAGE_SIZE), PAGE_SIZE));
 
         assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).hasSize(PAGE_SIZE);
         verify(standingInstructionsHistoryApi, never()).retrieveAllStandingInstructionHistory(
@@ -236,17 +264,19 @@ class StandingInstructionFineractClientImplTest {
 
     @Test
     void listSavingsAccountRunHistoryIsEmptyWhenFineractReturnsNothing() {
-        stubRunHistory(0, null, null).thenReturn(null);
+        when(runHistoryRequest(0)).thenReturn(null);
 
         assertThat(client.listSavingsAccountRunHistory(CLIENT_ID, SAVINGS_ID, null, null)).isEmpty();
     }
 
-    /** Stubs the one Fineract request a run history read makes for a page. */
-    private OngoingStubbing<GetStandingInstructionRunHistoryResponse> stubRunHistory(
-            int offset, String fromDate, String toDate) {
-        return lenient().when(standingInstructionsHistoryApi.retrieveAllStandingInstructionHistory(
-                null, offset, PAGE_SIZE, RUN_ORDER, ASCENDING, null, null, CLIENT_ID, SAVINGS_ID,
-                SAVINGS_ACCOUNT_TYPE, LOCALE, DATE_FORMAT, fromDate, toDate));
+    /**
+     * The one Fineract request a run history read makes for a page, so stubs and reads cannot drift apart. Fineract's
+     * own date filter fails on PostgreSQL, so no locale, date format or dates are sent.
+     */
+    private GetStandingInstructionRunHistoryResponse runHistoryRequest(int offset) {
+        return standingInstructionsHistoryApi.retrieveAllStandingInstructionHistory(
+                null, offset, PAGE_SIZE, RUN_ORDER, DESCENDING, null, null, CLIENT_ID, SAVINGS_ID,
+                SAVINGS_ACCOUNT_TYPE, null, null, null, null);
     }
 
     private static GetStandingInstructionRunHistoryResponse page(
@@ -256,6 +286,14 @@ class StandingInstructionFineractClientImplTest {
 
     private static GetStandingInstructionHistoryPageItemsResponse run(Long instructionId, String status) {
         return new GetStandingInstructionHistoryPageItemsResponse().standingInstructionId(instructionId).status(status);
+    }
+
+    private static GetStandingInstructionHistoryPageItemsResponse runOn(long id, LocalDate date) {
+        return run(id, "success").executionTime(date);
+    }
+
+    private static List<GetStandingInstructionHistoryPageItemsResponse> runsOn(int count, LocalDate date) {
+        return LongStream.rangeClosed(1, count).mapToObj(id -> runOn(id, date)).toList();
     }
 
     private static List<GetStandingInstructionHistoryPageItemsResponse> runs(long firstId, long lastId) {

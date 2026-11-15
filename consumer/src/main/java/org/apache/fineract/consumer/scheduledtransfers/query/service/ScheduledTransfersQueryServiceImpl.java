@@ -20,7 +20,6 @@ package org.apache.fineract.consumer.scheduledtransfers.query.service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -150,7 +149,7 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
         if (instructionId == null) {
             return toRunPage(List.of(), query);
         }
-        // Only the window is read from Fineract, so a request costs the same however old the account is.
+        // Paging stops at the start of the window, so a request costs the same however old the account is.
         LocalDate fromDate = query.getFromDate() != null ? query.getFromDate() : defaultRunsFromDate();
         LocalDate toDate = query.getToDate();
         requireOrderedDates(fromDate, toDate);
@@ -163,8 +162,7 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
                 toRunData(run).ifPresent(runs::add);
             }
         }
-        // Fineract lists runs oldest first. Reversing before the stable sort keeps the latest of a day's runs first.
-        Collections.reverse(runs);
+        // Fineract lists runs newest first, so the stable sort keeps the latest of a day's runs first.
         runs.sort(Comparator.comparing(ScheduledTransferRunQueryData::getDate,
                 Comparator.nullsLast(Comparator.reverseOrder())));
         return toRunPage(runs, query);

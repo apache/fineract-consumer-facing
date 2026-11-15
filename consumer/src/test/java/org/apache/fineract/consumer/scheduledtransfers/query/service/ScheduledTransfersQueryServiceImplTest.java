@@ -475,8 +475,8 @@ class ScheduledTransfersQueryServiceImplTest {
         when(standingInstructionFineractClient.listSavingsAccountRunHistory(
                 CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, null))
                 .thenReturn(List.of(
-                        run(INSTRUCTION_ID, "success", AMOUNT, START),
-                        run(INSTRUCTION_ID, "failed", BigDecimal.ZERO, START)));
+                        run(INSTRUCTION_ID, "failed", AMOUNT, START),
+                        run(INSTRUCTION_ID, "success", BigDecimal.ZERO, START)));
 
         assertThat(service.listRuns(jwt(), runs(0, 20)).getContent())
                 .extracting(ScheduledTransferRunQueryData::getStatus)
