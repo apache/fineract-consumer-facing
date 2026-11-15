@@ -14,6 +14,8 @@ include::loans.adoc[leveloffset=+1]
 
 include::transfers.adoc[leveloffset=+1]
 
+include::scheduled-transfers.adoc[leveloffset=+1]
+
 include::beneficiaries.adoc[leveloffset=+1]
 
 include::profile-settings.adoc[leveloffset=+1]

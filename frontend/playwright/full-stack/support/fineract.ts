@@ -184,6 +184,17 @@ export class Fineract {
     return (await this.get(`loans/${loanId}`)).summary.totalOutstanding;
   }
 
+  /**
+   * Status codes of the client's standing instructions out of one savings account, deleted ones
+   * included: `standingInstructionStatus.active`, `.disabled` or `.deleted`.
+   */
+  async standingInstructionStatuses(clientId: number, fromSavingsId: number): Promise<string[]> {
+    const page = await this.get(`standinginstructions?clientId=${clientId}&limit=100`);
+    return (page.pageItems as { status: { code: string }; fromAccount: { id: number } }[])
+      .filter((instruction) => instruction.fromAccount.id === fromSavingsId)
+      .map((instruction) => instruction.status.code);
+  }
+
   private async documentTypeId(): Promise<number> {
     const codes = (await this.get('codes')) as { id: number; name: string }[];
     const code = codes.find((c) => c.name === CUSTOMER_IDENTIFIER_CODE);

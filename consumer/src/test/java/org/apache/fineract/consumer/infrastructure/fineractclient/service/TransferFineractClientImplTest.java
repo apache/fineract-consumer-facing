@@ -26,6 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.Set;
 import org.apache.fineract.consumer.infrastructure.fineractclient.data.LoanPayoffData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.AccountTransfersApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
@@ -34,6 +35,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.AccountTransferRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetAccountTransfersPageItems;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetAccountTransfersResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdResponse;
@@ -55,6 +57,7 @@ class TransferFineractClientImplTest {
     private static final Long SAVINGS_ID = 20L;
     private static final Long LOAN_ID = 30L;
     private static final Long TRANSFER_ID = 100L;
+    private static final Long TRANSFER_DETAIL_ID = 104L;
 
     @Mock
     private ClientApi clientApi;
@@ -204,5 +207,35 @@ class TransferFineractClientImplTest {
 
         assertThat(result).isSameAs(expected);
         verify(accountTransfersApi).retrieveOneAccountTransfer(TRANSFER_ID);
+    }
+
+    @Test
+    void getAccountTransferIdReadsTheOneTransferUnderTheDetail() {
+        when(accountTransfersApi.retrieveAllAccountTransfers(null, null, null, null, null, TRANSFER_DETAIL_ID))
+                .thenReturn(new GetAccountTransfersResponse()
+                        .pageItems(Set.of(new GetAccountTransfersPageItems().id(TRANSFER_ID))));
+
+        assertThat(client.getAccountTransferId(TRANSFER_DETAIL_ID)).isEqualTo(TRANSFER_ID);
+    }
+
+    @Test
+    void getAccountTransferIdReturnsNullUnlessExactlyOneTransferMatches() {
+        when(accountTransfersApi.retrieveAllAccountTransfers(null, null, null, null, null, TRANSFER_DETAIL_ID))
+                .thenReturn(new GetAccountTransfersResponse().pageItems(Set.of()))
+                .thenReturn(new GetAccountTransfersResponse().pageItems(Set.of(
+                        new GetAccountTransfersPageItems().id(TRANSFER_ID),
+                        new GetAccountTransfersPageItems().id(TRANSFER_ID + 1))))
+                .thenReturn(null);
+
+        assertThat(client.getAccountTransferId(TRANSFER_DETAIL_ID)).isNull();
+        assertThat(client.getAccountTransferId(TRANSFER_DETAIL_ID)).isNull();
+        assertThat(client.getAccountTransferId(TRANSFER_DETAIL_ID)).isNull();
+    }
+
+    @Test
+    void getAccountTransferIdNeverListsUnfilteredTransfers() {
+        assertThat(client.getAccountTransferId(null)).isNull();
+
+        verify(accountTransfersApi, never()).retrieveAllAccountTransfers(any(), any(), any(), any(), any(), any());
     }
 }

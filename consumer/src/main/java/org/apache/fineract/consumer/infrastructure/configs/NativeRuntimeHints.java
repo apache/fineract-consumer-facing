@@ -68,9 +68,10 @@ public class NativeRuntimeHints implements RuntimeHintsRegistrar {
 
     /**
      * Caffeine picks a generated cache class (SSW) and node class (PSW) for the builder options in use, today only
-     * {@code OwnedAccountsCache}'s {@code expireAfterWrite}, and binds them and its queue fields through static
-     * fields and VarHandles. The metadata repository's Caffeine entry predates 3.2. Adding builder options (a size
-     * bound, refresh, weak keys) selects different generated classes, which must then be added here.
+     * {@code expireAfterWrite} (in {@code OwnedAccountsCache} and {@code BusinessDateFineractClientImpl}), and binds
+     * them and its queue fields through static fields and VarHandles. The metadata repository's Caffeine entry
+     * predates 3.2. Adding builder options (a size bound, refresh, weak keys) selects different generated classes,
+     * which must then be added here.
      */
     private static final List<String> CAFFEINE_GENERATED_TYPES = List.of(
             "com.github.benmanes.caffeine.cache.SSW",

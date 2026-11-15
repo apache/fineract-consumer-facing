@@ -20,6 +20,7 @@
 package org.apache.fineract.consumer.infrastructure.fineractclient.service;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.fineractclient.data.LoanPayoffData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.AccountTransfersApi;
@@ -29,6 +30,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.AccountTransferRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetAccountTransfersPageItems;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetAccountTransfersResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetLoansLoanIdResponse;
@@ -67,6 +69,21 @@ public class TransferFineractClientImpl implements TransferFineractClient {
     public Long createAccountTransfer(AccountTransferRequest request) {
         PostAccountTransfersResponse response = accountTransfersApi.createAccountTransfer(request);
         return response == null ? null : response.getResourceId();
+    }
+
+    @Override
+    public Long getAccountTransferId(Long transferDetailId) {
+        // Without the filter Fineract lists every transfer in the tenant.
+        if (transferDetailId == null) {
+            return null;
+        }
+        GetAccountTransfersResponse page =
+                accountTransfersApi.retrieveAllAccountTransfers(null, null, null, null, null, transferDetailId);
+        Collection<GetAccountTransfersPageItems> transfers = page == null ? null : page.getPageItems();
+        if (transfers == null || transfers.size() != 1) {
+            return null;
+        }
+        return transfers.iterator().next().getId();
     }
 
     @Override

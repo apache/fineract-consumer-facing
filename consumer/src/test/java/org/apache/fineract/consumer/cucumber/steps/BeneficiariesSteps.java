@@ -28,6 +28,7 @@ import io.cucumber.java.en.When;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateAccountException;
 import org.apache.fineract.consumer.client.api.BeneficiariesCommandControllerApi;
 import org.apache.fineract.consumer.client.api.BeneficiariesQueryControllerApi;
 import org.apache.fineract.consumer.client.api.TransfersCommandControllerApi;
@@ -55,7 +56,9 @@ public class BeneficiariesSteps {
 
     private static final String DEVICE_FINGERPRINT = "cucumber-beneficiaries-device";
     private static final int FORBIDDEN = 403;
+    private static final int CONFLICT = 409;
     private static final String BENEFICIARY_NAME = "Cuke Beneficiary";
+    private static final String SECOND_BENEFICIARY_NAME = "Cuke Beneficiary Again";
     private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("1000.00");
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
     private static final BigDecimal WITHIN_LIMIT_AMOUNT = new BigDecimal("100.00");
@@ -112,6 +115,23 @@ public class BeneficiariesSteps {
                         .accountNumber(target.savingsAccountNumber())
                         .transferLimit(TRANSFER_LIMIT));
         assertThat(addedBeneficiary.getPublicId()).isNotNull();
+    }
+
+    @When("I register the target account again under a different name")
+    public void registerTargetAgainUnderDifferentName() {
+        lastError = captureError(() -> beneficiariesCommandApi.initiateAddBeneficiary(
+                DEVICE_FINGERPRINT,
+                new InitiateAddBeneficiaryCommandRequest()
+                        .name(SECOND_BENEFICIARY_NAME)
+                        .officeName(target.officeName())
+                        .accountNumber(target.savingsAccountNumber())
+                        .transferLimit(TRANSFER_LIMIT)));
+    }
+
+    @Then("the beneficiary is rejected as a duplicate account")
+    public void rejectedAsDuplicateAccount() {
+        assertThat(lastError.status()).isEqualTo(CONFLICT);
+        assertThat(readCode(lastError.contentUTF8())).isEqualTo(BeneficiaryDuplicateAccountException.CODE);
     }
 
     @Then("the beneficiary appears in my beneficiary list")

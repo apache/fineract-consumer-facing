@@ -153,4 +153,21 @@ class BeneficiariesQueryServiceImplTest {
 
         assertThat(service.findActiveByAccount(USER_ID, ACCOUNT_ID)).isEmpty();
     }
+
+    @Test
+    void findActiveByAccountForShareReadsThroughTheLockingQuery() {
+        BeneficiaryQueryEntity match = beneficiary(ALICE_NAME, TRANSFER_LIMIT);
+        when(repository.findForShareByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
+                USER_ID, ACCOUNT_ID, BeneficiaryAccountType.SAVINGS)).thenReturn(Optional.of(match));
+
+        Optional<BeneficiaryQueryData> result = service.findActiveByAccountForShare(USER_ID, ACCOUNT_ID);
+
+        assertThat(result).contains(BeneficiaryQueryData.builder()
+                .publicId(PUBLIC_ID)
+                .name(ALICE_NAME)
+                .fineractAccountId(ACCOUNT_ID)
+                .transferLimit(TRANSFER_LIMIT)
+                .build());
+        verify(repository, never()).findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(any(), any(), any());
+    }
 }

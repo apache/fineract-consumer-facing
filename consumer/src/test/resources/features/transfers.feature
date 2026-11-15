@@ -57,6 +57,12 @@ Feature: Consumer transfers
     When I transfer money from my savings account to the beneficiary
     Then my transfer history contains the transfer as an outgoing entry
 
+  Scenario: My transfer history uses the transfer id my confirmation returned, even once Fineract holds a standing instruction
+    Given another client owns a savings account I registered as a beneficiary
+    And Fineract already holds a standing instruction
+    When I transfer money from my savings account to the beneficiary
+    Then my transfer history contains the transfer as an outgoing entry
+
   Scenario: My transfer history reports page metadata so a client knows there is no further page
     Given another client owns a savings account I registered as a beneficiary
     When I transfer money from my savings account to the beneficiary

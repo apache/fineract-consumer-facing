@@ -27,6 +27,7 @@ import { AUDIT_EVENTS_PATH, AuditService } from '../audit/audit.service';
 import { buildDetails } from '../audit/pii-scrub';
 import { AuthService } from '../auth/auth.service';
 import { I18nService } from '../i18n/i18n.service';
+import { QUIET_ERROR_CODES } from './quiet-error-codes';
 
 const REFRESH_URL = '/api/v1/authentication/refresh';
 const GENERIC_ERROR_KEY = 'common.error.generic';
@@ -87,7 +88,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       recordApiFailure(audit, req.url, error.status);
-      notify(toast, i18n, error);
+      const code = (error.error as ConsumerApiError | null)?.code;
+      if (!code || !req.context.get(QUIET_ERROR_CODES).includes(code)) {
+        notify(toast, i18n, error);
+      }
       return throwError(() => error);
     }),
   );

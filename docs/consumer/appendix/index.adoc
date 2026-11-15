@@ -20,4 +20,6 @@ include::properties-rate-limit.adoc[leveloffset=+1]
 
 include::properties-audit.adoc[leveloffset=+1]
 
+include::properties-scheduled-transfers.adoc[leveloffset=+1]
+
 include::properties-openbanking.adoc[leveloffset=+1]

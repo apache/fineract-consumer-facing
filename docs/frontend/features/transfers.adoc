@@ -14,7 +14,7 @@ Code lives under `frontend/src/app/features/transfers/`. Shared state is held in
 
 | `/transfers`
 | `TransferComponent` (`transfer.component.ts`)
-| Transfer history table with pagination and a button to start a new transfer.
+| Transfer history table with pagination, a button to start a new transfer, and a button to the scheduled transfers (see the next chapter).
 
 | `/transfers/new`
 | `TransferFormComponent` (`transfer-form.component.ts`)

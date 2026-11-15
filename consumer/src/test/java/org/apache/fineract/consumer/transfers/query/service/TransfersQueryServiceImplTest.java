@@ -39,6 +39,7 @@ import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractDepositTypes;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.AccountTransferData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetAccountTransfersPageItems;
@@ -46,6 +47,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetAccountTransfersPageItemsToAccountType;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsDepositType;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionEnumData;
@@ -70,6 +72,8 @@ class TransfersQueryServiceImplTest {
     private static final Long CLIENT_ID = 11L;
     private static final Long ACCOUNT_A_ID = 1L;
     private static final Long ACCOUNT_B_ID = 2L;
+    private static final Long FIXED_DEPOSIT_ID = 3L;
+    private static final long FIXED_DEPOSIT_TYPE_ID = 200L;
     private static final String ACCOUNT_A_NO = "SAV-A";
     private static final String ACCOUNT_B_NO = "SAV-B";
     private static final String TRANSACTIONS_ASSOCIATION = "transactions";
@@ -149,7 +153,11 @@ class TransfersQueryServiceImplTest {
     }
 
     private static GetClientsSavingsAccounts account(Long id) {
-        return new GetClientsSavingsAccounts().id(id);
+        return account(id, FineractDepositTypes.SAVINGS_DEPOSIT_TYPE_ID);
+    }
+
+    private static GetClientsSavingsAccounts account(Long id, long depositTypeId) {
+        return new GetClientsSavingsAccounts().id(id).depositType(new GetClientsSavingsAccountsDepositType().id(depositTypeId));
     }
 
     private void givenTransferDestinationType(Long transferId, Long accountTypeId) {
@@ -347,6 +355,21 @@ class TransfersQueryServiceImplTest {
         assertThat(page.getContent()).isEmpty();
         assertThat(page.getTotalElements()).isZero();
         assertThat(page.getTotalPages()).isZero();
+    }
+
+    @Test
+    void listTransfersSkipsFixedDepositsBeforeAuthorizingOrFetchingThem() {
+        Jwt jwt = jwt();
+        givenAccounts(jwt, account(ACCOUNT_A_ID), account(FIXED_DEPOSIT_ID, FIXED_DEPOSIT_TYPE_ID));
+        givenTransactions(ACCOUNT_A_ID, ACCOUNT_A_NO, withdrawalLeg(transfer(TRANSFER_ID, DATE_NEWER, AMOUNT_100)));
+
+        List<TransferQueryData> result = service.listTransfers(jwt, query(0, 20, null, null)).getContent();
+
+        assertThat(result).extracting(TransferQueryData::getTransferId).containsExactly(TRANSFER_ID);
+        verify(accessPolicyEvaluator).authorize(eq(jwt), eq(ConsumerAction.SAVINGS_VIEW), eq(ACCOUNT_A_ID), any());
+        verify(accessPolicyEvaluator, never())
+                .authorize(eq(jwt), eq(ConsumerAction.SAVINGS_VIEW), eq(FIXED_DEPOSIT_ID), any());
+        verify(transferFineractClient, never()).retrieveSavingsAccount(eq(FIXED_DEPOSIT_ID), any(), any(), any());
     }
 
     @Test

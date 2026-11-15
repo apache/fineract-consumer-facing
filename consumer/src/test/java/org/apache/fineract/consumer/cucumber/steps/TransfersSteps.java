@@ -138,6 +138,11 @@ public class TransfersSteps {
                         .accountNumber(beneficiaryTarget.savingsAccountNumber()));
     }
 
+    @Given("Fineract already holds a standing instruction")
+    public void fineractHoldsStandingInstruction() {
+        fineractSeeder.seedStandingInstruction();
+    }
+
     @When("I transfer money from my savings account to the beneficiary")
     public void transferSavingsToBeneficiary() {
         transferResult = confirmTransferToBeneficiary();

@@ -31,7 +31,17 @@ public interface TransferFineractClient {
 
     Long getSavingsAccountClientId(Long savingsAccountId);
 
+    /**
+     * Creates the transfer and returns what Fineract answers with: the id of the transfer's details, not of the
+     * transfer. Resolve the transfer id with {@link #getAccountTransferId(Long)}.
+     */
     Long createAccountTransfer(AccountTransferRequest request);
+
+    /**
+     * The id of the one transfer Fineract recorded under {@code transferDetailId}: the id that savings transactions
+     * and {@code GET /v1/accounttransfers/{transferId}} use. Null when there is not exactly one.
+     */
+    Long getAccountTransferId(Long transferDetailId);
 
     LoanPayoffData getLoanPayoff(Long loanId);
 

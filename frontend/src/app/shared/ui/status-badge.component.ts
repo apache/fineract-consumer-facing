@@ -27,13 +27,18 @@ function classify(status: string): Tone {
   if (value.includes('awaiting')) {
     return 'warning';
   }
-  if (value.includes('active') || value.includes('approved') || value.includes('authorised')) {
+  if (
+    value.includes('active') ||
+    value.includes('approved') ||
+    value.includes('authorised') ||
+    value.includes('succeeded')
+  ) {
     return 'success';
   }
   if (value.includes('pending') || value.includes('submitted')) {
     return 'warning';
   }
-  if (value.includes('rejected') || value.includes('revoked')) {
+  if (value.includes('rejected') || value.includes('revoked') || value.includes('failed')) {
     return 'error';
   }
   return 'neutral';

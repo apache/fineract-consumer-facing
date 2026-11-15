@@ -49,6 +49,7 @@ public enum OtpPurpose {
     PASSWORD_CHANGE("password-change", "change the password on your account"),
     PASSWORD_RESET("password-reset", "reset the password you forgot"),
     TRANSFER("transfer", "authorise a money transfer"),
+    SCHEDULED_TRANSFER("scheduled-transfer", "set up or cancel a recurring transfer"),
     BENEFICIARY("beneficiary", "change the payees saved on your account");
 
     private final String keySegment;

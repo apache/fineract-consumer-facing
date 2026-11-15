@@ -230,5 +230,23 @@ describe('LoanRepayComponent', () => {
       expect(navigate).not.toHaveBeenCalled();
       expect((fixture.nativeElement as HTMLElement).querySelector('form')).not.toBeNull();
     });
+
+    it('does not bounce or error when the loan becomes non-active after repayment completes', () => {
+      const fixture = createComponent();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      selected.set(activeLoan);
+      fixture.detectChanges();
+
+      const component = fixture.componentInstance as unknown as {
+        step: { set(val: 'form' | 'otp' | 'done'): void };
+      };
+      component.step.set('done');
+      selected.set(closedLoan);
+      fixture.detectChanges();
+
+      expect(showError).not.toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
+    });
   });
 });

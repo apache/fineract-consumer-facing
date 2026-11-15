@@ -30,7 +30,7 @@ import {
   IonRouterLink,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { add } from 'ionicons/icons';
+import { add, calendar } from 'ionicons/icons';
 import { TranslatePipe } from '../../core/adapters';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { TransfersStore } from './transfers.store';
@@ -56,6 +56,10 @@ const HISTORY_PAGE_SIZE = 10;
   ],
   template: `
     <app-page-header [title]="'transfers.history.title' | appTranslate">
+      <ion-button fill="outline" [routerLink]="['/transfers', 'scheduled']">
+        <ion-icon slot="start" name="calendar" aria-hidden="true" />
+        {{ 'scheduledTransfers.title' | appTranslate }}
+      </ion-button>
       <ion-button [routerLink]="['/transfers', 'new']">
         <ion-icon slot="start" name="add" aria-hidden="true" />
         {{ 'transfers.newCta' | appTranslate }}
@@ -164,7 +168,7 @@ export class TransferComponent {
   });
 
   constructor() {
-    addIcons({ add });
+    addIcons({ add, calendar });
     this.loadPage(0);
   }
 

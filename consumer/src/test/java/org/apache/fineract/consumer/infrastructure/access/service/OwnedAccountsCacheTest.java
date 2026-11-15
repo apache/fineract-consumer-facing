@@ -32,10 +32,12 @@ import static org.mockito.Mockito.when;
 import java.time.Duration;
 import java.util.Set;
 import org.apache.fineract.consumer.infrastructure.access.data.OwnedAccounts;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractDepositTypes;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsDepositType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,6 +57,12 @@ class OwnedAccountsCacheTest {
     private static final Duration L2_TTL = Duration.ofSeconds(300);
     private static final Long SAVINGS_ID = 7L;
     private static final Long LOAN_ID = 77L;
+    private static final Long FIXED_DEPOSIT_ID = 8L;
+    private static final Long RECURRING_DEPOSIT_ID = 9L;
+    private static final Long UNTYPED_ACCOUNT_ID = 10L;
+    private static final Long UNTYPED_ID_ACCOUNT_ID = 11L;
+    private static final long FIXED_DEPOSIT_TYPE_ID = 200L;
+    private static final long RECURRING_DEPOSIT_TYPE_ID = 300L;
 
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
@@ -184,10 +192,36 @@ class OwnedAccountsCacheTest {
         assertThat(result.getLoanIds()).isEmpty();
     }
 
+    @Test
+    void savingsIdsExcludeFixedRecurringAndUntypedDeposits() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(EXPECTED_KEY)).thenReturn(null);
+        when(clientApi.retrieveAllClientAccounts(CLIENT_ID)).thenReturn(new GetClientsClientIdAccountsResponse()
+                .savingsAccounts(Set.of(
+                        savingsAccount(SAVINGS_ID, FineractDepositTypes.SAVINGS_DEPOSIT_TYPE_ID),
+                        savingsAccount(FIXED_DEPOSIT_ID, FIXED_DEPOSIT_TYPE_ID),
+                        savingsAccount(RECURRING_DEPOSIT_ID, RECURRING_DEPOSIT_TYPE_ID),
+                        new GetClientsSavingsAccounts().id(UNTYPED_ACCOUNT_ID),
+                        new GetClientsSavingsAccounts().id(UNTYPED_ID_ACCOUNT_ID)
+                                .depositType(new GetClientsSavingsAccountsDepositType())))
+                .loanAccounts(Set.of(new GetClientsLoanAccounts().id(LOAN_ID))));
+
+        OwnedAccounts result = cache.ownedAccounts(CLIENT_ID);
+
+        assertThat(result.getSavingsIds()).containsExactly(SAVINGS_ID);
+        assertThat(result.getLoanIds()).containsExactly(LOAN_ID);
+    }
+
     private static GetClientsClientIdAccountsResponse fineractAccounts() {
         return new GetClientsClientIdAccountsResponse()
-                .savingsAccounts(Set.of(new GetClientsSavingsAccounts().id(SAVINGS_ID)))
+                .savingsAccounts(Set.of(savingsAccount(SAVINGS_ID, FineractDepositTypes.SAVINGS_DEPOSIT_TYPE_ID)))
                 .loanAccounts(Set.of(new GetClientsLoanAccounts().id(LOAN_ID)));
+    }
+
+    private static GetClientsSavingsAccounts savingsAccount(Long id, long depositTypeId) {
+        return new GetClientsSavingsAccounts()
+                .id(id)
+                .depositType(new GetClientsSavingsAccountsDepositType().id(depositTypeId));
     }
 
     private static OwnedAccounts ownedAccounts() {

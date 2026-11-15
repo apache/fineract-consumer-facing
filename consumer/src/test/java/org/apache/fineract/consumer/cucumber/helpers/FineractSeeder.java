@@ -30,6 +30,8 @@ import feign.jackson.JacksonDecoder;
 import feign.jackson.JacksonEncoder;
 import feign.okhttp.OkHttpClient;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -45,11 +47,14 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountTransactionsApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsProductApi;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.StandingInstructionsApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyConfigurationData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyUpdateRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetCodeValuesDataResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetCodesResponse;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetPageItemsStandingInstructionSwagger;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetStandingInstructionsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostClientsClientIdIdentifiersRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostClientsClientIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostClientsRequest;
@@ -61,6 +66,8 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsAccountIdRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsAccountsRequest;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.PostSavingsProductsRequest;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.StandingInstructionCreationRequest;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.StandingInstructionUpdatesRequest;
 import org.springframework.cloud.openfeign.support.SpringMvcContract;
 
 public class FineractSeeder {
@@ -86,6 +93,7 @@ public class FineractSeeder {
     private static final String APPROVE_COMMAND = "approve";
     private static final String DISBURSE_COMMAND = "disburse";
     private static final String DEPOSIT_COMMAND = "deposit";
+    private static final String UPDATE_COMMAND = "update";
     private static final int SEED_PAYMENT_TYPE_ID = 2;
     private static final String FIRST_NAME = "Test";
     private static final String LAST_NAME_PREFIX = "User-";
@@ -113,6 +121,23 @@ public class FineractSeeder {
             buildFeignClient(SavingsAccountTransactionsApi.class);
     private static final LoanProductsApi LOAN_PRODUCTS = buildFeignClient(LoanProductsApi.class);
     private static final LoansApi LOANS = buildFeignClient(LoansApi.class);
+    private static final StandingInstructionsApi STANDING_INSTRUCTIONS =
+            buildFeignClient(StandingInstructionsApi.class);
+    // Fineract codes: savings account type 2, account transfer 1, fixed amount 1, active 1, periodic 1, weeks 1, low 4.
+    private static final String SAVINGS_ACCOUNT_TYPE = "2";
+    private static final String ACCOUNT_TRANSFER = "1";
+    private static final String FIXED_AMOUNT = "1";
+    private static final String ACTIVE = "1";
+    private static final String PERIODIC = "1";
+    private static final String WEEKS = "1";
+    private static final String EVERY_PERIOD = "1";
+    private static final String LOW_PRIORITY = "4";
+    private static final String ISO_DATE_FORMAT = "yyyy-MM-dd";
+    private static final String SEED_INSTRUCTION_AMOUNT = "1";
+    private static final String SEED_INSTRUCTION_NAME_PREFIX = "Cucumber seed instruction ";
+    // Fineract answers 500 for any other orderBy column.
+    private static final String STANDING_INSTRUCTION_ORDER = "atsi.id";
+    private static final int STANDING_INSTRUCTION_PAGE_SIZE = 200;
 
     private static volatile Long cachedPassportCodeValueId;
     private static volatile Long cachedClosureReasonCodeValueId;
@@ -174,6 +199,84 @@ public class FineractSeeder {
                 .getAccountNo();
         String officeName = CLIENTS.retrieveOneClient(clientId, null).getOfficeName();
         return new SeededTransferTarget(clientId, savingsAccountId, accountNumber, officeName);
+    }
+
+    /**
+     * Creates a weekly standing instruction between two savings accounts of a new client, starting a year from now so
+     * it never runs. Fineract stores it as transfer details with no transfer under them, so from then on the ids of
+     * transfers and of their details differ.
+     */
+    public void seedStandingInstruction() {
+        ensureUsdCurrency();
+        long clientId = createActiveClient(null);
+        createDormantStandingInstruction(clientId, createActiveSavingsAccount(clientId),
+                clientId, createActiveSavingsAccount(clientId));
+    }
+
+    /**
+     * Creates a standing instruction between two savings accounts, the way bank staff would in the back office. The
+     * accounts may belong to different clients. It starts a year from now, so it never runs.
+     */
+    public void seedBankStandingInstruction(long fromSavingsId, long toSavingsId) {
+        createDormantStandingInstruction(savingsAccountClientId(fromSavingsId), fromSavingsId,
+                savingsAccountClientId(toSavingsId), toSavingsId);
+    }
+
+    /** Changes a standing instruction's amount, the way bank staff would in the back office. */
+    public void updateStandingInstructionAmount(long standingInstructionId, BigDecimal amount) {
+        STANDING_INSTRUCTIONS.updateStandingInstruction(standingInstructionId, UPDATE_COMMAND,
+                new StandingInstructionUpdatesRequest()
+                        .amount(amount.toPlainString())
+                        .locale(LOCALE));
+    }
+
+    private static void createDormantStandingInstruction(long fromClientId, long fromSavingsId, long toClientId,
+            long toSavingsId) {
+        STANDING_INSTRUCTIONS.createStandingInstruction(new StandingInstructionCreationRequest()
+                .name(SEED_INSTRUCTION_NAME_PREFIX + UUID.randomUUID())
+                .fromOfficeId(String.valueOf(HEAD_OFFICE_ID))
+                .fromClientId(String.valueOf(fromClientId))
+                .fromAccountType(SAVINGS_ACCOUNT_TYPE)
+                .fromAccountId(String.valueOf(fromSavingsId))
+                .toOfficeId(String.valueOf(HEAD_OFFICE_ID))
+                .toClientId(String.valueOf(toClientId))
+                .toAccountType(SAVINGS_ACCOUNT_TYPE)
+                .toAccountId(String.valueOf(toSavingsId))
+                .transferType(ACCOUNT_TRANSFER)
+                .instructionType(FIXED_AMOUNT)
+                .priority(LOW_PRIORITY)
+                .status(ACTIVE)
+                .amount(SEED_INSTRUCTION_AMOUNT)
+                .validFrom(LocalDate.now(ZoneId.systemDefault()).plusYears(1).toString())
+                .recurrenceType(PERIODIC)
+                .recurrenceFrequency(WEEKS)
+                .recurrenceInterval(EVERY_PERIOD)
+                .allowPartialTransfer(false)
+                .locale(LOCALE)
+                .dateFormat(ISO_DATE_FORMAT));
+    }
+
+    /** Opens another active savings account for the client that owns {@code existingSavingsId}. */
+    public long openAnotherSavingsAccount(long existingSavingsId) {
+        return createActiveSavingsAccount(savingsAccountClientId(existingSavingsId));
+    }
+
+    /** Reads the standing instructions Fineract holds for transfers out of {@code savingsId}. */
+    public List<GetPageItemsStandingInstructionSwagger> standingInstructionsFrom(long savingsId) {
+        GetStandingInstructionsResponse page = STANDING_INSTRUCTIONS.retrieveAllStandingInstructions(
+                null, 0, STANDING_INSTRUCTION_PAGE_SIZE, STANDING_INSTRUCTION_ORDER, null, null, null,
+                savingsAccountClientId(savingsId), null, null);
+        List<GetPageItemsStandingInstructionSwagger> items = page == null || page.getPageItems() == null
+                ? List.of()
+                : List.copyOf(page.getPageItems());
+        return items.stream()
+                .filter(item -> item.getFromAccount() != null
+                        && Long.valueOf(savingsId).equals(item.getFromAccount().getId()))
+                .toList();
+    }
+
+    private long savingsAccountClientId(long savingsId) {
+        return SAVINGS_ACCOUNTS.retrieveSavingsAccount(savingsId, null, null, null).getClientId();
     }
 
     public void depositToSavings(long savingsId, BigDecimal amount) {
@@ -400,7 +503,7 @@ public class FineractSeeder {
                 .orElseThrow(() -> new IllegalStateException("Fineract entry not found: " + target));
     }
 
-    private static <T> T buildFeignClient(Class<T> apiType) {
+    static <T> T buildFeignClient(Class<T> apiType) {
         return Feign.builder()
                 .contract(new SpringMvcContract())
                 .client(new OkHttpClient())

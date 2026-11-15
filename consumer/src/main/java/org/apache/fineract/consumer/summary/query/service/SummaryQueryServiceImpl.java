@@ -29,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractDepositTypes;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
@@ -72,6 +73,7 @@ public class SummaryQueryServiceImpl implements SummaryQueryService {
             return List.of();
         }
         return sortedById(accounts.getSavingsAccounts(), GetClientsSavingsAccounts::getId)
+                .filter(FineractDepositTypes::isPlainSavings)
                 .map(this::toSavingsItem)
                 .toList();
     }

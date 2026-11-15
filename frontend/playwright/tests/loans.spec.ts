@@ -108,6 +108,25 @@ async function mockInitiate(page: Page): Promise<void> {
   );
 }
 
+async function mockLoanTemplate(page: Page): Promise<void> {
+  await page.route(
+    (url) => url.pathname === '/api/v1/loans/template',
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: JSON_CONTENT_TYPE,
+        body: JSON.stringify({
+          productOptions: [{ id: 1, name: 'Personal Loan' }],
+          productId: 1,
+          principal: 1000,
+          numberOfRepayments: 4,
+          repaymentEvery: 1,
+          interestRatePerPeriod: 2,
+        }),
+      }),
+  );
+}
+
 async function fillRepayForm(page: Page): Promise<void> {
   await page.locator('ion-select[formControlName="fromAccountId"]').click();
   await page.getByRole('radio', { name: 'Basic Savings · S-001' }).click();
@@ -130,6 +149,46 @@ test('loan detail: the make-a-payment button is hidden unless the loan is active
 
   await expect(page.getByText('L-001')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Make a payment' })).toHaveCount(0);
+});
+
+test('loan apply: a submitted draft locks the submit button so no second application is filed', async ({
+  page,
+}) => {
+  await mockResumedSession(page);
+  await mockLoanTemplate(page);
+  let submissions = 0;
+  await page.route(
+    (url) => url.pathname === '/api/v1/loans',
+    (route) => {
+      if (route.request().method() !== 'POST') {
+        return route.fallback();
+      }
+      submissions += 1;
+      return route.fulfill({
+        status: 200,
+        contentType: JSON_CONTENT_TYPE,
+        body: JSON.stringify({ loanId: 23, resourceId: 23, clientId: 1 }),
+      });
+    },
+  );
+
+  await page.goto('/loans/apply');
+  await expect(page.locator('ion-input[formControlName="principal"] input')).toHaveValue('1000');
+  await page
+    .locator('ion-input[formControlName="expectedDisbursementDate"] input')
+    .fill('2026-09-01');
+  await page.locator('ion-input[formControlName="submittedOnDate"] input').fill('2026-09-01');
+
+  const submit = page.getByRole('button', { name: 'Submit application' });
+  await submit.click();
+
+  const draft = page.locator('ion-card', { hasText: 'Draft Application #23' });
+  await expect(draft).toBeVisible();
+  await expect(submit).toBeDisabled();
+
+  await submit.click({ force: true });
+  await expect(draft).toHaveCount(1);
+  expect(submissions).toBe(1);
 });
 
 test('logged-in: loan detail -> repay form -> OTP step-up -> confirm -> success', async ({

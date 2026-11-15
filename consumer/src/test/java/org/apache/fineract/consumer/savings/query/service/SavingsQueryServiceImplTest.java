@@ -30,19 +30,15 @@ import static org.mockito.Mockito.when;
 
 import feign.FeignException;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountTransactionsApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsChargesApi;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractDepositTypes;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.CurrencyData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetChargesCurrencyResponse;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsCurrency;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsDepositType;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsStatus;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSavingsAccountTransactionsPageItem;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSavingsAccountsSavingsAccountIdChargesResponse;
@@ -50,6 +46,7 @@ import org.apache.fineract.consumer.infrastructure.fineractclient.generated.mode
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountTransactionsSearchResponse;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.SavingsFineractClient;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountListItemQueryData;
 import org.apache.fineract.consumer.savings.query.data.SavingsAccountQueryData;
@@ -75,8 +72,6 @@ class SavingsQueryServiceImplTest {
     private static final Long TRANSACTION_ID = 7L;
     private static final Integer PAGE = 0;
     private static final Integer SIZE = 20;
-    private static final String LOCALE = "en";
-    private static final String DATE_FORMAT = "yyyy-MM-dd";
     private static final String CURRENCY_CODE = "USD";
     private static final String ACCOUNT_NO = "000000042";
     private static final String PRODUCT_NAME = "Regular Savings";
@@ -84,18 +79,11 @@ class SavingsQueryServiceImplTest {
     private static final String SORT_BY_AMOUNT = "amount";
     private static final String SORT_ORDER_DESC = "desc";
     private static final Long TOTAL_ELEMENTS = 45L;
+    private static final long FIXED_DEPOSIT_TYPE_ID = 200L;
+    private static final long RECURRING_DEPOSIT_TYPE_ID = 300L;
 
     @Mock
-    private ClientApi clientApi;
-
-    @Mock
-    private SavingsAccountApi savingsAccountApi;
-
-    @Mock
-    private SavingsChargesApi savingsChargesApi;
-
-    @Mock
-    private SavingsAccountTransactionsApi savingsAccountTransactionsApi;
+    private SavingsFineractClient savingsFineractClient;
 
     @Mock
     private AccessPolicyEvaluator accessPolicyEvaluator;
@@ -105,6 +93,10 @@ class SavingsQueryServiceImplTest {
 
     @InjectMocks
     private SavingsQueryServiceImpl service;
+
+    private static GetClientsSavingsAccountsDepositType depositType(long id) {
+        return new GetClientsSavingsAccountsDepositType().id(id);
+    }
 
     private static Jwt jwt() {
         return Jwt.withTokenValue("token")
@@ -122,10 +114,11 @@ class SavingsQueryServiceImplTest {
                 .id(42L)
                 .accountNo(ACCOUNT_NO)
                 .productName(PRODUCT_NAME)
+                .depositType(depositType(FineractDepositTypes.SAVINGS_DEPOSIT_TYPE_ID))
                 .status(new GetClientsSavingsAccountsStatus().code(STATUS_ACTIVE).active(true))
                 .currency(new GetClientsSavingsAccountsCurrency().code(CURRENCY_CODE));
-        when(clientApi.retrieveAllClientAccounts(CLIENT_ID))
-                .thenReturn(new GetClientsClientIdAccountsResponse().savingsAccounts(Set.of(account)));
+        when(savingsFineractClient.listClientSavingsAccounts(CLIENT_ID))
+                .thenReturn(List.of(account));
 
         List<SavingsAccountListItemQueryData> result = service.listAccounts(jwt);
 
@@ -141,11 +134,27 @@ class SavingsQueryServiceImplTest {
     }
 
     @Test
+    void listAccountsExcludesFixedRecurringAndUntypedDeposits() {
+        Jwt jwt = jwt();
+        when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
+        when(savingsFineractClient.listClientSavingsAccounts(CLIENT_ID)).thenReturn(List.of(
+                new GetClientsSavingsAccounts().id(1L).depositType(depositType(FineractDepositTypes.SAVINGS_DEPOSIT_TYPE_ID)),
+                new GetClientsSavingsAccounts().id(2L).depositType(depositType(FIXED_DEPOSIT_TYPE_ID)),
+                new GetClientsSavingsAccounts().id(3L).depositType(depositType(RECURRING_DEPOSIT_TYPE_ID)),
+                new GetClientsSavingsAccounts().id(4L),
+                new GetClientsSavingsAccounts().id(5L).depositType(new GetClientsSavingsAccountsDepositType())));
+
+        List<SavingsAccountListItemQueryData> result = service.listAccounts(jwt);
+
+        assertThat(result).extracting(SavingsAccountListItemQueryData::getId).containsExactly(1L);
+    }
+
+    @Test
     void listAccountsEmptyWhenNoSavingsAccounts() {
         Jwt jwt = jwt();
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(clientApi.retrieveAllClientAccounts(CLIENT_ID))
-                .thenReturn(new GetClientsClientIdAccountsResponse());
+        when(savingsFineractClient.listClientSavingsAccounts(CLIENT_ID))
+                .thenReturn(List.of());
 
         assertThat(service.listAccounts(jwt)).isEmpty();
     }
@@ -154,7 +163,7 @@ class SavingsQueryServiceImplTest {
     void listAccountsTranslatesUpstreamFailure() {
         Jwt jwt = jwt();
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(clientApi.retrieveAllClientAccounts(CLIENT_ID)).thenThrow(mock(FeignException.class));
+        when(savingsFineractClient.listClientSavingsAccounts(CLIENT_ID)).thenThrow(mock(FeignException.class));
 
         assertThatThrownBy(() -> service.listAccounts(jwt))
                 .isInstanceOf(SavingsUpstreamUnavailableException.class);
@@ -174,7 +183,7 @@ class SavingsQueryServiceImplTest {
     @Test
     void getAccountMapsCurrency() {
         Jwt jwt = jwt();
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(savingsFineractClient.getAccount(SAVINGS_ID))
                 .thenReturn(new SavingsAccountData()
                         .id(SAVINGS_ID)
                         .accountNo(ACCOUNT_NO)
@@ -190,7 +199,7 @@ class SavingsQueryServiceImplTest {
     @Test
     void getChargesMapsCurrency() {
         Jwt jwt = jwt();
-        when(savingsChargesApi.retrieveAllSavingsAccountCharges(SAVINGS_ID, null))
+        when(savingsFineractClient.getCharges(SAVINGS_ID))
                 .thenReturn(List.of(new GetSavingsAccountsSavingsAccountIdChargesResponse()
                         .id(9L)
                         .name("Withdrawal fee")
@@ -205,7 +214,7 @@ class SavingsQueryServiceImplTest {
     @Test
     void getTransactionMapsCurrency() {
         Jwt jwt = jwt();
-        when(savingsAccountTransactionsApi.retrieveOneSavingsAccountTransaction(SAVINGS_ID, TRANSACTION_ID))
+        when(savingsFineractClient.getTransaction(SAVINGS_ID, TRANSACTION_ID))
                 .thenReturn(new SavingsAccountTransactionData()
                         .id(TRANSACTION_ID)
                         .currency(new CurrencyData().code(CURRENCY_CODE)));
@@ -224,9 +233,8 @@ class SavingsQueryServiceImplTest {
                         .id(1L)
                         .currency(new GetTransactionsCurrency().code(CURRENCY_CODE))))
                 .total(TOTAL_ELEMENTS);
-        when(savingsAccountTransactionsApi.searchSavingsAccountTransactions(
-                SAVINGS_ID, null, null, null, null, null, null, null, null, null,
-                0, SIZE, SORT_BY_AMOUNT, SORT_ORDER_DESC, LOCALE, DATE_FORMAT))
+        when(savingsFineractClient.searchTransactions(
+                SAVINGS_ID, null, null, 0, SIZE, SORT_BY_AMOUNT, SORT_ORDER_DESC))
                 .thenReturn(response);
 
         SavingsTransactionQueryResponse result = service.searchTransactions(jwt, SavingsTransactionSearchQuery.builder()
@@ -249,9 +257,8 @@ class SavingsQueryServiceImplTest {
     @Test
     void searchTransactionsPassesBareSortAsOrderByOnly() {
         Jwt jwt = jwt();
-        when(savingsAccountTransactionsApi.searchSavingsAccountTransactions(
-                SAVINGS_ID, null, null, null, null, null, null, null, null, null,
-                0, SIZE, SORT_BY_AMOUNT, null, LOCALE, DATE_FORMAT))
+        when(savingsFineractClient.searchTransactions(
+                SAVINGS_ID, null, null, 0, SIZE, SORT_BY_AMOUNT, null))
                 .thenReturn(new SavingsAccountTransactionsSearchResponse()
                         .content(List.of(new GetSavingsAccountTransactionsPageItem().id(1L)))
                         .total(1L));
@@ -270,9 +277,8 @@ class SavingsQueryServiceImplTest {
     @Test
     void searchTransactionsEmptyEnvelopeWhenNullContent() {
         Jwt jwt = jwt();
-        when(savingsAccountTransactionsApi.searchSavingsAccountTransactions(
-                SAVINGS_ID, null, null, null, null, null, null, null, null, null,
-                0, SIZE, null, null, LOCALE, DATE_FORMAT))
+        when(savingsFineractClient.searchTransactions(
+                SAVINGS_ID, null, null, 0, SIZE, null, null))
                 .thenReturn(new SavingsAccountTransactionsSearchResponse());
 
         SavingsTransactionQueryResponse result = service.searchTransactions(jwt, SavingsTransactionSearchQuery.builder()

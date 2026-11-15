@@ -34,31 +34,33 @@ import org.apache.fineract.consumer.beneficiaries.command.data.InitiateUpdateBen
 import org.apache.fineract.consumer.beneficiaries.command.data.ResolvedBeneficiaryAccountCommandData;
 import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryLimitBelowScheduledTransferException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryScheduledTransferActiveException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiarySelfAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryStepUpInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryUpstreamUnavailableException;
 import org.apache.fineract.consumer.beneficiaries.command.repository.BeneficiaryCommandRepository;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SearchApiApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSearchResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.BeneficiariesFineractClient;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.FineractCaller;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
-import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
-import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpPurpose;
 import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
+import org.apache.fineract.consumer.infrastructure.stepup.data.StepUpConstants;
+import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
+import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -76,14 +78,16 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     // 304=TRANSFER_ON_HOLD
     private static final Set<Long> NON_CLOSED_STATUS_IDS = Set.of(100L, 200L, 300L, 303L, 304L);
 
+    static final String NAME_UNIQUE_CONSTRAINT = "uq_beneficiaries_user_name";
+    static final String ACCOUNT_UNIQUE_CONSTRAINT = "uq_beneficiaries_user_account";
+
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final UserQueryService userQueryService;
     private final OtpService otpService;
     private final StepUpTokenService stepUpTokenService;
     private final BeneficiaryCommandRepository beneficiaryCommandRepository;
-    private final SavingsAccountApi savingsAccountApi;
-    private final SearchApiApi searchApiApi;
-    private final ClientApi clientApi;
+    private final BeneficiariesFineractClient beneficiariesFineractClient;
+    private final BeneficiaryScheduledTransferLookupPort scheduledTransferLookupPort;
 
     @Override
     @Transactional(readOnly = true)
@@ -92,8 +96,10 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         UUID publicId = publicId(jwt);
         UserQueryData user = userQueryService.findByPublicId(publicId);
         requireNameAvailable(user.getId(), command.getName());
-        requireNotOwnAccount(
-                resolveSavingsAccount(command.getAccountNumber(), command.getOfficeName()), user);
+        ResolvedBeneficiaryAccountCommandData resolved =
+                resolveSavingsAccount(command.getAccountNumber(), command.getOfficeName());
+        requireNotOwnAccount(resolved, user);
+        requireAccountAvailable(user.getId(), resolved.getAccountId());
 
         sendOtp(publicId, user);
         IssuedJwt issued = stepUpTokenService.issue(publicId, command.getDeviceFingerprint(),
@@ -122,6 +128,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         ResolvedBeneficiaryAccountCommandData resolved =
                 resolveSavingsAccount(command.getAccountNumber(), command.getOfficeName());
         requireNotOwnAccount(resolved, user);
+        requireAccountAvailable(user.getId(), resolved.getAccountId());
 
         Beneficiary beneficiary = Beneficiary.register(UUID.randomUUID(), user.getId(), command.getName(),
                 resolved.getOfficeId(), resolved.getClientId(), resolved.getAccountId(),
@@ -138,6 +145,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         UserQueryData user = userQueryService.findByPublicId(publicId);
         Beneficiary beneficiary = requireOwnedActive(command.getPublicId(), user.getId());
         requireNameAvailableForUpdate(user.getId(), command.getName(), beneficiary);
+        requireLimitCoversScheduledTransfers(user, beneficiary, command.getTransferLimit());
 
         sendOtp(publicId, user);
         IssuedJwt issued = stepUpTokenService.issue(publicId, command.getDeviceFingerprint(),
@@ -160,8 +168,9 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         validateOtp(publicId, command.getOtp());
 
         UserQueryData user = userQueryService.findByPublicId(publicId);
-        Beneficiary beneficiary = requireOwnedActive(command.getPublicId(), user.getId());
+        Beneficiary beneficiary = requireOwnedActiveLocked(command.getPublicId(), user.getId());
         requireNameAvailableForUpdate(user.getId(), command.getName(), beneficiary);
+        requireLimitCoversScheduledTransfers(user, beneficiary, command.getTransferLimit());
 
         beneficiary.update(command.getName(), command.getTransferLimit());
         persist(beneficiary);
@@ -173,21 +182,27 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     public void delete(Jwt jwt, UUID publicId) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.BENEFICIARY_DELETE);
         UserQueryData user = userQueryService.findByPublicId(publicId(jwt));
-        Beneficiary beneficiary = requireOwnedActive(publicId, user.getId());
+        Beneficiary beneficiary = requireOwnedActiveLocked(publicId, user.getId());
+        if (guard(() -> scheduledTransferLookupPort.hasActiveTransfersTo(
+                user.getId(), user.getFineractClientId(), beneficiary.getFineractAccountId()))) {
+            throw new BeneficiaryScheduledTransferActiveException();
+        }
         beneficiary.deactivate();
         beneficiaryCommandRepository.save(beneficiary);
     }
 
     private ResolvedBeneficiaryAccountCommandData resolveSavingsAccount(String accountNumber, String officeName) {
         List<GetSearchResponse> matches =
-                call(() -> searchApiApi.searchData(accountNumber, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true));
+                call(() -> beneficiariesFineractClient.searchData(
+                        accountNumber, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true));
         if (matches != null) {
             for (GetSearchResponse match : matches) {
                 if (match.getEntityId() == null) {
                     continue;
                 }
                 SavingsAccountData account =
-                        call(() -> savingsAccountApi.retrieveSavingsAccount(match.getEntityId(), null, null, null));
+                        call(() -> beneficiariesFineractClient.retrieveSavingsAccount(
+                                match.getEntityId(), null, null, null));
                 if (accountNumber.equals(account.getAccountNo()) && account.getClientId() != null
                         && isNonClosed(account.getStatus() == null ? null : account.getStatus().getId())) {
                     return withVerifiedOffice(account.getClientId(), officeName, match.getEntityId());
@@ -198,7 +213,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     }
 
     private ResolvedBeneficiaryAccountCommandData withVerifiedOffice(Long clientId, String officeName, Long accountId) {
-        GetClientsClientIdResponse client = call(() -> clientApi.retrieveOneClient(clientId, false));
+        GetClientsClientIdResponse client = call(() -> beneficiariesFineractClient.retrieveOneClient(clientId, false));
         if (client.getOfficeId() == null || !officeName.equals(client.getOfficeName())) {
             throw new BeneficiaryAccountInvalidException();
         }
@@ -216,6 +231,31 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     private Beneficiary requireOwnedActive(UUID beneficiaryPublicId, Long userId) {
         return beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(beneficiaryPublicId, userId)
                 .orElseThrow(BeneficiaryNotFoundException::new);
+    }
+
+    /**
+     * Locks the beneficiary until the transaction ends, so a scheduled transfer confirm to it either waits for this
+     * change or is seen by the scheduled transfer check that follows.
+     */
+    private Beneficiary requireOwnedActiveLocked(UUID beneficiaryPublicId, Long userId) {
+        return beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(beneficiaryPublicId, userId)
+                .orElseThrow(BeneficiaryNotFoundException::new);
+    }
+
+    /**
+     * Fineract keeps running a standing instruction whatever happens to the beneficiary, so a limit is not lowered
+     * below an active scheduled transfer's amount. A limit that stays, rises, or is removed needs no check.
+     */
+    private void requireLimitCoversScheduledTransfers(UserQueryData user, Beneficiary beneficiary,
+            BigDecimal newLimit) {
+        BigDecimal currentLimit = beneficiary.getTransferLimit();
+        if (newLimit == null || (currentLimit != null && newLimit.compareTo(currentLimit) >= 0)) {
+            return;
+        }
+        if (guard(() -> scheduledTransferLookupPort.hasActiveTransfersAbove(
+                user.getId(), user.getFineractClientId(), beneficiary.getFineractAccountId(), newLimit))) {
+            throw new BeneficiaryLimitBelowScheduledTransferException();
+        }
     }
 
     private static void requireNotOwnAccount(ResolvedBeneficiaryAccountCommandData resolved, UserQueryData user) {
@@ -237,11 +277,25 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
         }
     }
 
+    private void requireAccountAvailable(Long userId, Long fineractAccountId) {
+        if (beneficiaryCommandRepository.existsByUserIdAndFineractAccountIdAndActiveTrue(userId, fineractAccountId)) {
+            throw new BeneficiaryDuplicateAccountException();
+        }
+    }
+
     private void persist(Beneficiary beneficiary) {
         try {
             beneficiaryCommandRepository.saveAndFlush(beneficiary);
         } catch (DataIntegrityViolationException e) {
-            throw new BeneficiaryDuplicateNameException();
+            if (e.getCause() instanceof ConstraintViolationException cve) {
+                if (ACCOUNT_UNIQUE_CONSTRAINT.equals(cve.getConstraintName())) {
+                    throw new BeneficiaryDuplicateAccountException();
+                }
+                if (NAME_UNIQUE_CONSTRAINT.equals(cve.getConstraintName())) {
+                    throw new BeneficiaryDuplicateNameException();
+                }
+            }
+            throw e;
         }
     }
 
@@ -257,7 +311,7 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
     }
 
     private String addActionFingerprint(String name, String officeName, String accountNumber,
-            BigDecimal transferLimit) {
+                                        BigDecimal transferLimit) {
         return stepUpTokenService.actionFingerprint(BeneficiaryConstants.ADD_ACTION_ID,
                 name, officeName, accountNumber, transferLimit == null ? "" : transferLimit);
     }
@@ -285,6 +339,14 @@ public class BeneficiariesCommandServiceImpl implements BeneficiariesCommandServ
 
     private static UUID publicId(Jwt jwt) {
         return UUID.fromString(jwt.getSubject());
+    }
+
+    /** The scheduled transfer check fails closed: if Fineract cannot answer, the change is not made. */
+    private static boolean guard(Supplier<Boolean> check) {
+        return FineractCaller.call(check,
+                e -> new BeneficiaryUpstreamUnavailableException(),
+                e -> new BeneficiaryUpstreamUnavailableException(),
+                e -> new BeneficiaryUpstreamUnavailableException());
     }
 
     private <T> T call(Supplier<T> upstream) {

@@ -38,7 +38,7 @@ The BFF replaces that model. It is the policy enforcement point for consumer-fac
 |Project documentation, including this manual.
 |===
 
-Within the BFF, code is packaged by feature (bounded context), not by layer: `audit`, `authentication`, `beneficiaries`, `identity`, `loans`, `openbanking`, `registration`, `savings`, `summary`, `transfers`, `user`, plus a shared `infrastructure` package (which also hosts cross-feature capabilities such as OTP challenges). Spring Modulith (a library that treats each top-level package as a module and verifies that modules only use each other's exposed interfaces) enforces these boundaries at test time. Each feature is split into `command` (writes) and `query` (reads) sub-trees.
+Within the BFF, code is packaged by feature (bounded context), not by layer: `audit`, `authentication`, `beneficiaries`, `identity`, `loans`, `openbanking`, `registration`, `savings`, `scheduledtransfers`, `summary`, `transfers`, `user`, plus a shared `infrastructure` package (which also hosts cross-feature capabilities such as OTP challenges). Spring Modulith (a library that treats each top-level package as a module and verifies that modules only use each other's exposed interfaces) enforces these boundaries at test time. Each feature is split into `command` (writes) and `query` (reads) sub-trees.
 
 == Runtime topology
 
@@ -60,7 +60,7 @@ The local stack is defined in `consumer/compose.yaml`. Docker Compose (a tool th
 
 |`bff-db`
 |`postgres:18-alpine`
-|The BFF's own PostgreSQL database, host port 5432. Holds users, refresh tokens, beneficiaries, audit events, open banking consents, registered third-party providers (TPPs), OAuth2 authorization state, and the Modulith event publication log.
+|The BFF's own PostgreSQL database, host port 5432. Holds users, refresh tokens, beneficiaries, scheduled transfer references, audit events, open banking consents, registered third-party providers (TPPs), OAuth2 authorization state, and the Modulith event publication log.
 
 |`fineract`
 |`apache/fineract:1.12.1`

@@ -31,17 +31,19 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import feign.FeignException;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryChallengeCommandData;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryCommandData;
-import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryAccountType;
 import org.apache.fineract.consumer.beneficiaries.command.data.BeneficiaryConstants;
 import org.apache.fineract.consumer.beneficiaries.command.data.ConfirmAddBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.data.ConfirmUpdateBeneficiaryCommand;
@@ -49,8 +51,11 @@ import org.apache.fineract.consumer.beneficiaries.command.data.InitiateAddBenefi
 import org.apache.fineract.consumer.beneficiaries.command.data.InitiateUpdateBeneficiaryCommand;
 import org.apache.fineract.consumer.beneficiaries.command.domain.Beneficiary;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryAccountInvalidException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryDuplicateNameException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryLimitBelowScheduledTransferException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryNotFoundException;
+import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryScheduledTransferActiveException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiarySelfAccountException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryStepUpInvalidException;
 import org.apache.fineract.consumer.beneficiaries.command.exception.BeneficiaryUpstreamUnavailableException;
@@ -58,22 +63,21 @@ import org.apache.fineract.consumer.beneficiaries.command.repository.Beneficiary
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SavingsAccountApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.SearchApiApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetSearchResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountData;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.SavingsAccountStatusEnumData;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.BeneficiariesFineractClient;
 import org.apache.fineract.consumer.infrastructure.jwt.data.IssuedJwt;
-import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpConstants;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpDestination;
 import org.apache.fineract.consumer.infrastructure.otp.data.OtpPurpose;
 import org.apache.fineract.consumer.infrastructure.otp.service.OtpService;
-import org.apache.fineract.consumer.user.query.data.UserStatus;
+import org.apache.fineract.consumer.infrastructure.stepup.service.StepUpTokenService;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
+import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.service.UserQueryService;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -102,6 +106,8 @@ class BeneficiariesCommandServiceImplTest {
     private static final String ACCOUNT_NUMBER = "000000123";
     private static final String OTHER_ACCOUNT_NUMBER = "999999999";
     private static final BigDecimal TRANSFER_LIMIT = new BigDecimal("500.00");
+    private static final BigDecimal CURRENT_LIMIT = BigDecimal.TEN;
+    private static final BigDecimal LOWER_LIMIT = new BigDecimal("5.00");
     private static final Long SAVINGS_ID = 66L;
     private static final Long CALLER_CLIENT_ID = 42L;
     private static final Long DEST_CLIENT_ID = 99L;
@@ -125,13 +131,10 @@ class BeneficiariesCommandServiceImplTest {
     private BeneficiaryCommandRepository beneficiaryCommandRepository;
 
     @Mock
-    private SavingsAccountApi savingsAccountApi;
+    private BeneficiariesFineractClient beneficiariesFineractClient;
 
     @Mock
-    private SearchApiApi searchApiApi;
-
-    @Mock
-    private ClientApi clientApi;
+    private BeneficiaryScheduledTransferLookupPort scheduledTransferLookupPort;
 
     @InjectMocks
     private BeneficiariesCommandServiceImpl service;
@@ -176,28 +179,40 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     private static InitiateUpdateBeneficiaryCommand initiateUpdateCommand(String name) {
+        return initiateUpdateCommand(name, TRANSFER_LIMIT);
+    }
+
+    private static InitiateUpdateBeneficiaryCommand initiateUpdateCommand(String name, BigDecimal transferLimit) {
         return InitiateUpdateBeneficiaryCommand.builder()
                 .publicId(BENEFICIARY_PUBLIC_ID)
                 .name(name)
-                .transferLimit(TRANSFER_LIMIT)
+                .transferLimit(transferLimit)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
     }
 
     private static ConfirmUpdateBeneficiaryCommand confirmUpdateCommand(String name) {
+        return confirmUpdateCommand(name, TRANSFER_LIMIT);
+    }
+
+    private static ConfirmUpdateBeneficiaryCommand confirmUpdateCommand(String name, BigDecimal transferLimit) {
         return ConfirmUpdateBeneficiaryCommand.builder()
                 .stepUpToken(STEP_UP_TOKEN)
                 .otp(OTP)
                 .publicId(BENEFICIARY_PUBLIC_ID)
                 .name(name)
-                .transferLimit(TRANSFER_LIMIT)
+                .transferLimit(transferLimit)
                 .deviceFingerprint(DEVICE_FINGERPRINT)
                 .build();
     }
 
     private static Beneficiary existingBeneficiary(String name) {
+        return existingBeneficiary(name, CURRENT_LIMIT);
+    }
+
+    private static Beneficiary existingBeneficiary(String name, BigDecimal transferLimit) {
         return Beneficiary.register(BENEFICIARY_PUBLIC_ID, USER_ID, name, DEST_OFFICE_ID, DEST_CLIENT_ID,
-                SAVINGS_ID, BigDecimal.TEN);
+                SAVINGS_ID, transferLimit);
     }
 
     private static SavingsAccountData savingsAccount(String accountNo, Long statusId) {
@@ -218,6 +233,11 @@ class BeneficiariesCommandServiceImplTest {
         return new GetClientsClientIdResponse().officeId(DEST_OFFICE_ID).officeName(officeName);
     }
 
+    private static DataIntegrityViolationException uniqueViolation(String constraintName) {
+        return new DataIntegrityViolationException(constraintName,
+                new ConstraintViolationException(constraintName, new SQLException(), constraintName));
+    }
+
     private void stubAddFingerprint() {
         when(stepUpTokenService.actionFingerprint(BeneficiaryConstants.ADD_ACTION_ID,
                 NAME, OFFICE_NAME, ACCOUNT_NUMBER, TRANSFER_LIMIT))
@@ -225,8 +245,12 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     private void stubUpdateFingerprint(String name) {
+        stubUpdateFingerprint(name, TRANSFER_LIMIT);
+    }
+
+    private void stubUpdateFingerprint(String name, Object transferLimitPart) {
         when(stepUpTokenService.actionFingerprint(BeneficiaryConstants.UPDATE_ACTION_ID,
-                BENEFICIARY_PUBLIC_ID.toString(), name, TRANSFER_LIMIT))
+                BENEFICIARY_PUBLIC_ID.toString(), name, transferLimitPart))
                 .thenReturn(ACTION_FINGERPRINT);
     }
 
@@ -236,19 +260,21 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     private void stubSavingsResolution() {
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(savingsAccount(ACCOUNT_NUMBER, ACTIVE_STATUS_ID));
-        when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false)).thenReturn(destinationClient(OFFICE_NAME));
+        when(beneficiariesFineractClient.retrieveOneClient(DEST_CLIENT_ID, false))
+                .thenReturn(destinationClient(OFFICE_NAME));
     }
 
     private void stubCallerOwnedSavingsResolution() {
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(callerOwnedSavingsAccount());
-        when(clientApi.retrieveOneClient(CALLER_CLIENT_ID, false)).thenReturn(destinationClient(OFFICE_NAME));
+        when(beneficiariesFineractClient.retrieveOneClient(CALLER_CLIENT_ID, false))
+                .thenReturn(destinationClient(OFFICE_NAME));
     }
 
     private void stubValidConfirmAdd() {
@@ -297,11 +323,27 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     @Test
+    void initiateAddRejectsDuplicateAccount() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
+                .thenReturn(false);
+        stubSavingsResolution();
+        when(beneficiaryCommandRepository.existsByUserIdAndFineractAccountIdAndActiveTrue(USER_ID, SAVINGS_ID))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
+                .isInstanceOf(BeneficiaryDuplicateAccountException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiaryDuplicateAccountException.CODE);
+
+        verify(otpService, never()).createOtp(any(), any(), any());
+    }
+
+    @Test
     void initiateAddRejectsUnresolvableAccount() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of());
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
@@ -316,9 +358,9 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(savingsAccount(ACCOUNT_NUMBER, CLOSED_STATUS_ID));
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
@@ -332,11 +374,12 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(savingsAccount(ACCOUNT_NUMBER, ACTIVE_STATUS_ID));
-        when(clientApi.retrieveOneClient(DEST_CLIENT_ID, false)).thenReturn(destinationClient(OTHER_OFFICE_NAME));
+        when(beneficiariesFineractClient.retrieveOneClient(DEST_CLIENT_ID, false))
+                .thenReturn(destinationClient(OTHER_OFFICE_NAME));
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
                 .isInstanceOf(BeneficiaryAccountInvalidException.class);
@@ -363,7 +406,7 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenThrow(mock(FeignException.NotFound.class));
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
@@ -375,7 +418,7 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenThrow(mock(FeignException.InternalServerError.class));
 
         assertThatThrownBy(() -> service.initiateAdd(jwt(), initiateAddCommand()))
@@ -442,9 +485,9 @@ class BeneficiariesCommandServiceImplTest {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
-        when(searchApiApi.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
+        when(beneficiariesFineractClient.searchData(ACCOUNT_NUMBER, BeneficiaryConstants.SAVINGS_SEARCH_RESOURCE, true))
                 .thenReturn(List.of(new GetSearchResponse().entityId(SAVINGS_ID)));
-        when(savingsAccountApi.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
+        when(beneficiariesFineractClient.retrieveSavingsAccount(SAVINGS_ID, null, null, null))
                 .thenReturn(savingsAccount(OTHER_ACCOUNT_NUMBER, ACTIVE_STATUS_ID));
 
         assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
@@ -471,13 +514,46 @@ class BeneficiariesCommandServiceImplTest {
     }
 
     @Test
-    void confirmAddMapsIntegrityViolationToDuplicateName() {
+    void confirmAddRejectsDuplicateAccount() {
+        stubValidConfirmAdd();
+        when(beneficiaryCommandRepository.existsByUserIdAndFineractAccountIdAndActiveTrue(USER_ID, SAVINGS_ID))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
+                .isInstanceOf(BeneficiaryDuplicateAccountException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiaryDuplicateAccountException.CODE);
+
+        verify(beneficiaryCommandRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void confirmAddMapsNameConstraintViolationToDuplicateName() {
         stubValidConfirmAdd();
         when(beneficiaryCommandRepository.saveAndFlush(any()))
-                .thenThrow(new DataIntegrityViolationException("duplicate"));
+                .thenThrow(uniqueViolation(BeneficiariesCommandServiceImpl.NAME_UNIQUE_CONSTRAINT));
 
         assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
                 .isInstanceOf(BeneficiaryDuplicateNameException.class);
+    }
+
+    @Test
+    void confirmAddMapsAccountConstraintViolationToDuplicateAccount() {
+        stubValidConfirmAdd();
+        when(beneficiaryCommandRepository.saveAndFlush(any()))
+                .thenThrow(uniqueViolation(BeneficiariesCommandServiceImpl.ACCOUNT_UNIQUE_CONSTRAINT));
+
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
+                .isInstanceOf(BeneficiaryDuplicateAccountException.class);
+    }
+
+    @Test
+    void confirmAddRethrowsUnrecognisedIntegrityViolation() {
+        stubValidConfirmAdd();
+        DataIntegrityViolationException violation = uniqueViolation("beneficiaries_public_id_key");
+        when(beneficiaryCommandRepository.saveAndFlush(any())).thenThrow(violation);
+
+        assertThatThrownBy(() -> service.confirmAdd(jwt(), confirmAddCommand()))
+                .isSameAs(violation);
     }
 
     @Test
@@ -550,7 +626,7 @@ class BeneficiariesCommandServiceImplTest {
                 .thenReturn(true);
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         Beneficiary beneficiary = existingBeneficiary(OLD_NAME);
-        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
                 .thenReturn(Optional.of(beneficiary));
         when(beneficiaryCommandRepository.existsByUserIdAndNameIgnoreCaseAndActiveTrue(USER_ID, NAME))
                 .thenReturn(false);
@@ -581,13 +657,134 @@ class BeneficiariesCommandServiceImplTest {
     void deleteDeactivatesBeneficiary() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
         Beneficiary beneficiary = existingBeneficiary(NAME);
-        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
                 .thenReturn(Optional.of(beneficiary));
 
         service.delete(jwt(), BENEFICIARY_PUBLIC_ID);
 
+        verify(scheduledTransferLookupPort).hasActiveTransfersTo(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID);
         verify(beneficiaryCommandRepository).save(beneficiary);
         assertThat(beneficiary.isActive()).isFalse();
+    }
+
+    @Test
+    void deleteRejectsABeneficiaryWithAnActiveScheduledTransfer() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        Beneficiary beneficiary = existingBeneficiary(NAME);
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(beneficiary));
+        when(scheduledTransferLookupPort.hasActiveTransfersTo(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(jwt(), BENEFICIARY_PUBLIC_ID))
+                .isInstanceOf(BeneficiaryScheduledTransferActiveException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiaryScheduledTransferActiveException.CODE);
+
+        verify(beneficiaryCommandRepository, never()).save(any());
+        assertThat(beneficiary.isActive()).isTrue();
+    }
+
+    @Test
+    void deleteFailsClosedWhenFineractCannotSayWhetherAScheduledTransferIsActive() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        Beneficiary beneficiary = existingBeneficiary(NAME);
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(beneficiary));
+        when(scheduledTransferLookupPort.hasActiveTransfersTo(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID))
+                .thenThrow(mock(FeignException.InternalServerError.class));
+
+        assertThatThrownBy(() -> service.delete(jwt(), BENEFICIARY_PUBLIC_ID))
+                .isInstanceOf(BeneficiaryUpstreamUnavailableException.class);
+
+        verify(beneficiaryCommandRepository, never()).save(any());
+        assertThat(beneficiary.isActive()).isTrue();
+    }
+
+    @Test
+    void initiateUpdateRejectsALimitBelowAnActiveScheduledTransferAndSendsNoOtp() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME)));
+        when(scheduledTransferLookupPort.hasActiveTransfersAbove(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID, LOWER_LIMIT))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, LOWER_LIMIT)))
+                .isInstanceOf(BeneficiaryLimitBelowScheduledTransferException.class)
+                .hasFieldOrPropertyWithValue("code", BeneficiaryLimitBelowScheduledTransferException.CODE);
+
+        verify(otpService, never()).createOtp(any(), any(), any());
+    }
+
+    @Test
+    void initiateUpdateLowersALimitThatStillCoversEveryScheduledTransfer() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME)));
+        stubUpdateFingerprint(NAME, LOWER_LIMIT);
+        stubIssuedToken(Instant.now().plusSeconds(300));
+
+        service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, LOWER_LIMIT));
+
+        verify(scheduledTransferLookupPort).hasActiveTransfersAbove(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID, LOWER_LIMIT);
+        verify(otpService).createOtp(eq(PUBLIC_ID), eq(OtpPurpose.BENEFICIARY), any());
+    }
+
+    @Test
+    void initiateUpdateChecksScheduledTransfersWhenALimitIsSetWhereThereWasNone() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME, null)));
+        when(scheduledTransferLookupPort.hasActiveTransfersAbove(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID, LOWER_LIMIT))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, LOWER_LIMIT)))
+                .isInstanceOf(BeneficiaryLimitBelowScheduledTransferException.class);
+    }
+
+    @Test
+    void initiateUpdateDoesNotCheckScheduledTransfersWhenTheLimitStaysOrRises() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME)));
+        stubUpdateFingerprint(NAME, CURRENT_LIMIT);
+        stubUpdateFingerprint(NAME, TRANSFER_LIMIT);
+        stubIssuedToken(Instant.now().plusSeconds(300));
+
+        service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, CURRENT_LIMIT));
+        service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, TRANSFER_LIMIT));
+
+        verifyNoInteractions(scheduledTransferLookupPort);
+    }
+
+    @Test
+    void initiateUpdateDoesNotCheckScheduledTransfersWhenTheLimitIsRemoved() {
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(existingBeneficiary(NAME)));
+        stubUpdateFingerprint(NAME, "");
+        stubIssuedToken(Instant.now().plusSeconds(300));
+
+        service.initiateUpdate(jwt(), initiateUpdateCommand(NAME, null));
+
+        verifyNoInteractions(scheduledTransferLookupPort);
+    }
+
+    @Test
+    void confirmUpdateRechecksTheLimitUnderALockAndKeepsTheOldOneWhenAScheduledTransferIsAbove() {
+        stubUpdateFingerprint(NAME, LOWER_LIMIT);
+        when(stepUpTokenService.verify(STEP_UP_TOKEN, PUBLIC_ID, DEVICE_FINGERPRINT, ACTION_FINGERPRINT))
+                .thenReturn(true);
+        when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
+        Beneficiary beneficiary = existingBeneficiary(NAME);
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+                .thenReturn(Optional.of(beneficiary));
+        when(scheduledTransferLookupPort.hasActiveTransfersAbove(USER_ID, CALLER_CLIENT_ID, SAVINGS_ID, LOWER_LIMIT))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.confirmUpdate(jwt(), confirmUpdateCommand(NAME, LOWER_LIMIT)))
+                .isInstanceOf(BeneficiaryLimitBelowScheduledTransferException.class);
+
+        verify(beneficiaryCommandRepository, never()).saveAndFlush(any());
+        assertThat(beneficiary.getTransferLimit()).isEqualByComparingTo(CURRENT_LIMIT);
     }
 
     @Test
@@ -648,7 +845,7 @@ class BeneficiariesCommandServiceImplTest {
     @Test
     void deleteRejectsUnknownBeneficiary() {
         when(userQueryService.findByPublicId(PUBLIC_ID)).thenReturn(user());
-        when(beneficiaryCommandRepository.findByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
+        when(beneficiaryCommandRepository.findLockedByPublicIdAndUserIdAndActiveTrue(BENEFICIARY_PUBLIC_ID, USER_ID))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.delete(jwt(), BENEFICIARY_PUBLIC_ID))

@@ -62,6 +62,7 @@ const showError = vi.fn();
 const submitApplication = vi.fn();
 const modifyApplication = vi.fn();
 const loadTemplate = vi.fn();
+const draft = signal<{ loanId: number } | null>(null);
 
 function createComponent(): ComponentFixture<LoanApplyComponent> {
   TestBed.configureTestingModule({
@@ -81,7 +82,7 @@ function createComponent(): ComponentFixture<LoanApplyComponent> {
           withdraw: vi.fn(),
           template: signal(null),
           schedulePreview: signal(null),
-          draft: signal({ loanId: DRAFT_LOAN_ID }),
+          draft,
         },
       },
     ],
@@ -100,6 +101,7 @@ function componentWithValidTerms(): ApplyInternals {
 describe('LoanApplyComponent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    draft.set(null);
     submitApplication.mockReturnValue(of({ loanId: DRAFT_LOAN_ID }));
     modifyApplication.mockReturnValue(of({ loanId: DRAFT_LOAN_ID }));
   });
@@ -139,6 +141,16 @@ describe('LoanApplyComponent', () => {
         expect.any(String),
         expect.objectContaining(validTerms),
       );
+    });
+
+    it('refuses to dispatch a second application once a draft exists', () => {
+      const component = componentWithValidTerms();
+      draft.set({ loanId: DRAFT_LOAN_ID });
+
+      component.submit();
+
+      expect(showError).not.toHaveBeenCalled();
+      expect(submitApplication).not.toHaveBeenCalled();
     });
   });
 

@@ -35,12 +35,14 @@ import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessKycRequiredException;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
+import org.apache.fineract.consumer.infrastructure.fineractclient.data.FineractDepositTypes;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdAccountsResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoanAccountsStatus;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsLoansAccountsCurrency;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccounts;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsCurrency;
+import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsDepositType;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsSavingsAccountsStatus;
 import org.apache.fineract.consumer.infrastructure.fineractclient.service.SummaryFineractClient;
 import org.apache.fineract.consumer.summary.query.data.AccountsSummaryQueryData;
@@ -72,6 +74,8 @@ class SummaryQueryServiceImplTest {
     private static final String LOAN_STATUS_CODE = "loanStatusType.active";
     private static final String LOAN_BALANCE = "9000.00";
     private static final String LOAN_AMOUNT_PAID = "1000.00";
+    private static final long FIXED_DEPOSIT_TYPE_ID = 200L;
+    private static final long RECURRING_DEPOSIT_TYPE_ID = 300L;
 
     @Mock
     private SummaryFineractClient summaryFineractClient;
@@ -93,12 +97,19 @@ class SummaryQueryServiceImplTest {
                 .build();
     }
 
+    private static GetClientsSavingsAccountsDepositType depositType(long id) {
+        return new GetClientsSavingsAccountsDepositType().id(id);
+    }
+
+    private static GetClientsSavingsAccounts plainSavings(Long id) {
+        return new GetClientsSavingsAccounts().id(id).depositType(depositType(FineractDepositTypes.SAVINGS_DEPOSIT_TYPE_ID));
+    }
+
     @Test
     void getAccountsSummaryMapsSavingsAndLoans() {
         Jwt jwt = jwt();
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        GetClientsSavingsAccounts savings = new GetClientsSavingsAccounts()
-                .id(SAVINGS_ACCOUNT_ID)
+        GetClientsSavingsAccounts savings = plainSavings(SAVINGS_ACCOUNT_ID)
                 .accountNo(SAVINGS_ACCOUNT_NO)
                 .productName(SAVINGS_PRODUCT_NAME)
                 .status(new GetClientsSavingsAccountsStatus().code(SAVINGS_STATUS).active(true))
@@ -152,15 +163,38 @@ class SummaryQueryServiceImplTest {
         when(summaryFineractClient.retrieveAllClientAccounts(CLIENT_ID))
                 .thenReturn(new GetClientsClientIdAccountsResponse()
                         .savingsAccounts(Set.of(
-                                new GetClientsSavingsAccounts().id(9L),
-                                new GetClientsSavingsAccounts().id(3L),
-                                new GetClientsSavingsAccounts().id(5L))));
+                                plainSavings(9L),
+                                plainSavings(3L),
+                                plainSavings(5L))));
 
         AccountsSummaryQueryData result = service.getAccountsSummary(jwt);
 
         assertThat(result.getSavings())
                 .extracting(SavingsSummaryItemQueryData::getId)
                 .containsExactly(3L, 5L, 9L);
+    }
+
+    @Test
+    void getAccountsSummaryExcludesFixedAndRecurringDeposits() {
+        Jwt jwt = jwt();
+        when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
+        when(summaryFineractClient.retrieveAllClientAccounts(CLIENT_ID))
+                .thenReturn(new GetClientsClientIdAccountsResponse()
+                        .savingsAccounts(Set.of(
+                                plainSavings(1L),
+                                new GetClientsSavingsAccounts().id(2L).depositType(depositType(FIXED_DEPOSIT_TYPE_ID)),
+                                new GetClientsSavingsAccounts().id(3L).depositType(depositType(RECURRING_DEPOSIT_TYPE_ID)),
+                                new GetClientsSavingsAccounts().id(4L)))
+                        .loanAccounts(Set.of(new GetClientsLoanAccounts().id(LOAN_ACCOUNT_ID))));
+
+        AccountsSummaryQueryData result = service.getAccountsSummary(jwt);
+
+        assertThat(result.getSavings())
+                .extracting(SavingsSummaryItemQueryData::getId)
+                .containsExactly(1L);
+        assertThat(result.getLoans())
+                .extracting(LoanSummaryItemQueryData::getId)
+                .containsExactly(LOAN_ACCOUNT_ID);
     }
 
     @Test

@@ -74,6 +74,27 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'transfers/scheduled',
+        loadComponent: () =>
+          import('./features/scheduled-transfers/scheduled-transfers.component').then(
+            (m) => m.ScheduledTransfersComponent,
+          ),
+      },
+      {
+        path: 'transfers/scheduled/new',
+        loadComponent: () =>
+          import('./features/scheduled-transfers/scheduled-transfer-form.component').then(
+            (m) => m.ScheduledTransferFormComponent,
+          ),
+      },
+      {
+        path: 'transfers/scheduled/:publicId',
+        loadComponent: () =>
+          import('./features/scheduled-transfers/scheduled-transfer-detail.component').then(
+            (m) => m.ScheduledTransferDetailComponent,
+          ),
+      },
+      {
         path: 'beneficiaries',
         loadComponent: () =>
           import('./features/beneficiaries/beneficiaries.component').then(

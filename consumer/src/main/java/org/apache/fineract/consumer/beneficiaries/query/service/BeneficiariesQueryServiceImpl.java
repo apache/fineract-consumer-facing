@@ -31,6 +31,7 @@ import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEv
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -56,6 +57,19 @@ public class BeneficiariesQueryServiceImpl implements BeneficiariesQueryService 
     public Optional<BeneficiaryQueryData> findActiveByAccount(Long userId, Long fineractAccountId) {
         return repository
                 .findByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
+                        userId, fineractAccountId, BeneficiaryAccountType.SAVINGS)
+                .map(BeneficiariesQueryServiceImpl::toQueryData);
+    }
+
+    /**
+     * Joins the caller's transaction, which must allow writes: PostgreSQL refuses a row lock in a read-only one. Being
+     * mandatory, this never starts a transaction of its own, so {@code readOnly} is never applied.
+     */
+    @Override
+    @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
+    public Optional<BeneficiaryQueryData> findActiveByAccountForShare(Long userId, Long fineractAccountId) {
+        return repository
+                .findForShareByUserIdAndFineractAccountIdAndAccountTypeAndActiveTrue(
                         userId, fineractAccountId, BeneficiaryAccountType.SAVINGS)
                 .map(BeneficiariesQueryServiceImpl::toQueryData);
     }

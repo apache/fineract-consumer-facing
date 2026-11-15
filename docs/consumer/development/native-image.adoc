@@ -1,3 +1,4 @@
+[[native-image]]
 = Native Image
 
 The BFF can be compiled ahead of time into a GraalVM native executable. The native build starts in well under a second and runs the full Cucumber suite in under 100 MiB. The JVM jar takes roughly ten seconds to start and runs in a 512 MB container. The JVM jar stays the default artifact; the native build is opt-in.

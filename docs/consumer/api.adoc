@@ -142,6 +142,21 @@ One row per endpoint, grouped by feature module. All paths sit under the `/api/v
 |GET |`/api/v1/transfers` |List the user's transfer history (paginated)
 |===
 
+=== Scheduled transfers
+
+Every endpoint answers HTTP 404 unless `consumer.scheduled-transfers.enabled` is set (off by default).
+
+[cols="1,4,6",options="header"]
+|===
+|Method |Path |Purpose
+|POST |`/api/v1/scheduled-transfers/initiate` |Start setting up a weekly or monthly transfer; issues a step-up OTP challenge
+|POST |`/api/v1/scheduled-transfers/confirm` |Confirm with the OTP and create the Fineract standing instruction
+|GET |`/api/v1/scheduled-transfers` |List the user's active scheduled transfers
+|GET |`/api/v1/scheduled-transfers/{publicId}/runs` |List one scheduled transfer's runs (paginated)
+|POST |`/api/v1/scheduled-transfers/{publicId}/cancel/initiate` |Start cancelling a scheduled transfer; issues a step-up OTP challenge
+|POST |`/api/v1/scheduled-transfers/{publicId}/cancel/confirm` |Confirm with the OTP and delete the Fineract standing instruction
+|===
+
 === Beneficiaries
 
 [cols="1,4,6",options="header"]
@@ -161,7 +176,7 @@ One row per endpoint, grouped by feature module. All paths sit under the `/api/v
 |===
 |Method |Path |Purpose
 |POST |`/api/v1/audit/events` |Ingest a batch of client-side audit events from the frontend
-|GET |`/api/v1/audit/events` |List the caller's own audit events, paginated (demo-only; registered only when `consumer.audit.query-enabled` is set, off by default)
+|GET |`/api/v1/audit/events` |List the caller's own audit events, paginated (demo-only; answers HTTP 404 unless `consumer.audit.query-enabled` is set, off by default)
 |===
 
 === Open banking
