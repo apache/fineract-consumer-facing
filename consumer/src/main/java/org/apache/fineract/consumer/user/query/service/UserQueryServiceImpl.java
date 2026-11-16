@@ -29,13 +29,11 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.consumer.infrastructure.access.data.ConsumerAction;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientChargesApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.DefaultApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsChargesPageItems;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdChargesResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetObligeeData;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.UserFineractClient;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
 import org.apache.fineract.consumer.infrastructure.web.service.EmailMaskingService;
 import org.apache.fineract.consumer.user.query.data.UserChargeQueryData;
@@ -63,9 +61,7 @@ public class UserQueryServiceImpl implements UserQueryService {
     private static final String IMAGE_ACCEPT_TEXT_PLAIN = "text/plain";
 
     private final UserQueryRepository repository;
-    private final ClientApi clientApi;
-    private final ClientChargesApi clientChargesApi;
-    private final DefaultApi defaultApi;
+    private final UserFineractClient userFineractClient;
     private final AccessPolicyEvaluator accessPolicyEvaluator;
     private final UserClientResolver userClientResolver;
 
@@ -90,7 +86,7 @@ public class UserQueryServiceImpl implements UserQueryService {
     public UserProfileQueryData getProfile(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_PROFILE_VIEW);
         Long clientId = userClientResolver.resolveClientId(jwt);
-        GetClientsClientIdResponse client = fetch(() -> clientApi.retrieveOneClient(clientId, null));
+        GetClientsClientIdResponse client = fetch(() -> userFineractClient.retrieveOneClient(clientId, null));
         return UserProfileQueryData.builder()
                 .displayName(client.getDisplayName())
                 .accountNo(client.getAccountNo())
@@ -113,7 +109,7 @@ public class UserQueryServiceImpl implements UserQueryService {
         Integer limit = query.getSize();
         Integer offset = query.getPage() * query.getSize();
         GetClientsClientIdChargesResponse charges = fetch(() ->
-                clientChargesApi.retrieveAllClientCharges(clientId, query.getStatus(), null, limit, offset));
+                userFineractClient.retrieveAllClientCharges(clientId, query.getStatus(), null, limit, offset));
         List<UserChargeQueryData> items = charges == null || charges.getPageItems() == null
                 ? List.of()
                 : charges.getPageItems().stream().map(this::toChargeData).toList();
@@ -127,7 +123,7 @@ public class UserQueryServiceImpl implements UserQueryService {
     public List<UserObligeeQueryData> getObligees(Jwt jwt) {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_OBLIGEES_VIEW);
         Long clientId = userClientResolver.resolveClientId(jwt);
-        List<GetObligeeData> obligees = fetch(() -> clientApi.retrieveClientObligeeDetails(clientId));
+        List<GetObligeeData> obligees = fetch(() -> userFineractClient.retrieveClientObligeeDetails(clientId));
         if (obligees == null) {
             return List.of();
         }
@@ -139,7 +135,7 @@ public class UserQueryServiceImpl implements UserQueryService {
         accessPolicyEvaluator.authorize(jwt, ConsumerAction.USER_IMAGE_VIEW);
         Long clientId = userClientResolver.resolveClientId(jwt);
         try {
-            String imageDataUri = defaultApi.retrieveImage(
+            String imageDataUri = userFineractClient.retrieveImage(
                     IMAGE_ENTITY_TYPE, clientId, maxWidth, maxHeight, null, IMAGE_ACCEPT_TEXT_PLAIN);
             return UserImageQueryData.builder()
                     .imageDataUri(imageDataUri)

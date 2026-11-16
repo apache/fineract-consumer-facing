@@ -39,16 +39,13 @@ import org.apache.fineract.consumer.infrastructure.access.exception.AccessKycReq
 import org.apache.fineract.consumer.infrastructure.access.exception.AccessScopeInsufficientException;
 import org.apache.fineract.consumer.infrastructure.access.service.AccessPolicyEvaluator;
 import org.apache.fineract.consumer.infrastructure.access.service.UserClientResolver;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.ClientChargesApi;
-import org.apache.fineract.consumer.infrastructure.fineractclient.generated.api.DefaultApi;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientChargeCurrency;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsChargesPageItems;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdChargesResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetClientsClientIdResponse;
 import org.apache.fineract.consumer.infrastructure.fineractclient.generated.model.GetObligeeData;
+import org.apache.fineract.consumer.infrastructure.fineractclient.service.UserFineractClient;
 import org.apache.fineract.consumer.infrastructure.jwt.data.JwtClaims;
-import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.data.UserChargeQueryData;
 import org.apache.fineract.consumer.user.query.data.UserChargesQuery;
 import org.apache.fineract.consumer.user.query.data.UserChargesQueryResponse;
@@ -57,6 +54,7 @@ import org.apache.fineract.consumer.user.query.data.UserImageQueryData;
 import org.apache.fineract.consumer.user.query.data.UserObligeeQueryData;
 import org.apache.fineract.consumer.user.query.data.UserProfileQueryData;
 import org.apache.fineract.consumer.user.query.data.UserQueryData;
+import org.apache.fineract.consumer.user.query.data.UserStatus;
 import org.apache.fineract.consumer.user.query.exception.UserChargeStatusInvalidException;
 import org.apache.fineract.consumer.user.query.exception.UserImageNotFoundException;
 import org.apache.fineract.consumer.user.query.exception.UserQueryNotFoundException;
@@ -116,13 +114,7 @@ class UserQueryServiceImplTest {
     private UserQueryRepository repository;
 
     @Mock
-    private ClientApi clientApi;
-
-    @Mock
-    private ClientChargesApi clientChargesApi;
-
-    @Mock
-    private DefaultApi defaultApi;
+    private UserFineractClient userFineractClient;
 
     @Mock
     private AccessPolicyEvaluator accessPolicyEvaluator;
@@ -215,7 +207,7 @@ class UserQueryServiceImplTest {
     void getProfileMapsClientAndMasksContactInfo() {
         Jwt jwt = jwt(true);
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(clientApi.retrieveOneClient(CLIENT_ID, null)).thenReturn(new GetClientsClientIdResponse()
+        when(userFineractClient.retrieveOneClient(CLIENT_ID, null)).thenReturn(new GetClientsClientIdResponse()
                 .displayName(DISPLAY_NAME)
                 .accountNo(ACCOUNT_NO)
                 .active(true)
@@ -241,7 +233,7 @@ class UserQueryServiceImplTest {
     void getProfileHandlesNullContactInfo() {
         Jwt jwt = jwt(false);
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(clientApi.retrieveOneClient(CLIENT_ID, null)).thenReturn(new GetClientsClientIdResponse()
+        when(userFineractClient.retrieveOneClient(CLIENT_ID, null)).thenReturn(new GetClientsClientIdResponse()
                 .displayName(DISPLAY_NAME));
 
         UserProfileQueryData profile = service.getProfile(jwt);
@@ -256,7 +248,7 @@ class UserQueryServiceImplTest {
     void getProfileUpstreamFailureIsTranslated() {
         Jwt jwt = jwt(true);
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(clientApi.retrieveOneClient(CLIENT_ID, null)).thenThrow(mock(FeignException.class));
+        when(userFineractClient.retrieveOneClient(CLIENT_ID, null)).thenThrow(mock(FeignException.class));
 
         assertThatThrownBy(() -> service.getProfile(jwt))
                 .isInstanceOf(UserUpstreamUnavailableException.class);
@@ -279,7 +271,7 @@ class UserQueryServiceImplTest {
                 .isPaid(false)
                 .isWaived(false)
                 .penalty(false);
-        when(clientChargesApi.retrieveAllClientCharges(CLIENT_ID, CHARGE_STATUS_ACTIVE, null, 5, 10))
+        when(userFineractClient.retrieveAllClientCharges(CLIENT_ID, CHARGE_STATUS_ACTIVE, null, 5, 10))
                 .thenReturn(new GetClientsClientIdChargesResponse()
                         .pageItems(Set.of(charge))
                         .totalFilteredRecords(12));
@@ -309,7 +301,7 @@ class UserQueryServiceImplTest {
 
         assertThatThrownBy(() -> service.getCharges(jwt, chargesQuery(CHARGE_STATUS_INVALID, 0, 20)))
                 .isInstanceOf(UserChargeStatusInvalidException.class);
-        verifyNoInteractions(clientChargesApi, clientApi);
+        verifyNoInteractions(userFineractClient);
     }
 
     @Test
@@ -320,7 +312,7 @@ class UserQueryServiceImplTest {
 
         assertThatThrownBy(() -> service.getCharges(jwt, chargesQuery(CHARGE_STATUS_ALL, 0, 20)))
                 .isInstanceOf(AccessKycRequiredException.class);
-        verifyNoInteractions(clientChargesApi, clientApi);
+        verifyNoInteractions(userFineractClient);
     }
 
     @Test
@@ -334,7 +326,7 @@ class UserQueryServiceImplTest {
                 .guaranteeAmount(new BigDecimal(OBLIGEE_GUARANTEE_AMOUNT))
                 .amountReleased(new BigDecimal(OBLIGEE_AMOUNT_RELEASED))
                 .amountTransferred(new BigDecimal(OBLIGEE_AMOUNT_TRANSFERRED));
-        when(clientApi.retrieveClientObligeeDetails(CLIENT_ID)).thenReturn(List.of(obligee));
+        when(userFineractClient.retrieveClientObligeeDetails(CLIENT_ID)).thenReturn(List.of(obligee));
 
         List<UserObligeeQueryData> result = service.getObligees(jwt);
 
@@ -353,7 +345,7 @@ class UserQueryServiceImplTest {
     void getObligeesEmptyUpstreamYieldsEmptyList() {
         Jwt jwt = jwt(true);
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(clientApi.retrieveClientObligeeDetails(CLIENT_ID)).thenReturn(null);
+        when(userFineractClient.retrieveClientObligeeDetails(CLIENT_ID)).thenReturn(null);
 
         assertThat(service.getObligees(jwt)).isEmpty();
     }
@@ -362,7 +354,7 @@ class UserQueryServiceImplTest {
     void getImageReturnsDataUri() {
         Jwt jwt = jwt(true);
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(defaultApi.retrieveImage(IMAGE_ENTITY_TYPE, CLIENT_ID, IMAGE_DIMENSION, IMAGE_DIMENSION, null,
+        when(userFineractClient.retrieveImage(IMAGE_ENTITY_TYPE, CLIENT_ID, IMAGE_DIMENSION, IMAGE_DIMENSION, null,
                 IMAGE_ACCEPT_TEXT_PLAIN))
                 .thenReturn(IMAGE_DATA_URI);
 
@@ -380,14 +372,14 @@ class UserQueryServiceImplTest {
 
         assertThatThrownBy(() -> service.getImage(jwt, null, null))
                 .isInstanceOf(AccessScopeInsufficientException.class);
-        verifyNoInteractions(defaultApi);
+        verifyNoInteractions(userFineractClient);
     }
 
     @Test
     void getImageMissingUpstreamImageIsTranslatedTo404() {
         Jwt jwt = jwt(true);
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(defaultApi.retrieveImage(IMAGE_ENTITY_TYPE, CLIENT_ID, null, null, null, IMAGE_ACCEPT_TEXT_PLAIN))
+        when(userFineractClient.retrieveImage(IMAGE_ENTITY_TYPE, CLIENT_ID, null, null, null, IMAGE_ACCEPT_TEXT_PLAIN))
                 .thenThrow(mock(FeignException.NotFound.class));
 
         assertThatThrownBy(() -> service.getImage(jwt, null, null))
@@ -398,7 +390,7 @@ class UserQueryServiceImplTest {
     void getImageUpstreamFailureIsTranslated() {
         Jwt jwt = jwt(true);
         when(userClientResolver.resolveClientId(jwt)).thenReturn(CLIENT_ID);
-        when(defaultApi.retrieveImage(IMAGE_ENTITY_TYPE, CLIENT_ID, null, null, null, IMAGE_ACCEPT_TEXT_PLAIN))
+        when(userFineractClient.retrieveImage(IMAGE_ENTITY_TYPE, CLIENT_ID, null, null, null, IMAGE_ACCEPT_TEXT_PLAIN))
                 .thenThrow(mock(FeignException.class));
 
         assertThatThrownBy(() -> service.getImage(jwt, null, null))
