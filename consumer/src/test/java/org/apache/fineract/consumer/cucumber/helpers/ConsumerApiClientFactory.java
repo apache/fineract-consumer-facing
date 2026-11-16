@@ -12,7 +12,7 @@
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
+ * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
@@ -29,12 +29,24 @@ import org.springframework.http.HttpHeaders;
 public final class ConsumerApiClientFactory {
 
     public static final String BFF_BASE_URL = System.getenv().getOrDefault("BASE_URL", "http://localhost:8080");
+    /**
+     * The second BFF that {@code compose.second-bff.yaml} adds, with scheduled transfers turned off. It shares the
+     * first's database and signing key, so the first's access tokens work on it. Only {@code @second-bff} scenarios
+     * use it.
+     */
+    public static final String SECOND_BFF_BASE_URL =
+            System.getenv().getOrDefault("SECOND_BFF_BASE_URL", "http://localhost:8081");
 
     private ConsumerApiClientFactory() {
     }
 
     public static <T extends ApiClient.Api> T authenticated(Class<T> apiType, String accessToken, String deviceFingerprint) {
-        ApiClient apiClient = newApiClient();
+        return authenticated(apiType, accessToken, deviceFingerprint, BFF_BASE_URL);
+    }
+
+    public static <T extends ApiClient.Api> T authenticated(Class<T> apiType, String accessToken,
+            String deviceFingerprint, String baseUrl) {
+        ApiClient apiClient = newApiClient(baseUrl);
         apiClient.getFeignBuilder().requestInterceptor(template -> {
             template.header(HttpHeaders.COOKIE,
                     AuthenticationConstants.ACCESS_TOKEN_COOKIE_NAME + "=" + accessToken);
@@ -46,12 +58,12 @@ public final class ConsumerApiClientFactory {
     }
 
     public static <T extends ApiClient.Api> T unauthenticated(Class<T> apiType) {
-        return newApiClient().buildClient(apiType);
+        return newApiClient(BFF_BASE_URL).buildClient(apiType);
     }
 
-    private static ApiClient newApiClient() {
+    private static ApiClient newApiClient(String baseUrl) {
         ApiClient apiClient = new ApiClient();
-        apiClient.setBasePath(BFF_BASE_URL);
+        apiClient.setBasePath(baseUrl);
         apiClient.getFeignBuilder()
                 .errorDecoder((methodKey, response) -> FeignException.errorStatus(methodKey, response))
                 .retryer(Retryer.NEVER_RETRY);

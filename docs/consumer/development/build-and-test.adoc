@@ -67,6 +67,20 @@ Fineract runs a standing instruction only once the tenant's business date reache
 
 A scenario that keeps Fineract's business date moved across several steps uses `FineractBusinessDate` (in `cucumber.helpers`), as `FineractJobRunner` does: `moveTo(date)` turns the setting on and sets the date, and `restore()` puts both back. The BFF caches Fineract's today for 30 seconds (see xref:fineract-today[Fineract's current date]), so after each move the scenario waits until something the BFF answers by that date has changed, and it waits again after restoring, so that the next scenario's start dates are checked against the real today. `ScheduledTransfersSteps` polls its list, which leaves out transfers past their end date, and restores in an `@After` hook, so a failed scenario puts the date back too. Each such wait can take up to the 30 seconds.
 
+[[build-and-test-cucumber-second-bff]]
+=== Scenarios that need a second BFF
+
+Scenarios tagged `@second-bff` (in `scheduledtransfers-second-bff.feature`) need a second BFF next to the first. `consumer/compose.second-bff.yaml` adds it on port 8081, with scheduled transfers turned off and the same database, Fineract, Valkey, Mailpit and JWT signing key, so an access token from the first BFF works on it. It starts once the first is up, so only the first applies the Liquibase changelog. It has no JaCoCo agent. The default run leaves these scenarios out (`tags = 'not @second-bff'` in `consumer/build.gradle`), and `--tags` replaces that filter:
+
+[source,bash]
+----
+cd consumer
+docker compose -f compose.yaml -f compose.second-bff.yaml up -d --build --wait \
+  && ./gradlew cucumber --tags @second-bff; docker compose -f compose.yaml -f compose.second-bff.yaml down -v
+----
+
+The glue reaches the second BFF through `ConsumerApiClientFactory.SECOND_BFF_BASE_URL` (`SECOND_BFF_BASE_URL`, default `http://localhost:8081`).
+
 == Static analysis
 
 The BFF build runs the same Java analyzers as Apache Fineract core, with versions matched to core's:
@@ -139,7 +153,7 @@ npm run e2e:stack:run
 
 The GitHub workflows in `.github/workflows/` run:
 
-* `build-tests-backend.yml`: on changes under `consumer/`, sets up JDK 21, generates the dev JWT key, starts the Docker stack, captures the OpenAPI spec and generates both clients (uploaded as artifacts), runs SpotBugs and Modernizer (see Static analysis), then runs `./gradlew test` and `./gradlew cucumber`, and tears down with `docker compose down -v`.
+* `build-tests-backend.yml`: on changes under `consumer/`, sets up JDK 21, generates the dev JWT key, starts the Docker stack, captures the OpenAPI spec and generates both clients (uploaded as artifacts), runs SpotBugs and Modernizer (see Static analysis), then runs `./gradlew test` and `./gradlew cucumber`, and tears down with `docker compose down -v`. A second job, *Beneficiary guard on two BFFs*, starts the stack with `compose.second-bff.yaml`, generates the clients, and runs only the `@second-bff` scenarios (see xref:build-and-test-cucumber-second-bff[Scenarios that need a second BFF]).
 * `build-tests-frontend.yml`: on changes under `frontend/`, `consumer/`, or the e2e compose file, runs two jobs. The unit job starts the backend, generates the TypeScript client, runs a production build (`npm run build`), and runs `npm test -- --no-watch`. The e2e job brings up the full stack with `npm run e2e:docker:up`, runs `npm run e2e` (Playwright), and tears down with `-v`.
 * `prettier-eslint.yaml`: on changes under `frontend/`, runs `npm run lint` (ESLint), `npm run test:eslint-rules` (the tests of the repository's own ESLint rules), and `npm run format:check` (Prettier) against the frontend sources.
 * `category-x-check.yml`: two jobs. The backend job runs `./gradlew checkLicense` to gate Gradle dependency licenses against the ASF allowlist and warns on Category B licenses. The frontend job generates an npm license report with `license-checker-rseidelsohn` and checks it against `frontend/allowed-licenses.json` with the same Category A pass, Category B warn, otherwise fail rules.

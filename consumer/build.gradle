@@ -284,6 +284,9 @@ cucumber {
 	featurePath = 'src/test/resources/features'
 	glue = 'org.apache.fineract.consumer.cucumber'
 	plugin = ['pretty']
+	// @second-bff scenarios need the second BFF from compose.second-bff.yaml; run them with
+	// ./gradlew cucumber --tags @second-bff, which replaces this filter.
+	tags = 'not @second-bff'
 }
 
 task openapi {
