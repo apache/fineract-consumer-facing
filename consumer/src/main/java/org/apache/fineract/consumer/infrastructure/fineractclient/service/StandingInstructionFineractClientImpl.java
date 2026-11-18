@@ -19,6 +19,7 @@
 
 package org.apache.fineract.consumer.infrastructure.fineractclient.service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -40,14 +41,18 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class StandingInstructionFineractClientImpl implements StandingInstructionFineractClient {
-
     // Fineract pages these lists by offset and applies no order of its own, so every page is requested in the same
-    // order to keep the offsets stable. orderBy must name a column through Fineract's own SQL alias (atsi is the
-    // instruction table, atsih the run history table); anything else fails with HTTP 500.
+    // order. Instructions are read oldest first: a row inserted meanwhile lands after the offsets already read. Run
+    // history is read newest first so the scan can stop at the start of the window. A run Fineract inserts between
+    // two pages shifts the later offsets, so a run on a page boundary can be returned twice. Runs carry no id to tell
+    // them from two identical runs, so the pages are not deduplicated; the job runs once a day, so this is rare.
+    // orderBy must name a column through Fineract's own SQL alias (atsi is the instruction table, atsih the run
+    // history table); anything else fails with HTTP 500. 
     static final int PAGE_SIZE = 200;
     static final String INSTRUCTION_ORDER = "atsi.id";
     static final String RUN_ORDER = "atsih.id";
     static final String ASCENDING = "ASC";
+    static final String DESCENDING = "DESC";
     static final int SAVINGS_ACCOUNT_TYPE = 2;
     static final String DELETE_COMMAND = "delete";
 
@@ -82,13 +87,34 @@ public class StandingInstructionFineractClientImpl implements StandingInstructio
 
     @Override
     public List<GetStandingInstructionHistoryPageItemsResponse> listSavingsAccountRunHistory(
-            Long clientId, Long savingsAccountId) {
-        return fetchAllPages(
-                offset -> standingInstructionsHistoryApi.retrieveAllStandingInstructionHistory(
-                        null, offset, PAGE_SIZE, RUN_ORDER, ASCENDING, null, null, clientId, savingsAccountId,
-                        SAVINGS_ACCOUNT_TYPE, null, null, null, null),
-                GetStandingInstructionRunHistoryResponse::getPageItems,
-                GetStandingInstructionRunHistoryResponse::getTotalFilteredRecords);
+            Long clientId, Long savingsAccountId, LocalDate fromDate, LocalDate toDate) {
+        List<GetStandingInstructionHistoryPageItemsResponse> window = new ArrayList<>();
+        int offset = 0;
+        while (true) {
+            GetStandingInstructionRunHistoryResponse page = standingInstructionsHistoryApi
+                    .retrieveAllStandingInstructionHistory(null, offset, PAGE_SIZE, RUN_ORDER, DESCENDING, null, null,
+                            clientId, savingsAccountId, SAVINGS_ACCOUNT_TYPE, null, null, null, null);
+            List<GetStandingInstructionHistoryPageItemsResponse> items = page == null ? null : page.getPageItems();
+            if (items == null || items.isEmpty()) {
+                return window;
+            }
+            boolean reachedOlderRuns = false;
+            for (GetStandingInstructionHistoryPageItemsResponse run : items) {
+                LocalDate ran = run.getExecutionTime();
+                if (ran != null && fromDate != null && ran.isBefore(fromDate)) {
+                    reachedOlderRuns = true;
+                } else if (ran == null || toDate == null || !ran.isAfter(toDate)) {
+                    window.add(run);
+                }
+            }
+            offset += items.size();
+            Integer total = page.getTotalFilteredRecords();
+            // This relies on executionTime rising with the run id, which is what the pages are ordered by. If that
+            // stopped holding, the scan would end early and silently drop runs that are inside the window.
+            if (reachedOlderRuns || items.size() < PAGE_SIZE || (total != null && offset >= total)) {
+                return window;
+            }
+        }
     }
 
     private static <P, T> List<T> fetchAllPages(IntFunction<P> fetchPage, Function<P, ? extends Collection<T>> itemsOf,

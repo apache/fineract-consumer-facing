@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.apache.fineract.consumer.scheduledtransfers.query.data.ScheduledTransferQueryData;
@@ -63,13 +64,34 @@ class ScheduledTransfersQueryControllerTest {
     void runHistoryThreadsThePublicIdAndPageIntoTheQuery() {
         when(service.listRuns(any(), any())).thenReturn(ScheduledTransferRunQueryResponse.builder().build());
 
-        controller.listScheduledTransferRuns(jwt(), PUBLIC_ID, 2, 5);
+        controller.listScheduledTransferRuns(jwt(), PUBLIC_ID, 2, 5, null, null);
 
+        assertThat(capturedQuery()).isEqualTo(
+                ScheduledTransferRunHistoryQuery.builder().publicId(PUBLIC_ID).page(2).size(5).build());
+    }
+
+    @Test
+    void runHistoryThreadsTheDateWindowIntoTheQuery() {
+        LocalDate from = LocalDate.of(2029, 1, 15);
+        LocalDate to = LocalDate.of(2030, 1, 14);
+        when(service.listRuns(any(), any())).thenReturn(ScheduledTransferRunQueryResponse.builder().build());
+
+        controller.listScheduledTransferRuns(jwt(), PUBLIC_ID, 0, 20, from, to);
+
+        assertThat(capturedQuery()).isEqualTo(ScheduledTransferRunHistoryQuery.builder()
+                .publicId(PUBLIC_ID)
+                .page(0)
+                .size(20)
+                .fromDate(from)
+                .toDate(to)
+                .build());
+    }
+
+    private ScheduledTransferRunHistoryQuery capturedQuery() {
         ArgumentCaptor<ScheduledTransferRunHistoryQuery> query =
                 ArgumentCaptor.forClass(ScheduledTransferRunHistoryQuery.class);
         verify(service).listRuns(any(), query.capture());
-        assertThat(query.getValue()).isEqualTo(
-                ScheduledTransferRunHistoryQuery.builder().publicId(PUBLIC_ID).page(2).size(5).build());
+        return query.getValue();
     }
 
     private static Jwt jwt() {
