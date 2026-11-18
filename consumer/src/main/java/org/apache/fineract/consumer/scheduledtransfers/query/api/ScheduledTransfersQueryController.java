@@ -51,12 +51,13 @@ public class ScheduledTransfersQueryController {
     public List<ScheduledTransferQueryData> listScheduledTransfers(@AuthenticationPrincipal Jwt jwt) {
         return scheduledTransfersQueryService.listScheduledTransfers(jwt);
     }
-
+    
     @Operation(operationId = "listScheduledTransferRuns",
             description = "The runs of one of the caller's scheduled transfers, newest first. A failed run moved "
                     + "nothing and carries no amount. Only runs between fromDate and toDate (ISO dates) are read; "
-                    + "with no fromDate the window starts twelve months before the core banking system's current "
-                    + "date, and with no toDate it is open at the end. Ask for an earlier window to see older runs.")
+                    + "with no fromDate the window starts twelve months before toDate when one is given, and "
+                    + "otherwise twelve months before the core banking system's current date. With no toDate it is "
+                    + "open at the end. Ask for an earlier window to see older runs.")
     @GetMapping("/{publicId}/runs")
     public ScheduledTransferRunQueryResponse listScheduledTransferRuns(
             @AuthenticationPrincipal Jwt jwt,
