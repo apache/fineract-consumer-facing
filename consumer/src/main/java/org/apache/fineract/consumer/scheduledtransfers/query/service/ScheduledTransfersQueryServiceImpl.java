@@ -150,9 +150,9 @@ public class ScheduledTransfersQueryServiceImpl implements ScheduledTransfersQue
             return toRunPage(List.of(), query);
         }
         // Paging stops at the start of the window, so a request costs the same however old the account is.
-        LocalDate fromDate = query.getFromDate() != null ? query.getFromDate() : defaultRunsFromDate();
         LocalDate toDate = query.getToDate();
-        requireOrderedDates(fromDate, toDate);
+        LocalDate fromDate = query.getFromDate() != null ? query.getFromDate()
+                : toDate != null ? toDate.minusMonths(DEFAULT_RUN_WINDOW_MONTHS) : defaultRunsFromDate();	
         List<GetStandingInstructionHistoryPageItemsResponse> history = fetch(
                 () -> standingInstructionFineractClient.listSavingsAccountRunHistory(
                         clientId, sourceAccountId, fromDate, toDate));

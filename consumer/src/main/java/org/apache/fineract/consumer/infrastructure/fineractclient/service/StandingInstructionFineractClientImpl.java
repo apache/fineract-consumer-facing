@@ -42,11 +42,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class StandingInstructionFineractClientImpl implements StandingInstructionFineractClient {
     // Fineract pages these lists by offset and applies no order of its own, so every page is requested in the same
-    // order to keep the offsets stable. Instructions are read oldest first and run history newest first. orderBy must
-    // name a column through Fineract's own SQL alias (atsi is the instruction table, atsih the run history table);
-    // anything else fails with HTTP 500.
-    // The run history fromDate/toDate filter is not used: on PostgreSQL Fineract binds the dates as text against a
-    // timestamp column and fails with HTTP 500. The window is applied here instead.
+    // order. Instructions are read oldest first: a row inserted meanwhile lands after the offsets already read. Run
+    // history is read newest first so the scan can stop at the start of the window. A run Fineract inserts between
+    // two pages shifts the later offsets, so a run on a page boundary can be returned twice. Runs carry no id to tell
+    // them from two identical runs, so the pages are not deduplicated; the job runs once a day, so this is rare.
+    // orderBy must name a column through Fineract's own SQL alias (atsi is the instruction table, atsih the run
+    // history table); anything else fails with HTTP 500. 
     static final int PAGE_SIZE = 200;
     static final String INSTRUCTION_ORDER = "atsi.id";
     static final String RUN_ORDER = "atsih.id";
@@ -108,7 +109,8 @@ public class StandingInstructionFineractClientImpl implements StandingInstructio
             }
             offset += items.size();
             Integer total = page.getTotalFilteredRecords();
-            // Newest first, so a run before fromDate means everything after it is older still: nothing more to read.
+            // This relies on executionTime rising with the run id, which is what the pages are ordered by. If that
+            // stopped holding, the scan would end early and silently drop runs that are inside the window.
             if (reachedOlderRuns || items.size() < PAGE_SIZE || (total != null && offset >= total)) {
                 return window;
             }

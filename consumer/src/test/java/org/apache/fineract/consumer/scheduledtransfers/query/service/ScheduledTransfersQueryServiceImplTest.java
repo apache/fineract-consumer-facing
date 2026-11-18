@@ -513,13 +513,14 @@ class ScheduledTransfersQueryServiceImplTest {
     }
 
     @Test
-    void runHistoryWithOnlyAToDateStillStartsTwelveMonthsBeforeFineractsDate() {
-        LocalDate to = TODAY.minusDays(1);
+    void runHistoryWithOnlyAToDateStartsTwelveMonthsBeforeIt() {
+        LocalDate to = LocalDate.of(2028, 6, 1);
 
         service.listRuns(jwt(), runsBetween(null, to));
 
         verify(standingInstructionFineractClient)
-                .listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID, DEFAULT_RUNS_FROM, to);
+                .listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID, to.minusMonths(12), to);
+        verify(businessDateFineractClient, never()).today();
     }
 
     @Test
@@ -539,10 +540,13 @@ class ScheduledTransfersQueryServiceImplTest {
     }
 
     @Test
-    void runHistoryRejectsAToDateBeforeTheDefaultStartWhenNoFromDateIsGiven() {
-        assertThatThrownBy(() -> service.listRuns(jwt(), runsBetween(null, DEFAULT_RUNS_FROM.minusDays(1))))
-                .isInstanceOf(ScheduledTransferQueryInvalidException.class);
-        verify(standingInstructionFineractClient, never()).listSavingsAccountRunHistory(any(), any(), any(), any());
+    void runHistoryAcceptsAToDateBeforeTheDefaultStartWhenNoFromDateIsGiven() {
+        LocalDate to = DEFAULT_RUNS_FROM.minusDays(1);
+
+        service.listRuns(jwt(), runsBetween(null, to));
+
+        verify(standingInstructionFineractClient)
+                .listSavingsAccountRunHistory(CLIENT_ID, FROM_SAVINGS_ID, to.minusMonths(12), to);
     }
 
     @Test
