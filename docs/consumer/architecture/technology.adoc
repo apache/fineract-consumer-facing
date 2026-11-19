@@ -13,7 +13,7 @@ The BFF is built with Gradle from `consumer/build.gradle`. Versions below are ta
 |Gradle toolchain (`JavaLanguageVersion.of(21)`).
 
 |Spring Boot
-|4.0.6
+|4.0.9
 |Via the `org.springframework.boot` Gradle plugin.
 
 |Spring Cloud
