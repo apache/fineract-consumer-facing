@@ -30,9 +30,9 @@ updates:
         patterns:
           - "github/codeql-action*"
 
-  # Maintain dependencies for npm (Frontend/Node.js)
+  # Maintain dependencies for npm (Angular client in frontend/)
   - package-ecosystem: "npm"
-    directory: "/"
+    directory: "/frontend"
     schedule:
       interval: "weekly"
     cooldown:
@@ -44,33 +44,23 @@ updates:
           - "@angular/*"
           - "angular-eslint"
 
-  # Maintain dependencies for Gradle (Backend)
+  # Maintain dependencies for Gradle (BFF in consumer/)
   - package-ecosystem: "gradle"
-    directory: "/"
+    directory: "/consumer"
     schedule:
       interval: "weekly"
     cooldown:
       default-days: 7
+    ignore:
+      # Liquibase 5 is no longer Apache-licensed; Fineract stays on 4.33.x (FINERACT-2326)
+      - dependency-name: "org.liquibase:*"
+        versions: [">= 5.0.0"]
 
-  # Maintain dependencies for Maven (Backend alternative)
-  - package-ecosystem: "maven"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-
-  # Maintain dependencies for Docker
+  # Maintain dependencies for Docker (BFF and frontend images)
   - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-
-  # Maintain dependencies for Python (pip)
-  - package-ecosystem: "pip"
-    directory: "/"
+    directories:
+      - "/consumer"
+      - "/frontend"
     schedule:
       interval: "weekly"
     cooldown:
