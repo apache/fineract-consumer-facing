@@ -24,7 +24,7 @@
 #
 # The base image's glibc must be at least the build machine's (ubuntu-24.04 runners and this image: 2.39).
 # Dockerfile.native.dockerignore limits the build context to build/native/nativeCompile.
-FROM ubuntu:24.04
+FROM ubuntu:25.10
 WORKDIR /app
 COPY build/native/nativeCompile/ /app/
 EXPOSE 8080
