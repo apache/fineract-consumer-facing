@@ -25,7 +25,7 @@ COPY . .
 RUN npm run build -- --configuration ${BUILD_CONFIGURATION}
 
 # Serve the built app with nginx
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
 WORKDIR /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/frontend/browser ./
