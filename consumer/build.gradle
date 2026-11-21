@@ -102,7 +102,7 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.modulith:spring-modulith-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
-	testImplementation 'io.cucumber:cucumber-java:7.20.1'
+	testImplementation 'io.cucumber:cucumber-java:8.0.4'
 	testImplementation 'io.github.openfeign:feign-okhttp'
 	testImplementation 'io.github.openfeign:feign-jackson'
 	testImplementation 'io.github.openfeign:feign-slf4j'
