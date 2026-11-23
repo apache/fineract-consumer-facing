@@ -79,7 +79,7 @@
     "jsdom": "^29.1.1",
     "lcov-result-merger": "^6.0.0",
     "lcov-total": "^2.1.1",
-    "monocart-coverage-reports": "^2.12.12",
+    "monocart-coverage-reports": "^3.2.1",
     "prettier": "3.9.6",
     "typescript": "~6.0.3",
     "typescript-eslint": "8.62.1",
