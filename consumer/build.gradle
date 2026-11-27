@@ -25,7 +25,7 @@ import com.github.jk1.license.filter.LicenseBundleNormalizer
 plugins {
 	id 'java'
 	id 'jacoco'
-	id 'org.springframework.boot' version '4.0.9'
+	id 'org.springframework.boot' version '4.2.0'
 	id 'org.graalvm.buildtools.native' version '0.11.5' apply false
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'se.thinkcode.cucumber-runner' version '0.0.14'
