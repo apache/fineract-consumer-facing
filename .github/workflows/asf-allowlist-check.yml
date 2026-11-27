@@ -46,4 +46,4 @@ jobs:
           persist-credentials: false
 
       - name: ASF Allowlist Check
-        uses: apache/infrastructure-actions/allowlist-check@e1840906fea87558d20fb15e27ba101a4bff620f # main as of 2026-05-22
+        uses: apache/infrastructure-actions/allowlist-check@e7a429310354bd9aa30b4aa1d71753572c1604e9 # main as of 2026-05-22
